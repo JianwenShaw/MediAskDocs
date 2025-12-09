@@ -153,7 +153,7 @@ classDiagram
         <<Deployable>>
     }
 
-    class App ["mediask-application (应用层)"] {
+    class Service ["mediask-service (业务服务层)"] {
         +Service : 业务编排
         +DTO : 数据传输对象
         +Event : 领域事件发布
@@ -170,7 +170,7 @@ classDiagram
         +Entity : 数据库实体
     }
 
-    class Infra ["mediask-infrastructure (基础设施层)"] {
+    class Infra ["mediask-dal (数据访问层)"] {
         +Redis : 缓存实现
         +AIClient : 大模型客户端
         +FileStore : 文件存储实现
@@ -204,10 +204,9 @@ classDiagram
 |------|------|---------|
 | **mediask-api** | Web 流量入口 | 参数校验、JWT 认证、限流 |
 | **mediask-worker** | 异步任务处理 | 定时任务、消息消费、物理隔离 |
-| **mediask-application** | 业务流程编排 | 事务管理、领域事件发布 |
+| **mediask-service** | 业务流程编排 | 事务管理、领域事件发布 |
 | **mediask-domain** | 核心业务规则 | 纯 POJO，不依赖框架 |
-| **mediask-dal** | 数据库操作 | MyBatis Mapper、实体映射 |
-| **mediask-infrastructure** | 外部服务集成 | Redis、AI、文件存储 |
+| **mediask-dal** | 数据访问与外部服务 | MyBatis Mapper、Redis、AI、文件存储 |
 | **mediask-common** | 通用工具 | 异常、工具类、常量 |
 
 ## 7. 核心工程化能力

@@ -26,9 +26,9 @@ mediask-dal/
         └── DoctorMapper.xml
 ```
 
-### 1.2 mediask-application 模块结构
+### 1.2 mediask-service 模块结构
 ```
-mediask-application/
+mediask-service/
 ├── service/                 # 业务服务接口
 │   ├── UserService.java
 │   └── AppointmentService.java

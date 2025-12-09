@@ -205,7 +205,7 @@ classDiagram
         <<Deployable>>
     }
 
-    class App ["mediask-application (应用层)"] {
+    class Service ["mediask-service (业务服务层)"] {
         +Service : 业务编排
         +DTO : 数据传输对象
         +Event : 领域事件发布
@@ -217,7 +217,7 @@ classDiagram
         <<Core>>
     }
 
-    class Infra ["mediask-infrastructure (基础设施层)"] {
+    class DAL ["mediask-dal (数据访问层)"] {
         +Mapper : MyBatis实现
         +Redis : 缓存实现
         +AIClient : 大模型客户端
@@ -233,26 +233,26 @@ classDiagram
     %% 依赖关系
     Root --* API
     Root --* Worker
-    Root --* App
+    Root --* Service
     Root --* Domain
-    Root --* Infra
+    Root --* DAL
     Root --* Common
 
-    API ..> App : 依赖
-    Worker ..> App : 依赖
-    App ..> Domain : 依赖
-    Infra ..|> Domain : 实现接口 (依赖倒置)
-    Infra ..> Common : 依赖
+    API ..> Service : 依赖
+    Worker ..> Service : 依赖
+    Service ..> Domain : 依赖
+    DAL ..|> Domain : 实现接口 (依赖倒置)
+    DAL ..> Common : 依赖
     Domain ..> Common : 依赖
-    App ..> Common : 依赖
+    Service ..> Common : 依赖
 ```
 
 ### 6.1 模块职责说明
 *   **mediask-api**: 系统的**流量入口**，负责参数校验、身份认证，不包含复杂业务逻辑。
 *   **mediask-worker**: 系统的**后台工人**，负责异步处理耗时任务，与 Web 流量物理隔离。
-*   **mediask-application**: 系统的**大脑**，负责编排业务流程（如：先扣库存，再生成订单，最后发短信）。
+*   **mediask-service**: 系统的**大脑**，负责编排业务流程（如：先扣库存，再生成订单，最后发短信）。
 *   **mediask-domain**: 系统的**心脏**，包含最纯粹的业务规则，不依赖任何第三方框架（POJO）。
-*   **mediask-infrastructure**: 系统的**四肢**，负责具体的技术实现（连数据库、连 Redis、连 AI）。
+*   **mediask-dal**: 系统的**四肢**，负责具体的技术实现（连数据库、连 Redis、连 AI）。
 
 ### 6.2 部署架构优势
 *   **Web 模块独立扩展**: 当挂号流量激增时，只需增加 `mediask-api` 的容器实例数量。
