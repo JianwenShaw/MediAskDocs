@@ -2,6 +2,8 @@
 
 > 本文档定义项目强制执行的代码规范、分层架构实践和示例代码
 
+项目一切代码必须符合现代Java开发规范
+
 ## 1. 包结构设计
 
 ### 1.1 mediask-dal 模块结构
@@ -459,8 +461,326 @@ log.info("创建挂号成功, apptNo=" + apptNo + ", patientId=" + patientId);
 log.info("创建成功");
 ```
 
-## 10. 代码审查 Checklist
+## 10. 接口设计规范
 
+### 10.1 幂等性设计
+
+**幂等性定义**：同一个请求多次执行，结果与执行一次相同，不会产生副作用。
+
+#### 10.1.1 需要幂等性保障的场景
+- **支付接口**：防止重复扣款
+- **订单创建**：防止重复下单
+- **挂号预约**：防止重复挂号
+- **状态变更**：防止状态混乱
+
+#### 10.1.2 幂等性实现方案
+
+**方案一：唯一业务键（数据库唯一约束）**
+```java
+// 数据库层面保障
+CREATE UNIQUE INDEX uk_appt_patient_schedule 
+ON appointments(patient_id, schedule_id, deleted_at);
+
+// Service 层捕获异常
+@Override
+@Transactional(rollbackFor = Exception.class)
+public String createAppointment(ApptCreateDTO dto) {
+    try {
+        AppointmentDO appointment = new AppointmentDO();
+        // ... 构建对象
+        appointmentMapper.insert(appointment);
+        return appointment.getApptNo();
+    } catch (DuplicateKeyException e) {
+        log.warn("重复挂号, patientId={}, scheduleId={}", 
+            dto.getPatientId(), dto.getScheduleId());
+        throw new BizException(ErrorCode.APPT_DUPLICATE);
+    }
+}
+```
+
+**方案二：Idempotency-Key（Token机制）**
+```java
+/**
+ * 幂等性校验注解
+ */
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Idempotent {
+    /**
+     * 幂等性保障时长（秒）
+     */
+    int ttl() default 300;
+}
+
+/**
+ * 幂等性切面
+ */
+@Aspect
+@Component
+@RequiredArgsConstructor
+public class IdempotentAspect {
+    
+    private final RedisTemplate<String, String> redisTemplate;
+    
+    @Around("@annotation(idempotent)")
+    public Object around(ProceedingJoinPoint point, Idempotent idempotent) {
+        HttpServletRequest request = 
+            ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes())
+            .getRequest();
+        
+        // 从请求头获取幂等性Token
+        String idempotencyKey = request.getHeader("Idempotency-Key");
+        if (StringUtils.isBlank(idempotencyKey)) {
+            throw new BizException(ErrorCode.IDEMPOTENCY_KEY_MISSING);
+        }
+        
+        String lockKey = RedisKeyConstants.IDEMPOTENCY_PREFIX + idempotencyKey;
+        
+        // 尝试设置NX（不存在时才设置）
+        Boolean success = redisTemplate.opsForValue()
+            .setIfAbsent(lockKey, "processing", idempotent.ttl(), TimeUnit.SECONDS);
+        
+        if (Boolean.FALSE.equals(success)) {
+            throw new BizException(ErrorCode.DUPLICATE_REQUEST);
+        }
+        
+        try {
+            return point.proceed();
+        } catch (Throwable e) {
+            // 失败时删除Key，允许重试
+            redisTemplate.delete(lockKey);
+            throw new RuntimeException(e);
+        }
+    }
+}
+
+/**
+ * Controller 使用示例
+ */
+@PostMapping
+@Idempotent(ttl = 60)
+public R<String> createAppointment(@RequestBody ApptCreateDTO dto) {
+    return R.ok(appointmentService.createAppointment(dto));
+}
+```
+
+**方案三：分布式锁（已在common模块实现）**
+```java
+@Override
+@DistributedLockable(
+    key = "#dto.patientId + ':' + #dto.scheduleId",
+    lockType = LockKeys.APPT_CREATE,
+    waitTime = 3,
+    leaseTime = 10
+)
+public String createAppointment(ApptCreateDTO dto) {
+    // 业务逻辑自动加锁保护
+}
+```
+
+### 10.2 防重复提交
+
+#### 10.2.1 前端防重复
+```typescript
+// 按钮防抖
+<el-button 
+  @click="handleSubmit" 
+  :loading="submitting"
+  :disabled="submitting">
+  提交
+</el-button>
+
+// 请求拦截器添加 Idempotency-Key
+axios.interceptors.request.use(config => {
+  if (['post', 'put', 'delete'].includes(config.method)) {
+    config.headers['Idempotency-Key'] = generateUUID();
+  }
+  return config;
+});
+```
+
+#### 10.2.2 后端防重复
+
+**方案一：接口限流（固定窗口）**
+```java
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface RateLimiter {
+    /** 限流Key（支持SpEL） */
+    String key();
+    /** 时间窗口（秒） */
+    int period() default 1;
+    /** 最大请求数 */
+    int limit() default 5;
+}
+
+// 使用示例
+@PostMapping("/send-sms")
+@RateLimiter(key = "'sms:' + #phone", period = 60, limit = 1)
+public R<Void> sendSmsCode(@RequestParam String phone) {
+    // 每个手机号每分钟只能发送1次
+}
+```
+
+**方案二：滑动窗口限流（Redisson实现）**
+```java
+@Service
+@RequiredArgsConstructor
+public class RateLimiterService {
+    
+    private final RedissonClient redissonClient;
+    
+    /**
+     * 滑动窗口限流
+     * @param key 限流Key
+     * @param rateType 限流类型
+     * @param rateInterval 时间窗口
+     * @param rate 最大请求数
+     */
+    public boolean tryAcquire(String key, RateType rateType, 
+                              long rateInterval, long rate) {
+        RRateLimiter limiter = redissonClient.getRateLimiter(key);
+        limiter.trySetRate(rateType, rate, rateInterval, RateIntervalUnit.SECONDS);
+        return limiter.tryAcquire();
+    }
+}
+```
+
+### 10.3 接口版本管理
+
+#### 10.3.1 URL路径版本
+```java
+// ✅ 推荐：路径版本
+@RequestMapping("/api/v1/appointments")
+@RestController
+public class AppointmentController {
+    // v1 版本接口
+}
+
+@RequestMapping("/api/v2/appointments")
+@RestController
+public class AppointmentV2Controller {
+    // v2 版本接口（不兼容变更）
+}
+```
+
+#### 10.3.2 请求头版本
+```java
+@GetMapping(value = "/appointments", headers = "API-Version=2.0")
+public R<List<ApptVO>> listAppointmentsV2() {
+    // v2 版本
+}
+```
+
+### 10.4 接口安全规范
+
+#### 10.4.1 敏感参数加密
+```java
+/**
+ * 支付请求DTO（敏感信息加密）
+ */
+@Data
+public class PaymentDTO {
+    /** 订单号 */
+    private String orderNo;
+    
+    /** 加密的支付密码 */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private String encryptedPassword;
+    
+    /** 银行卡号（脱敏显示） */
+    @JsonSerialize(using = CardNoSerializer.class)
+    private String cardNo;
+}
+```
+
+#### 10.4.2 签名校验
+```java
+@PostMapping("/callback/payment")
+public R<Void> handlePaymentCallback(
+        @RequestBody PaymentCallbackDTO dto,
+        @RequestHeader("X-Signature") String signature) {
+    
+    // 验证签名
+    String expectedSign = SignUtil.sign(dto, secretKey);
+    if (!expectedSign.equals(signature)) {
+        throw new BizException(ErrorCode.SIGNATURE_INVALID);
+    }
+    
+    // 处理回调
+    paymentService.processCallback(dto);
+    return R.ok();
+}
+```
+
+### 10.5 接口文档规范
+
+#### 10.5.1 OpenAPI 3.0 注解
+```java
+@Operation(
+    summary = "创建挂号预约",
+    description = "患者选择医生和时间段创建预约，需支付挂号费后生效",
+    tags = {"挂号预约"}
+)
+@ApiResponses({
+    @ApiResponse(
+        responseCode = "200",
+        description = "预约成功",
+        content = @Content(schema = @Schema(implementation = String.class))
+    ),
+    @ApiResponse(
+        responseCode = "40001",
+        description = "号源不足",
+        content = @Content(schema = @Schema(implementation = R.class))
+    )
+})
+@PostMapping
+public R<String> createAppointment(
+        @Parameter(description = "预约信息", required = true)
+        @RequestBody ApptCreateDTO dto) {
+    return R.ok(appointmentService.createAppointment(dto));
+}
+```
+
+### 10.6 接口监控埋点
+
+```java
+@Service
+@RequiredArgsConstructor
+public class AppointmentServiceImpl implements AppointmentService {
+    
+    private final MeterRegistry meterRegistry;
+    
+    @Override
+    public String createAppointment(ApptCreateDTO dto) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        
+        try {
+            // 业务逻辑
+            String apptNo = doCreateAppointment(dto);
+            
+            // 成功埋点
+            meterRegistry.counter("appt.create.success", 
+                "doctor_id", dto.getDoctorId().toString()).increment();
+            
+            return apptNo;
+            
+        } catch (BizException e) {
+            // 失败埋点
+            meterRegistry.counter("appt.create.fail",
+                "error_code", e.getCode().toString()).increment();
+            throw e;
+            
+        } finally {
+            sample.stop(meterRegistry.timer("appt.create.duration"));
+        }
+    }
+}
+```
+
+## 11. 代码审查 Checklist
+
+### 11.1 基础规范
 - [ ] 所有类命名符合规范（DO/DTO/VO后缀）
 - [ ] 方法命名清晰表达业务含义
 - [ ] 变量命名无拼音、无缩写
@@ -471,3 +791,12 @@ log.info("创建成功");
 - [ ] 敏感数据（密码、身份证）加密存储
 - [ ] 数据库查询使用索引字段
 - [ ] 分页查询设置最大条数限制
+
+### 11.2 接口设计
+- [ ] 核心接口实现幂等性保障（支付/订单/预约）
+- [ ] 对外接口添加签名校验
+- [ ] 高频接口配置限流策略
+- [ ] 接口添加完整的 OpenAPI 注解
+- [ ] 不兼容变更使用新版本号（v2/v3）
+- [ ] 敏感参数加密传输
+- [ ] 关键接口添加监控埋点
