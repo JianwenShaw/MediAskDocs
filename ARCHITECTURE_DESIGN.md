@@ -77,6 +77,40 @@ flowchart TB
 
 采用目前工业界最主流的 **React 生态**，构建纯客户端渲染 (CSR) 的单页应用 (SPA)，彻底杜绝服务端渲染 (SSR) 可能带来的安全风险 (如 XSS) 和运维复杂度。
 
+> 本项目的**管理员端 & 医生端**统一采用：React + React Router + Ant Design + Tailwind CSS。
+
+### 2.1 多端形态选择（面向毕设：优先保证 AI 核心能力交付）
+
+本系统的亮点与主要工作量在 **AI 能力（对话、RAG、评估、安全）**，因此端侧选型以“**降低前端不确定性、快速跑通闭环**”为第一原则。
+
+**医生端 / 管理员端（Web）**
+- 形态：Web SPA
+- 技术栈：React + React Router + Ant Design + Tailwind CSS
+- 原因：中后台页面复杂（表格/表单/权限），Web 生态成熟，开发效率高。
+
+**患者端（优先：公众号内 H5 Web）**
+- 形态：微信公众号菜单/图文入口打开 H5
+- 技术栈：同 Web（React）以最大化复用 API SDK、鉴权、组件与工程化能力
+- 原因：无需学习小程序体系即可在微信内完成演示与闭环，把主要时间投入到 AI 模块实现与质量。
+
+**可选演进（Phase 2）：微信小程序**
+- 当需要更强触达/订阅提醒/扫码入口时，可在后端 API 不变的前提下增加小程序端（可选 Taro/React）。
+
+### 2.2 仓库组织建议（两端同仓：Monorepo）
+
+当前已确定患者端采用“公众号内 H5（React）”，且医生/管理员端同为 Web 技术栈，因此建议将两端前端放在**同一个仓库**，以复用 API SDK、鉴权、类型定义与工程化配置，降低毕设实现风险。
+
+推荐目录（示例）：
+
+```text
+mediask-fe/
+  apps/
+    admin-web/        # 医生端 + 管理员端（React + Antd + Tailwind）
+    patient-h5/       # 公众号内 H5（React + Tailwind）
+  packages/
+    shared/           # 共享：API client、types、auth、utils、error codes
+```
+
 *   **渲染模式**: **SPA (Single Page Application)**
     *   所有页面渲染逻辑均在浏览器端执行，构建产物为纯静态 HTML/JS/CSS 文件。
     *   部署时直接托管于 **Nginx** 或对象存储，不涉及 Node.js 服务端运行时。
