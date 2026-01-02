@@ -45,16 +45,26 @@
    - 性能测试（JMeter/Gatling）
    - 测试覆盖率要求
 
+6. **[前端快速开始](./docs/07-FRONTEND_QUICKSTART.md)**
+   - pnpm workspace + Vite + React 19
+   - React Router v7（`react-router`）
+   - Ant Design + Tailwind v4（Vite 插件）
+   - 启动/构建/部署要点（静态 SPA）
+
+7. **[前端搭建过程回顾（Web 已完成）](./docs/08-FRONTEND_SETUP_HISTORY.md)**
+   - 你当前仓库已完成的操作清单（便于复现）
+   - 为新增患者端（H5）提供一致的参考路径
+
 ### 补充文档
 
-6. **[数据库设计](./DATABASE_DESIGN.md)**
+8. **[数据库设计](./DATABASE_DESIGN.md)**
    - ER 图（16 张核心表）
    - DDL 建表语句
    - 索引策略与优化
    - 分库分表方案
    - Redis 缓存设计
 
-7. **[项目规划](./PROJECT_PLAN.md)**
+9. **[项目规划](./PROJECT_PLAN.md)**
    - 项目背景与意义
    - 功能模块设计
    - 需求分析与系统功能描述（用例/流程/边界/验收）
