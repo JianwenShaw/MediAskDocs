@@ -228,6 +228,45 @@ classDiagram
 | **监控告警** | Actuator + Prometheus + Grafana |
 | **CI/CD** | GitHub Actions + Docker 自动化部署 |
 
+## 8. 认证与会话（接口契约）
+
+> 本节描述前后端联调需要稳定遵守的接口契约（`/api/v1` 版本化 + `Result<T>` 统一响应体）。
+
+### 8.1 统一响应体
+
+所有接口统一返回：
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {},
+  "traceId": "xxx",
+  "timestamp": 1730000000000
+}
+```
+
+### 8.2 登录：`POST /api/v1/auth/login`
+
+- **请求体**：`{ "account": "...", "password": "..." }`
+- **响应 data**（关键字段）：
+  - `tokenType`: `"Bearer"`
+  - `token`: access token
+  - `expiresIn`: access token 剩余有效期（秒）
+  - `expireAt`: access token 过期时间（秒级时间戳，兼容字段）
+  - `refreshToken`: refresh token（仅用于刷新）
+
+### 8.3 刷新：`POST /api/v1/auth/refresh`
+
+- **请求体**：`{ "refreshToken": "..." }`
+- **响应**：同登录（返回新的 `token` + 轮换后的 `refreshToken`）
+- **安全约束**：refresh token **不能**用于业务接口访问（不能放在 `Authorization` 里当 access token 用）。
+
+### 8.4 当前用户：`GET /api/v1/users/me`
+
+- **请求头**：`Authorization: Bearer <accessToken>`
+- **响应 data**：返回当前登录用户的脱敏信息（如 `userId/username/phone/userType/...`）
+
 ---
 
 ## 相关文档
