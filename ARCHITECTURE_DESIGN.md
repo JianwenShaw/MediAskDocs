@@ -77,23 +77,26 @@ flowchart TB
 
 采用目前工业界最主流的 **React 生态**，构建纯客户端渲染 (CSR) 的单页应用 (SPA)，彻底杜绝服务端渲染 (SSR) 可能带来的安全风险 (如 XSS) 和运维复杂度。
 
-> 本项目的**管理员端 & 医生端**统一采用：React + React Router + Ant Design + Tailwind CSS。
+> 本项目的**管理员端 & 医生端**统一采用：React + React Router + Ant Design + Tailwind CSS；患者端采用微信公众号内 H5（React）以最大化复用。
 
 ### 2.1 多端形态选择（面向毕设：优先保证 AI 核心能力交付）
 
 本系统的亮点与主要工作量在 **AI 能力（对话、RAG、评估、安全）**，因此端侧选型以“**降低前端不确定性、快速跑通闭环**”为第一原则。
 
 **医生端 / 管理员端（Web）**
+
 - 形态：Web SPA
 - 技术栈：React + React Router + Ant Design + Tailwind CSS
 - 原因：中后台页面复杂（表格/表单/权限），Web 生态成熟，开发效率高。
 
 **患者端（优先：公众号内 H5 Web）**
+
 - 形态：微信公众号菜单/图文入口打开 H5
 - 技术栈：同 Web（React）以最大化复用 API SDK、鉴权、组件与工程化能力
 - 原因：无需学习小程序体系即可在微信内完成演示与闭环，把主要时间投入到 AI 模块实现与质量。
 
 **可选演进（Phase 2）：微信小程序**
+
 - 当需要更强触达/订阅提醒/扫码入口时，可在后端 API 不变的前提下增加小程序端（可选 Taro/React）。
 
 ### 2.2 仓库组织建议（两端同仓：Monorepo）
@@ -114,14 +117,116 @@ mediask-fe/
 *   **渲染模式**: **SPA (Single Page Application)**
     *   所有页面渲染逻辑均在浏览器端执行，构建产物为纯静态 HTML/JS/CSS 文件。
     *   部署时直接托管于 **Nginx** 或对象存储，不涉及 Node.js 服务端运行时。
-*   **核心框架**: **React 19** (利用 Concurrent Mode 优化体验)
-*   **开发语言**: **TypeScript** (强类型约束，减少 Bug，利于后期维护)
-*   **构建工具**: **Vite** (极速冷启动，秒级热更新，优于 Webpack)
-*   **UI 组件库**: **Ant Design 6.0** (企业级中后台首选，内置大量医疗场景适用的表单/表格组件)
+*   **核心框架**: **React 19** 
+*   **开发语言**: **TypeScript** 
+*   **构建工具**: **Vite** 
+*   **UI 组件库**: **Ant Design 6.x**
 *   **状态管理**: **Zustand** (比 Redux 更轻量、现代，代码量少) 或 **React Query** (专门处理服务端状态，如挂号列表的缓存与自动刷新)
 *   **路由管理**: **React Router v6**
 *   **HTTP 客户端**: **Axios** (封装拦截器，统一处理 Token 和全局错误)
 *   **样式方案**: **Tailwind CSS** (原子化 CSS，开发效率极高) 
+
+### 2.3 前端状态与数据流方案（工程最佳实践）
+
+本项目的前端状态按“**服务端状态（Server State）**”与“**纯前端状态（Client/UI State）**”拆分治理：
+
+- **React Query（TanStack Query）**：作为服务端状态的唯一事实来源（请求、缓存、失效、自动刷新、并发去重、分页）。
+- **Zustand**：承载纯前端状态（鉴权会话、权限展示态、UI 状态、表单草稿），以及 AI SSE 流式过程中的短生命周期状态。
+
+#### 2.3.1 状态归属原则（必须遵守）
+
+1. **任何来自后端 API 的数据不要长期放进 Zustand 当缓存**。否则你需要自己重建一套缓存失效、并发去重、刷新与一致性策略。
+2. Zustand 只存“让 UI 工作”的状态：例如 token、当前用户信息快照、是否登录、菜单折叠、对话输入框草稿、流式输出中的临时文本。
+3. React Query 只存“后端资源”的状态：例如医院/科室/医生、排班号源、预约单、病历、处方、知识库文档、AI 会话/消息列表。
+
+#### 2.3.2 推荐的前端目录结构（可在 Monorepo 中复用）
+
+```text
+packages/shared/
+  api/
+    http.ts              # Axios 实例 + 拦截器
+    error.ts             # 统一错误结构
+    endpoints.ts         # 按领域划分的 API 调用
+  query/
+    client.ts            # QueryClient 初始化与默认策略
+    keys.ts              # queryKey 工厂（强约束）
+  stores/
+    auth.store.ts        # Zustand：token/用户快照/权限展示态
+    aiStream.store.ts    # Zustand：SSE 流式临时态（可选）
+```
+
+#### 2.3.3 Axios 拦截器与错误标准化（配合后端统一响应体 R<T>）
+
+后端响应体在架构里定义为 `R<T> { code, msg, data, traceId }`。前端约定：
+
+- **HTTP 失败（网络/超时/5xx）**：归类为“网络错误”，可有限重试。
+- **业务失败（HTTP 200 但 code != 0 或非成功码）**：归类为“业务错误”，默认不重试，直接展示 msg，并保留 traceId 便于排障。
+- **401/403**：触发登出/跳转登录，并清空敏感缓存。
+
+建议在 Axios 拦截器中把 `R<T>` 转成“要么返回 T，要么抛出统一错误对象”，确保 React Query 的错误处理一致。
+
+#### 2.3.4 React Query 默认策略（建议值，可按端侧调整）
+
+在医疗/挂号场景中，数据一致性比“离线可用”更重要，建议：
+
+- 默认 `retry`：网络错误重试 1-2 次；业务错误 `retry=false`。
+- 默认 `refetchOnWindowFocus`：对医生端建议开启（避免工作台停留导致信息过期）；对患者端可关闭减少流量。
+- `staleTime` 分级：
+  - 字典/低频变更（医院、科室、药品）可设较长（分钟级到小时级）。
+  - 排班/号源建议较短（秒级到分钟级），以减少“看到可约但实际已被抢”的落差（真正强一致仍由后端 Redis+DB 兜底）。
+
+#### 2.3.5 queryKey 规范（必须统一，否则会出现缓存污染）
+
+统一使用 **数组 + 结构化对象参数**，严禁字符串拼接。
+
+示例（推荐用 key 工厂集中管理）：
+
+```ts
+export const qk = {
+  me: () => ['auth', 'me'] as const,
+  hospitals: (params?: { keyword?: string }) => ['hospitals', params ?? {}] as const,
+  departments: (params: { hospitalId: number }) => ['departments', params] as const,
+  doctors: (params: { deptId: number; page: number; pageSize: number }) => ['doctors', params] as const,
+  schedules: (params: { doctorId: number; date: string }) => ['schedules', params] as const,
+  appointmentsMy: (params: { status?: number; page: number; pageSize: number }) => ['appointments', 'my', params] as const,
+  aiMessages: (params: { conversationId: number }) => ['ai', 'messages', params] as const,
+} as const;
+```
+
+#### 2.3.6 Mutation 与一致性（挂号/病历/处方的失效策略）
+
+原则：**写操作成功后，失效所有可能被影响的“读 query”**，让服务端成为最终事实来源。
+
+- 创建预约成功：
+  - `invalidateQueries(qk.appointmentsMy(...))`
+  - `invalidateQueries(qk.schedules({ doctorId, date }))`
+- 支付/取消预约成功：
+  - 同上（列表与号源都可能变化）
+- 病历提交/归档、处方开具成功：
+  - 失效病历详情、病历列表、处方列表（按你的页面组织来定 key）
+
+对“按钮连点/网络重试”场景：前端仍应生成并携带 `Idempotency-Key`（与你需求里的幂等策略对齐），并在 mutation in-flight 期间禁用重复提交。
+
+#### 2.3.7 AI SSE 流式对话（Zustand 负责“流式过程”，React Query 负责“会话事实”）
+
+结合你在架构中采用的 SSE：
+
+- **流式过程**：使用 Zustand 保存当前会话的 `streamingMessage`（逐 token 追加、可中断、可重连），避免频繁地把“半成品”写入 React Query 缓存。
+- **流式结束（done）**：后端落库后，前端执行一次 `invalidateQueries(qk.aiMessages({ conversationId }))` 拉取最终消息列表。
+- **断连重试**：由 SSE 客户端负责；重连期间 UI 继续展示上一次的 streaming 内容（Zustand）。
+
+这样可以保证：
+- UI 体验顺滑（流式 token 追加不受 query cache 约束）；
+- 数据一致性清晰（最终消息列表以 DB 为准，React Query 自动接管）。
+
+#### 2.3.8 鉴权与 RBAC（Zustand 的边界）
+
+你的后端采用 Spring Security + JWT + RBAC（见需求与架构治理部分）。前端建议：
+
+- Zustand `auth.store` 存：`accessToken`、`userSnapshot`、`authorities/roles`（用于菜单/路由守卫的展示逻辑）。
+- React Query `qk.me()` 拉取“我的信息/权限”（若后端提供），并在登录成功后 `prefetchQuery`，用于首屏快速渲染。
+- 登出时：清空 auth store，并执行 `queryClient.clear()` 或按域失效，避免敏感数据残留。
+
 
 ## 3. 后端技术选型 (Backend Stack)
 
