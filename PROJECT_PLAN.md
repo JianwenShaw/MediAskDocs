@@ -12,8 +12,18 @@
 *   **数据库**: 
     *   MySQL 8.0: 存储用户、病历、挂号等结构化数据。
     *   **Redis**: 用于缓存医生排班信息、用户Session、验证码，提高系统响应速度。
-    *   **Vector Database (向量数据库)**: (推荐: Milvus, Chroma 或 PostgreSQL + pgvector) 用于存储医疗知识库的向量数据，支持RAG检索。
+    *   **Vector Database (向量数据库)**: Milvus 用于存储医疗知识库的向量数据，支持RAG检索。
 *   **AI模型接口**: DeepSeek API (或其他OpenAI兼容接口)。
+
+### 2.1.1 AI 微服务技术栈 (Python)
+AI 能力采用**独立 Python 微服务**架构，与 Java 主业务解耦，充分发挥 Python 在 AI/LLM 领域的生态优势。
+
+*   **Web 框架**: FastAPI - 原生 async、自动 OpenAPI 文档、SSE 支持
+*   **AI 编排**: LangChain - RAG Pipeline、Prompt 管理、文档加载器
+*   **对话状态机**: LangGraph - 多轮对话状态管理，比 Memory 更可控
+*   **向量数据库**: pymilvus - Milvus Python SDK
+*   **LLM 接入**: OpenAI SDK (DeepSeek 兼容) - 流式输出、Function Calling
+*   **服务器**: uvicorn - 高性能 ASGI 服务器
 
 ### 2.2 前端技术栈
 

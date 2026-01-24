@@ -64,7 +64,7 @@ graph TB
             Drug[Drug]
         end
         
-        subgraph AIContext["AI 问诊上下文"]
+        subgraph AIContext["AI 问诊上下文 (Python 微服务)"]
             Conversation[Conversation]
             KnowledgeDoc[KnowledgeDoc]
             RAG[RAG Engine]
@@ -72,14 +72,14 @@ graph TB
         
         UserContext -.依赖.-> ApptContext
         UserContext -.依赖.-> MedicalContext
-        ApptContext -.依赖.-> AIContext
-        MedicalContext -.依赖.-> AIContext
+        ApptContext -.HTTP.-> AIContext
+        MedicalContext -.HTTP.-> AIContext
     end
     
     style UserContext fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
     style ApptContext fill:#fff8e1,stroke:#ff6f00,stroke-width:2px
     style MedicalContext fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
-    style AIContext fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style AIContext fill:#fff3e0,stroke:#e65100,stroke-width:2px
 ```
 
 ### 2.3 上下文映射关系
@@ -88,8 +88,10 @@ graph TB
 |---------|------|---------|---------|
 | 预约上下文 | Upstream | 用户上下文 | REST API |
 | 诊疗上下文 | Upstream | 预约上下文 | Domain Event |
-| AI 问诊 | Customer | 诊疗上下文 | REST API |
+| AI 问诊 (Python) | Customer | 诊疗上下文 | HTTP / SSE |
 | 所有上下文 | Conformist | 用户上下文 | Shared Kernel |
+
+> **注**：AI 问诊上下文作为独立 Python 微服务部署，Java 主服务通过 HTTP 调用 AI 服务接口。
 
 ---
 

@@ -11,6 +11,7 @@ flowchart TB
     classDef client fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
     classDef gateway fill:#fff8e1,stroke:#ff6f00,stroke-width:2px,color:#000
     classDef app fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef ai fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
     classDef infra fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
     classDef external fill:#ffebee,stroke:#c62828,stroke-width:2px,stroke-dasharray: 5 5,color:#000
 
@@ -23,7 +24,7 @@ flowchart TB
 
     GW["Nginx 网关 (反向代理/SSL)"]:::gateway
 
-    subgraph BackendLayer ["后端应用层 (Modular Monolith)"]
+    subgraph BackendLayer ["Java 后端应用层 (Modular Monolith)"]
         direction TB
         API["mediask-api (Web入口)"]:::app
         Worker["mediask-worker (异步任务)"]:::app
@@ -32,7 +33,17 @@ flowchart TB
             Auth[认证授权]
             Appt[挂号预约]
             EMR[电子病历]
-            AI[AI智能服务]
+        end
+    end
+
+    subgraph AILayer ["AI 微服务层 (Python)"]
+        direction TB
+        AIService["mediask-ai<br/>(FastAPI + LangChain + LangGraph)"]:::ai
+        
+        subgraph AIModules ["AI 核心能力"]
+            RAG[RAG 知识问答]
+            Triage[智能预问诊]
+            Guard[安全过滤]
         end
     end
 
@@ -55,14 +66,16 @@ flowchart TB
     %% 链路关系
     User --> Web & H5
     Web & H5 -- "HTTPS / JSON" --> GW
-    GW -- "负载均衡" --> API
+    GW -- "/api/*" --> API
+    GW -- "/ai/*" --> AIService
 
     API -- "同步调用" --> Modules
+    API -- "HTTP 调用" --> AIService
     Worker -- "复用逻辑" --> Modules
 
     Modules -- "JDBC" --> MySQL
     Modules -- "Jedis" --> Redis
-    Modules -- "gRPC" --> Milvus
+    AIService -- "pymilvus" --> Milvus
     
     API -- "生产消息 (事务)" --> MQ
     MQ -- "消费消息" --> Worker
@@ -70,7 +83,7 @@ flowchart TB
     Modules -.-> RustFS
     Modules -.-> OSS
 
-    AI -- "HTTP / SSE流式" --> DeepSeek
+    AIService -- "HTTP / SSE流式" --> DeepSeek
 ```
 
 ## 2. 前端技术选型 (Frontend Stack)
@@ -235,11 +248,58 @@ export const qk = {
 *   **开发语言**: **Java 21** (使用 Record 类简化 DTO，使用 Virtual Threads 提升高并发 I/O 性能)
 *   **核心框架**: **Spring Boot 3.2+** (原生支持 AOT 编译，启动更快)
 *   **ORM 框架**: **MyBatis-Plus** (简化 CRUD) + **MyBatis-Plus-Join** (连表查询增强)
-*   **AI 应用框架**: **Spring AI** 或 **LangChain4j** (统一的大模型接入层，支持流式对话 Streaming)
 *   **工具库**: 
     *   **Lombok**: 消除样板代码。
     *   **MapStruct**: 高性能 Bean 属性拷贝 (优于 BeanUtils)。
     *   **Knife4j**: 生成美观的接口文档。 
+
+## 3.1 AI 微服务技术选型 (Python Stack)
+
+AI 能力采用**独立 Python 微服务**架构，与 Java 主业务解耦，充分发挥 Python 在 AI/LLM 领域的生态优势。
+
+| 技术分类 | 选型方案 | 选型理由 |
+|---------|---------|---------|
+| **Web 框架** | FastAPI | 原生 async、自动 OpenAPI 文档、SSE 支持 |
+| **AI 编排** | LangChain | RAG Pipeline、Prompt 管理、文档加载器 |
+| **对话状态机** | LangGraph | 多轮对话状态管理、比 Memory 更可控 |
+| **向量数据库** | pymilvus | Milvus Python SDK |
+| **Embedding** | sentence-transformers / API | 文本向量化 |
+| **LLM 接入** | OpenAI SDK (DeepSeek 兼容) | 流式输出、Function Calling |
+| **服务器** | uvicorn | 高性能 ASGI 服务器 |
+| **可观测性** | LangSmith (可选) | LLM 调用追踪与调试 |
+
+### 3.1.1 Python AI 服务核心能力
+
+| 功能模块 | 核心能力 | 技术实现 |
+|---------|---------|---------|
+| **RAG 检索增强** | 医疗知识库问答，回答可追溯 | LangChain LCEL + Milvus |
+| **混合检索** | 向量检索 + BM25 关键词检索 | RRF 结果融合算法 |
+| **多轮对话** | 预问诊状态管理，生成预问诊摘要 | LangGraph StateGraph + SSE |
+| **安全过滤** | PII 脱敏、敏感内容拦截 | 自定义 Guard Rails |
+| **文档解析** | PDF/Markdown/HTML 解析入库 | LangChain DocumentLoaders |
+
+### 3.1.2 服务间通信设计
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         Nginx                               │
+│              /api/* → Java    /ai/* → Python                │
+└─────────────────────────────────────────────────────────────┘
+                │                         │
+                ▼                         ▼
+┌───────────────────────┐      ┌─────────────────────────────┐
+│    mediask-api        │      │      mediask-ai             │
+│    (Spring Boot)      │      │      (FastAPI)              │
+│                       │      │                             │
+│  • 用户认证 (JWT)     │      │  • /ai/chat/stream (SSE)    │
+│  • 挂号预约           │ ───▶ │  • /ai/triage (预问诊)      │
+│  • 病历处方           │ HTTP │  • /ai/rag/query (知识问答) │
+│  • 权限管理           │      │  • /ai/docs/ingest (文档解析)│
+└───────────────────────┘      └─────────────────────────────┘
+         │                                │
+         ▼                                ▼
+      MySQL/Redis                      Milvus
+``` 
 
 ## 4. 数据存储与中间件 (Data & Middleware)
 
@@ -319,6 +379,529 @@ export const qk = {
 2.  **敏感数据脱敏**: 基于 Jackson 自定义序列化器实现**注解式脱敏** (`@Sensitive(strategy = PHONE)`)，彻底解耦业务代码。
 3.  **数据加密**: 密码使用 **BCrypt**，身份证号使用 **AES-128** 加密存储。
 4.  **API 防护**: 引入 **Redis Lua 脚本** 实现滑动窗口限流；关键接口引入 `Idempotency-Key` 防止重放攻击。
+
+### 5.7 AI 智能模块设计 (Python 微服务架构)
+
+本项目的 AI 核心模块采用**独立 Python 微服务**架构，基于 **FastAPI + LangChain + LangGraph** 构建，实现 RAG（检索增强生成）与多轮对话能力，解决大语言模型在医疗场景下的"幻觉"问题。
+
+#### 5.7.1 Python 项目结构
+
+```
+mediask-ai/
+├── pyproject.toml              # 依赖管理 (Poetry/uv)
+├── .env                        # 环境变量
+├── app/
+│   ├── __init__.py
+│   ├── main.py                 # FastAPI 入口
+│   ├── config.py               # 配置管理
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── routes/
+│   │   │   ├── chat.py         # 对话接口 (SSE)
+│   │   │   ├── rag.py          # RAG 问答接口
+│   │   │   ├── triage.py       # 预问诊接口
+│   │   │   └── docs.py         # 文档管理接口
+│   │   └── deps.py             # 依赖注入
+│   ├── core/
+│   │   ├── llm.py              # LLM 客户端封装
+│   │   ├── embeddings.py       # Embedding 模型
+│   │   └── vector_store.py     # Milvus 封装
+│   ├── rag/
+│   │   ├── pipeline.py         # RAG Pipeline (LCEL)
+│   │   ├── retriever.py        # 混合检索器
+│   │   ├── reranker.py         # 重排序
+│   │   └── prompts.py          # Prompt 模板
+│   ├── triage/
+│   │   ├── graph.py            # LangGraph 状态机
+│   │   ├── nodes.py            # 状态节点
+│   │   └── state.py            # 状态定义
+│   ├── guard/
+│   │   ├── pii_filter.py       # PII 脱敏
+│   │   ├── safety_check.py     # 安全检查
+│   │   └── disclaimer.py       # 免责声明
+│   └── ingest/
+│       ├── loader.py           # 文档加载
+│       ├── splitter.py         # 文本切分
+│       └── indexer.py          # 向量索引
+├── tests/
+│   └── ...
+└── notebooks/                  # Jupyter 实验/演示
+    ├── rag_demo.ipynb
+    └── evaluation.ipynb
+```
+
+#### 5.7.2 核心依赖配置
+
+```toml
+# pyproject.toml
+[project]
+name = "mediask-ai"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "langchain-community>=0.3.0",
+    "langgraph>=0.2.0",
+    "pymilvus>=2.4.0",
+    "sentence-transformers>=3.0.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "sse-starlette>=2.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "jupyter>=1.0.0",
+    "ipykernel>=6.0.0",
+]
+```
+
+#### 5.7.2 RAG 完整流程设计
+
+```mermaid
+flowchart LR
+    subgraph DocumentProcessing ["文档处理（Worker）"]
+        PDF[PDF解析] --> Split[文本切分] --> Embed[向量化] --> Milvus[存入Milvus]
+    end
+
+    subgraph Retrieval ["检索（RAG）"]
+        UserQuery[用户问题] --> EmbedQuery[问题向量化]
+        EmbedQuery --> VectorSearch[向量检索]
+        EmbedQuery --> BM25Search[关键词检索]
+        VectorSearch --> Fusion[结果融合]
+        BM25Search --> Fusion
+        Fusion --> Context[相关文档片段]
+    end
+
+    subgraph Generation ["生成（LLM）"]
+        Context --> Prompt[Prompt组装]
+        UserQuery --> Prompt
+        Prompt --> LLM[DeepSeek LLM]
+        LLM --> Response[带引用回答]
+    end
+
+    DocumentProcessing -.-> Context
+```
+
+#### 5.7.3 医疗知识库构建流程 (Python)
+
+**文档加载与解析**
+```python
+# app/ingest/loader.py
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    UnstructuredMarkdownLoader,
+    UnstructuredHTMLLoader,
+)
+from langchain_core.documents import Document
+
+class MedicalDocumentLoader:
+    """医疗文档加载器"""
+    
+    def load(self, file_path: str) -> list[Document]:
+        """根据文件类型自动选择加载器"""
+        if file_path.endswith('.pdf'):
+            loader = PyPDFLoader(file_path)
+        elif file_path.endswith('.md'):
+            loader = UnstructuredMarkdownLoader(file_path)
+        elif file_path.endswith('.html'):
+            loader = UnstructuredHTMLLoader(file_path)
+        else:
+            raise ValueError(f"Unsupported file type: {file_path}")
+        
+        docs = loader.load()
+        # 添加元数据
+        for doc in docs:
+            doc.metadata["source_file"] = file_path
+            doc.metadata["doc_type"] = "medical_knowledge"
+        return docs
+```
+
+**文本语义切分**
+```python
+# app/ingest/splitter.py
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+class MedicalTextSplitter:
+    """医疗文档切分器"""
+    
+    def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50):
+        self.splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            separators=["\n\n", "\n", "。", "；", " ", ""],
+            length_function=len,
+        )
+    
+    def split(self, documents: list[Document]) -> list[Document]:
+        """切分文档，保留元数据"""
+        return self.splitter.split_documents(documents)
+```
+
+**向量化与存储**
+```python
+# app/ingest/indexer.py
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import Milvus
+
+class MedicalIndexer:
+    """医疗知识库索引器"""
+    
+    def __init__(self, collection_name: str = "medical_knowledge"):
+        self.embeddings = OpenAIEmbeddings(
+            base_url="https://api.deepseek.com",
+            model="text-embedding-3-small",
+        )
+        self.collection_name = collection_name
+    
+    def index(self, documents: list[Document]) -> None:
+        """将文档向量化并存入 Milvus"""
+        Milvus.from_documents(
+            documents,
+            self.embeddings,
+            collection_name=self.collection_name,
+            connection_args={"host": "localhost", "port": "19530"},
+        )
+```
+
+#### 5.7.4 混合检索策略 (Python)
+
+```python
+# app/rag/retriever.py
+from langchain_core.retrievers import BaseRetriever
+from langchain_community.retrievers import BM25Retriever
+from langchain_community.vectorstores import Milvus
+
+class HybridMedicalRetriever(BaseRetriever):
+    """混合检索器：向量检索 + BM25 关键词检索"""
+    
+    def __init__(
+        self,
+        vector_store: Milvus,
+        bm25_retriever: BM25Retriever,
+        k: int = 60,  # RRF 常数
+        top_k: int = 5,
+    ):
+        self.vector_store = vector_store
+        self.bm25_retriever = bm25_retriever
+        self.k = k
+        self.top_k = top_k
+    
+    def _get_relevant_documents(self, query: str) -> list[Document]:
+        # 1. 向量检索（语义相似度）
+        vector_results = self.vector_store.similarity_search(query, k=self.top_k)
+        
+        # 2. BM25 关键词检索（精确匹配）
+        bm25_results = self.bm25_retriever.get_relevant_documents(query)[:self.top_k]
+        
+        # 3. RRF 融合
+        return self._rrf_fusion([vector_results, bm25_results])
+    
+    def _rrf_fusion(self, ranked_lists: list[list[Document]]) -> list[Document]:
+        """RRF (Reciprocal Rank Fusion) 融合算法"""
+        scores: dict[str, float] = {}
+        doc_map: dict[str, Document] = {}
+        
+        for ranked_list in ranked_lists:
+            for rank, doc in enumerate(ranked_list):
+                doc_id = doc.page_content[:100]  # 简化的文档 ID
+                rrf_score = 1.0 / (self.k + rank + 1)
+                scores[doc_id] = scores.get(doc_id, 0) + rrf_score
+                doc_map[doc_id] = doc
+        
+        # 按分数排序
+        sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+        return [doc_map[doc_id] for doc_id in sorted_ids[:self.top_k]]
+```
+
+#### 5.7.5 RAG Pipeline (LangChain LCEL)
+
+```python
+# app/rag/pipeline.py
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+from langchain_openai import ChatOpenAI
+
+RAG_SYSTEM_PROMPT = """你是一位专业的医疗知识助手，请根据以下检索到的医学资料回答用户问题。
+
+检索到的参考资料：
+{context}
+
+回答规则：
+1. 优先使用检索到的参考资料回答，确保答案有据可查
+2. 如参考资料无法覆盖问题，明确告知用户并建议咨询医生
+3. 对用药建议、剂量、禁忌等内容特别谨慎
+4. 回答需附带参考来源（标注章节或页码）
+5. 最后务必添加声明："以上内容仅供参考，具体诊疗请遵医嘱"
+"""
+
+def create_rag_chain(retriever: HybridMedicalRetriever):
+    """构建 RAG Chain"""
+    llm = ChatOpenAI(
+        base_url="https://api.deepseek.com",
+        model="deepseek-chat",
+        streaming=True,
+    )
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", RAG_SYSTEM_PROMPT),
+        ("human", "{question}"),
+    ])
+    
+    def format_docs(docs: list[Document]) -> str:
+        return "\n\n".join(
+            f"[来源: {doc.metadata.get('source_file', '未知')}]\n{doc.page_content}"
+            for doc in docs
+        )
+    
+    chain = (
+        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
+    
+    return chain
+```
+
+#### 5.7.6 多轮对话状态机 (LangGraph)
+
+```python
+# app/triage/graph.py
+from typing import TypedDict, Annotated
+from langgraph.graph import StateGraph, END
+from langgraph.graph.message import add_messages
+
+class TriageState(TypedDict):
+    """预问诊状态"""
+    messages: Annotated[list, add_messages]
+    symptoms: list[str]
+    onset_time: str | None
+    pain_level: int | None
+    recommended_department: str | None
+    summary: str | None
+    is_complete: bool
+
+def create_triage_graph():
+    """创建预问诊状态机"""
+    
+    def collect_symptoms(state: TriageState) -> TriageState:
+        """收集症状信息"""
+        # 分析用户消息，提取症状
+        # 判断是否需要追问
+        ...
+    
+    def ask_followup(state: TriageState) -> TriageState:
+        """追问细节"""
+        # 生成追问问题
+        ...
+    
+    def recommend_department(state: TriageState) -> TriageState:
+        """推荐科室"""
+        # 基于症状推荐就诊科室
+        ...
+    
+    def generate_summary(state: TriageState) -> TriageState:
+        """生成预问诊摘要"""
+        # 结构化输出摘要
+        ...
+    
+    def should_continue(state: TriageState) -> str:
+        """判断是否继续收集信息"""
+        if state["is_complete"]:
+            return "recommend"
+        return "followup"
+    
+    # 构建状态图
+    graph = StateGraph(TriageState)
+    
+    graph.add_node("collect", collect_symptoms)
+    graph.add_node("followup", ask_followup)
+    graph.add_node("recommend", recommend_department)
+    graph.add_node("summarize", generate_summary)
+    
+    graph.set_entry_point("collect")
+    graph.add_conditional_edges("collect", should_continue)
+    graph.add_edge("followup", "collect")
+    graph.add_edge("recommend", "summarize")
+    graph.add_edge("summarize", END)
+    
+    return graph.compile()
+```
+
+#### 5.7.7 安全过滤与 Guard Rails (Python)
+
+```python
+# app/guard/pii_filter.py
+import re
+
+class PIIFilter:
+    """个人敏感信息脱敏过滤器"""
+    
+    PATTERNS = {
+        "phone": (r"1[3-9]\d{9}", "[手机号已隐藏]"),
+        "id_card": (r"\d{17}[\dXx]", "[身份证已隐藏]"),
+        "name": (r"(?:姓名|患者)[：:]\s*[\u4e00-\u9fa5]{2,4}", "[姓名已隐藏]"),
+    }
+    
+    def filter(self, text: str) -> str:
+        """对文本进行 PII 脱敏"""
+        result = text
+        for pattern, replacement in self.PATTERNS.values():
+            result = re.sub(pattern, replacement, result)
+        return result
+
+
+# app/guard/safety_check.py
+class MedicalSafetyGuard:
+    """医疗安全检查器"""
+    
+    EMERGENCY_KEYWORDS = ["胸痛", "呼吸困难", "意识不清", "大出血", "昏迷"]
+    
+    def check_emergency(self, text: str) -> bool:
+        """检测是否包含急症关键词"""
+        return any(kw in text for kw in self.EMERGENCY_KEYWORDS)
+    
+    def add_disclaimer(self, response: str) -> str:
+        """添加免责声明"""
+        disclaimer = "\n\n⚠️ 以上内容仅供参考，不能替代医生诊断。如有不适，请及时就医。"
+        return response + disclaimer
+```
+
+#### 5.7.8 FastAPI 接口层 (Python)
+
+```python
+# app/api/routes/chat.py
+from fastapi import APIRouter, Depends
+from sse_starlette.sse import EventSourceResponse
+from app.rag.pipeline import create_rag_chain
+from app.guard.pii_filter import PIIFilter
+
+router = APIRouter(prefix="/ai", tags=["AI"])
+
+@router.get("/chat/stream")
+async def stream_chat(
+    session_id: str,
+    message: str,
+    pii_filter: PIIFilter = Depends(),
+):
+    """SSE 流式对话接口"""
+    # 1. PII 脱敏
+    sanitized_message = pii_filter.filter(message)
+    
+    # 2. 获取 RAG Chain
+    chain = create_rag_chain()
+    
+    async def event_generator():
+        async for chunk in chain.astream(sanitized_message):
+            yield {"event": "message", "data": chunk}
+        yield {"event": "done", "data": ""}
+    
+    return EventSourceResponse(event_generator())
+
+
+@router.post("/rag/query")
+async def rag_query(question: str, top_k: int = 5):
+    """RAG 知识问答接口"""
+    chain = create_rag_chain()
+    result = await chain.ainvoke(question)
+    return {"answer": result}
+
+
+@router.post("/triage/summary")
+async def generate_triage_summary(session_id: str):
+    """生成预问诊摘要"""
+    # 从 Redis/DB 加载对话历史
+    # 调用 LLM 生成摘要
+    ...
+```
+
+#### 5.7.9 Prompt 工程设计
+
+**预问诊 System Prompt**
+```python
+TRIAGE_SYSTEM_PROMPT = """你是一位专业的医疗预问诊助手，你的任务是：
+
+1. 以自然、友好的语气与患者交流，收集关键症状信息
+2. 收集信息包括：发病时间、主要症状、疼痛程度（1-10分）、伴随症状、已做检查、已用药情况
+3. 根据收集的信息，推荐合适的就诊科室
+4. 生成结构化的预问诊摘要，供医生参考
+
+重要安全规则：
+- 明确告知患者，AI 建议仅供参考，不能替代医生诊断
+- 如发现急症症状（胸痛、呼吸困难、意识不清等），立即提示患者紧急就医
+- 不得给出具体的用药建议或剂量
+- 不得诊断具体疾病，只能描述症状
+
+当前时间：{current_time}
+"""
+```
+
+#### 5.7.10 Docker Compose 部署配置
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # Java 主业务服务
+  mediask-api:
+    build: ./mediask-be
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - AI_SERVICE_URL=http://mediask-ai:8000
+    depends_on:
+      - mysql
+      - redis
+      - mediask-ai
+
+  # Python AI 微服务
+  mediask-ai:
+    build: ./mediask-ai
+    ports:
+      - "8000:8000"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+    depends_on:
+      - milvus
+
+  # 向量数据库
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    ports:
+      - "19530:19530"
+    volumes:
+      - milvus_data:/var/lib/milvus
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mediask
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  milvus_data:
+  mysql_data:
+```
 
 ## 6. 项目目录结构规范 (Maven Multi-Module)
 

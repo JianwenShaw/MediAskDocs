@@ -20,6 +20,7 @@ flowchart TB
     classDef client fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
     classDef gateway fill:#fff8e1,stroke:#ff6f00,stroke-width:2px,color:#000
     classDef app fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef ai fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
     classDef infra fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
     classDef external fill:#ffebee,stroke:#c62828,stroke-width:2px,stroke-dasharray: 5 5,color:#000
 
@@ -32,7 +33,7 @@ flowchart TB
 
     GW["Nginx 网关 (反向代理/SSL)"]:::gateway
 
-    subgraph BackendLayer ["后端应用层 (Modular Monolith)"]
+    subgraph BackendLayer ["Java 后端应用层 (Modular Monolith)"]
         direction TB
         API["mediask-api (Web入口)"]:::app
         Worker["mediask-worker (异步任务)"]:::app
@@ -41,8 +42,11 @@ flowchart TB
             Auth[认证授权]
             Appt[挂号预约]
             EMR[电子病历]
-            AI[AI智能服务]
         end
+    end
+
+    subgraph AILayer ["AI 微服务层 (Python)"]
+        AIService["mediask-ai<br/>(FastAPI + LangChain)"]:::ai
     end
 
     subgraph InfraLayer ["基础设施与中间件 (Infrastructure)"]
@@ -64,20 +68,24 @@ flowchart TB
     %% 链路关系
     User --> Web & H5
     Web & H5 -- "HTTPS / JSON" --> GW
-    GW -- "负载均衡" --> API
+    GW -- "/api/*" --> API
+    GW -- "/ai/*" --> AIService
 
     API -- "同步调用" --> Modules
+    API -- "HTTP 调用" --> AIService
     Worker -- "复用逻辑" --> Modules
 
     Modules -- "JDBC" --> MySQL
     Modules -- "Jedis" --> Redis
-    Modules -- "gRPC" --> Milvus
+    AIService -- "pymilvus" --> Milvus
     
     API -- "生产消息 (事务)" --> MQ
     MQ -- "消费消息" --> Worker
 
     Modules -.-> RustFS
     Modules -.-> OSS
+    
+    AIService -- "HTTP / SSE" --> DeepSeek
 
     AI -- "HTTP / SSE流式" --> DeepSeek
 ```
@@ -116,8 +124,19 @@ flowchart TB
 | **缓存** | Redis | 7.x | 分布式锁、号源池管理 |
 | **向量数据库** | Milvus | 2.3+ | 专业 RAG 检索 |
 | **消息队列** | RocketMQ | 5.0+ | 事务消息保证最终一致性 |
-| **AI 框架** | Spring AI / LangChain4j | - | 统一大模型接入 |
 | **工具库** | Lombok / MapStruct / Knife4j | - | 简化代码、类型安全、接口文档 |
+
+## 4.1 AI 微服务技术选型 (Python)
+
+AI 能力采用**独立 Python 微服务**架构，与 Java 主业务解耦。
+
+| 技术分类 | 选型方案 | 选型理由 |
+|---------|---------|---------|
+| **Web 框架** | FastAPI | 原生 async、自动 OpenAPI、SSE 支持 |
+| **AI 编排** | LangChain | RAG Pipeline、Prompt 管理 |
+| **对话状态机** | LangGraph | 多轮对话状态管理 |
+| **向量数据库** | pymilvus | Milvus Python SDK |
+| **LLM 接入** | OpenAI SDK | DeepSeek 兼容、流式输出 |
 
 ## 5. 数据存储方案
 
@@ -132,10 +151,17 @@ flowchart TB
 - **索引类型**: HNSW (高性能向量检索)
 - **用途**: 医疗知识库 RAG 检索
 
-### 5.3 文件存储: 策略模式切换
-- **开发环境**: 本地磁盘 / RustFS
-- **生产环境**: 阿里云 OSS + CDN
-- **实现**: `@Profile("dev")` / `@Profile("prod")` 自动切换
+### 5.3 AI 智能模块 (Python 微服务)
+
+本系统的 AI 核心模块采用**独立 Python 微服务**（FastAPI + LangChain + LangGraph），是毕设的重点亮点模块。
+
+| 功能模块 | 核心能力 | 技术实现 |
+|---------|---------|---------|
+| **RAG 检索增强** | 医疗知识库问答，回答可追溯 | LangChain LCEL + Milvus |
+| **混合检索** | 向量检索 + BM25 关键词检索 | RRF 结果融合算法 |
+| **多轮对话** | 预问诊状态管理，生成预问诊摘要 | LangGraph StateGraph + SSE |
+| **安全过滤** | PII 脱敏、敏感内容拦截 | Guard Rails + 正则过滤 |
+| **文档解析** | PDF/Markdown 解析入库 | LangChain DocumentLoaders |
 
 ## 6. 项目模块结构 (DDD 分层)
 
