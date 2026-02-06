@@ -32,6 +32,10 @@
 | 03 | [配置管理指南](./03-CONFIGURATION.md) | 运维 | 多环境配置、加密 |
 | 04 | [部署运维手册](./04-DEVOPS.md) | 运维 | Docker、CI/CD、监控 |
 | 05 | [测试策略](./05-TESTING.md) | 规范 | 测试要求与质量标准 |
+| **AI（Python 微服务）** |
+| 10 | [Python AI 服务设计与落地清单](./10-PYTHON_AI_SERVICE.md) | 架构 | API、配置、目录结构、待办 |
+| 11 | [AI 安全护栏方案](./11-AI_GUARDRAILS_PLAN.md) | 规范 | 风险分级、PII 脱敏、审计与降级 |
+| 12 | [AI/RAG 核心模块实现计划](./12-AI_RAG_IMPLEMENTATION_PLAN.md) | 规划 | 从 MVP 到可用的分阶段实施路线 |
 | **前端** |
 | 08 | [前端开发指南](./08-FRONTEND.md) | 运维 | React 快速开始 |
 | **根目录文档** |

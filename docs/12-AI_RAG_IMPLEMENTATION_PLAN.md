@@ -1,0 +1,113 @@
+# AI/RAG 核心模块实现计划（可演示、可追溯、可扩展）
+
+> 目标：在现有 `mediask-ai`（FastAPI）骨架上，补齐“知识入库 → 向量化 → Milvus 检索 → 引用 → LLM 生成”的端到端链路，并支持本地开发与线上演示环境平滑切换。
+
+## 1. 背景与边界
+
+- 本模块定位：`mediask-ai` 仅提供 AI 能力（RAG 问答、流式输出、知识库操作），不承载业务事务。
+- 上游：Java 后端通过 HTTP 调用。
+- 下游：LLM（DeepSeek / OpenAI 兼容 API）+ Milvus（向量库）。
+- 约束：医疗场景必须“谨慎、可追溯、最小化采集”，并具备降级与审计能力。
+
+## 2. 当前代码现状（基于仓库已有结构）
+
+- 已具备：
+  - LLM 调用：`app/services/llm_client.py`（OpenAI SDK，支持流式）。
+  - RAG 编排骨架：`app/services/rag_pipeline.py`（已串 guardrails + prompt + citations）。
+  - 安全护栏：`app/services/guardrails.py`（PII mask、规则驱动、审计 webhook）。
+  - API 与 SSE：`app/routers/chat.py`、`app/utils/sse.py`。
+- 主要缺口（需实现）：
+  - 检索器 `app/services/retriever.py` 仍为 stub（返回空列表）。
+  - 知识库入库 `app/services/knowledge_store.py` 仍为 stub（未分块、未 embedding、未写入 Milvus）。
+
+## 3. 核心目标（验收口径）
+
+### 3.1 功能验收
+- `/api/v1/knowledge/ingest`：支持 Markdown/PDF 入库（至少文本入库可用），完成分块、向量化、写入 Milvus。
+- `/api/v1/knowledge/search`：能检索返回 top_k chunks（含 score、metadata）。
+- `/api/v1/chat`：`use_rag=true` 时返回 `answer + citations`（可追溯到 doc/page/section）。
+- `/api/v1/chat/stream`：流式输出稳定；出现异常时输出 `error` 事件；结束输出 `end`。
+
+### 3.2 质量验收
+- 相关性：引入 `RAG_SCORE_THRESHOLD` 做基础过滤，避免硬塞无关上下文。
+- 安全：输入侧 PII 脱敏、风险分级、拒答策略、强制免责声明；审计字段可追踪 `trace_id/session_id`。
+- 可靠性：Milvus/LLM 任一不可用时可降级（例如检索失败则退化为无 RAG 的谨慎回答）。
+
+## 4. 分阶段实施（从 MVP 到可用）
+
+### 阶段 0：目标固化与验收样例（1 天）
+- 输出 1 页 spec：输入/输出格式、边界与禁止项、引用字段、降级策略、审计字段。
+- 建立最小“黄金问答集”（20 条）：用于后续对比检索与 prompt 调参效果。
+
+### 阶段 1：RAG MVP（2–4 天，优先端到端跑通）
+
+#### 1) 抽象“可替换”能力（Embedding / Loader / VectorStore）
+为避免“Embedding 供应商不确定”阻塞主流程，先将 embedding 抽象为可替换 provider：
+- `EmbeddingClient.embed_texts(texts) -> vectors`
+- `DocumentLoader.load_markdown/load_pdf -> (text, metadata)`
+- `VectorStore.upsert/search`（封装 pymilvus）
+
+建议默认方案：
+- 先走 **OpenAI 兼容 Embedding 接口**（与现有 OpenAI SDK 体系一致），后续只需替换 env 或 provider 实现。
+
+#### 2) 入库：Markdown / PDF → 分块 → Embedding → Milvus
+落地点：`app/services/knowledge_store.py`
+- 文档清洗：统一空白、去噪、保留标题层级信息到 metadata。
+- 分块策略：`chunk_size=800~1200`、`overlap=100~200`（以字符或 token 近似均可，MVP 先按字符）。
+- 元数据：`doc_id/source/chunk_id/page/section/title/category/created_at`（用于引用与过滤）。
+- 写入 Milvus：每个 chunk 一条记录（id + vector + text + metadata）。
+
+#### 3) 检索：Query Embedding → Milvus Search → 过滤 → RetrievalResult
+落地点：`app/services/retriever.py`
+- `top_k`：默认 5（与 API 一致）。
+- `score_threshold`：低于阈值的 chunk 过滤掉，防止上下文污染。
+- 返回：`RetrievalResult(content, source, score, metadata)`（供 citations 使用）。
+
+#### 4) RAG Pipeline 串联与降级
+落地点：`app/services/rag_pipeline.py`
+- 检索失败或无结果：自动降级为无 RAG 的 LLM 回复（并打日志 + 审计字段体现“是否降级”）。
+- citations：引用 snippet 建议按句子截断并携带 `page/section`，增强答辩“可追溯”观感。
+
+### 阶段 2：演示增强与质量提升（3–6 天）
+- Hybrid Retrieval：向量检索 + 关键词/BM25（可先简化为关键词召回）→ RRF 融合。
+- SSE 引用输出：为便于前端展示，建议在流式接口补充 `meta` 事件（携带 citations、session_id、trace_id），或在结束前追加一次结构化引用事件。
+- Prompt 规范化：避免免责声明重复（当前既在系统提示里要求，也在输出末尾 append，需统一策略）。
+- 输出侧基础脱敏：对模型输出再做一次 PII mask（防止意外泄露）。
+
+### 阶段 3：工程化与可靠性（2–5 天，可并行）
+- 可观测性：记录 retrieve/llm 耗时拆分、top score、命中数量、是否降级、模型名等。
+- 韧性：Milvus 超时、异常处理、重试/熔断（至少保证接口快速失败并降级）。
+- 测试：mock embedding + mock milvus；覆盖 chunking、阈值过滤、引用字段、拒答与降级路径；接口测试覆盖 SSE。
+
+### 阶段 4：数据与评测闭环（长期）
+- 扩充黄金集（50–200 条），每次调整分块/检索/prompt 都跑回归。
+- 指标：引用正确率（引用是否支持回答）、拒答正确率、平均延迟、降级比例。
+
+## 5. 配置建议（本地开发 → 线上演示平滑切换）
+
+建议在 `app/config.py` 增补并统一管理（示例字段名，可根据现有命名风格调整）：
+- Embedding：
+  - `EMBEDDING_PROVIDER=openai_compatible`
+  - `EMBEDDING_MODEL=...`
+  - `EMBEDDING_BASE_URL=...`
+  - `EMBEDDING_API_KEY=...`
+- Milvus：
+  - `MILVUS_URI=http://localhost:19530`
+  - `MILVUS_USER=...`、`MILVUS_PASSWORD=...`
+  - `VECTOR_COLLECTION=mediask_knowledge`
+- RAG：
+  - `RAG_TOP_K=5`
+  - `RAG_SCORE_THRESHOLD=0.2`
+
+环境切换方式：
+- 本地：`.env` 指向 localhost Milvus。
+- 演示：部署环境变量（或 `.env.prod`）指向服务器 Milvus；代码不写任何“环境分支逻辑”。
+
+## 6. 交付清单（建议顺序）
+
+1) 实现 `KnowledgeStore`：分块 + embedding + Milvus upsert。
+2) 实现 `Retriever`：Milvus search + 阈值过滤 + 返回结构化结果。
+3) 在 `RagPipeline` 中补全降级、引用字段增强与审计字段补充。
+4) 补齐 PDF/Markdown loader（先可用后优化）。
+5) 增加最小测试与黄金集回归脚本（至少可在答辩前稳定复现效果）。
+
