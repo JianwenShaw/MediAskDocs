@@ -67,27 +67,70 @@ dev-dependencies = [
 
 ## 4. 配置项
 
+### 4.1 多环境切换规则
+
+加载优先级（从高到低）：
+1. `ENV_FILE`：显式指定 env 文件路径（如 `.env.prod`）。
+2. `APP_ENV`：自动选择 `.env.{APP_ENV}`，不存在则回退到 `.env`。
+3. 默认：若存在 `.env.dev` 则使用 `.env.dev`，否则使用 `.env`。
+
+常用示例：
+
 ```bash
-# .env
+# 本地开发（默认）
+APP_ENV=dev
+
+# 生产环境
+APP_ENV=prod
+
+# 或显式指定
+ENV_FILE=.env.prod
+```
+
+```bash
+# .env.dev (本地默认)
+APP_ENV=dev
 API_KEY=mediask-ai-secret-key
 LOG_LEVEL=INFO
 
-LLM_PROVIDER=deepseek
-DEEPSEEK_API_KEY=sk-xxx
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-MODEL_NAME=deepseek-chat
-EMBEDDING_MODEL=text-embedding-3-small
+LLM_MODEL=deepseek-chat
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_API_KEY=sk-xxx
 
+MILVUS_MODE=lite
+MILVUS_LITE_PATH=.milvus/mediask.db
 MILVUS_URI=http://localhost:19530
-MILVUS_USER=
-MILVUS_PASSWORD=
-VECTOR_COLLECTION=mediask_knowledge
-RAG_TOP_K=5
-RAG_SCORE_THRESHOLD=0.2
+MILVUS_COLLECTION=mediask_knowledge
+```
 
-REQUEST_TIMEOUT=30
-MAX_TOKENS=1024
-TEMPERATURE=0.2
+```bash
+# .env.prod（生产）
+APP_ENV=prod
+LOG_LEVEL=INFO
+DEBUG=false
+
+MILVUS_MODE=milvus
+MILVUS_URI=http://milvus:19530
+MILVUS_COLLECTION=mediask_knowledge
+```
+
+### 4.2 本地启动与部署
+
+本地开发：
+
+```bash
+uv sync
+make dev
+```
+
+生产/演示环境（示例）：
+
+```bash
+# 方式一：环境变量切换
+APP_ENV=prod make run
+
+# 方式二：显式指定 env 文件
+ENV_FILE=.env.prod make run
 ```
 
 ## 5. API 设计
@@ -103,6 +146,19 @@ GET /health
 ```json
 {"status":"healthy"}
 ```
+
+### 5.4 Trace ID 规范
+
+本服务支持链路追踪的 Trace ID 透传与生成规则：
+
+- 若请求头包含 `X-Trace-Id`，直接透传并写入日志与响应头。
+- 若无 `X-Trace-Id`，但包含 `X-Request-Id`，则使用 `X-Request-Id`。
+- 两者都没有时，服务内部生成 UUID v4 作为 `trace_id`。
+
+调用方式建议：
+
+- **直接调用 AI 服务**：调用方可自行生成并传入 `X-Trace-Id`；否则服务会自动生成。
+- **经 Spring Boot 服务转发**：Spring Boot 生成并透传 `X-Trace-Id`，保证全链路一致。
 
 ### 5.2 对话接口
 

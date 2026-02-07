@@ -53,6 +53,8 @@ node_modules/
 
 ## 2. Docker Compose（本地开发）
 
+> AI 服务本地开发可选用 Milvus Lite（`MILVUS_MODE=lite`），无需启动完整 Milvus/etcd/minio 容器；生产或演示环境再使用标准 Milvus 服务。
+
 ```yaml
 version: '3.8'
 

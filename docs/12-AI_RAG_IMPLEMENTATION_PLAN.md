@@ -100,8 +100,8 @@
   - `RAG_SCORE_THRESHOLD=0.2`
 
 环境切换方式：
-- 本地：`.env` 指向 localhost Milvus。
-- 演示：部署环境变量（或 `.env.prod`）指向服务器 Milvus；代码不写任何“环境分支逻辑”。
+- 本地：默认读取 `.env.dev`，可用 Milvus Lite（`MILVUS_MODE=lite`）。
+- 演示/生产：读取 `.env.prod` 或设置 `APP_ENV=prod` 指向服务器 Milvus；代码不写任何“环境分支逻辑”。
 
 ## 6. 交付清单（建议顺序）
 
@@ -110,4 +110,3 @@
 3) 在 `RagPipeline` 中补全降级、引用字段增强与审计字段补充。
 4) 补齐 PDF/Markdown loader（先可用后优化）。
 5) 增加最小测试与黄金集回归脚本（至少可在答辩前稳定复现效果）。
-
