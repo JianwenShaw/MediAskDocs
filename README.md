@@ -23,7 +23,7 @@
 | 文档 | 说明 |
 |------|------|
 | [PROJECT_PLAN.md](./PROJECT_PLAN.md) | 项目规划与需求分析（功能模块、用例、流程） |
-| [ResearchProposal.md](./ResearchProposal.md) | 开题报告（研究目的、意义、技术方案、进度安排） |
+| [THESIS_OUTLINE.md](./THESIS_OUTLINE.md) | 论文/答辩主线（研究目标、创新点、评测口径、合规审计、演示脚本） |
 
 ---
 
@@ -40,10 +40,7 @@ cd MediAsk
 cd mediask-be
 docker-compose up -d
 
-# 3. 导入数据库
-mysql -uroot -proot mediask < MediAskDocs/docs/07-DATABASE.md
-
-# 4. 启动后端
+# 3. 启动后端
 mvn spring-boot:run -pl mediask-api
 
 # 5. 访问接口文档
@@ -88,4 +85,3 @@ http://localhost:8080/swagger-ui.html
 | | Ant Design | 6.0 |
 | **DevOps** | Docker | 24.x |
 | | GitHub Actions | - |
-

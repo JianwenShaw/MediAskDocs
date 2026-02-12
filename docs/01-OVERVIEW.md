@@ -86,8 +86,6 @@ flowchart TB
     Modules -.-> OSS
     
     AIService -- "HTTP / SSE" --> DeepSeek
-
-    AI -- "HTTP / SSE流式" --> DeepSeek
 ```
 
 ## 3. 前端技术选型
@@ -197,16 +195,10 @@ classDiagram
         <<Core>>
     }
 
-    class DAL ["mediask-dal (数据访问层)"] {
-        +Mapper : MyBatis实现
-        +Entity : 数据库实体
-    }
-
-    class Infra ["mediask-dal (数据访问层)"] {
-        +Redis : 缓存实现
-        +AIClient : 大模型客户端
-        +FileStore : 文件存储实现
-    }
+	    class DAL ["mediask-dal (数据访问层)"] {
+	        +Mapper : MyBatis实现
+	        +Entity : 数据库实体
+	    }
 
     class Common ["mediask-common (通用层)"] {
         +Utils : 工具类
@@ -214,22 +206,20 @@ classDiagram
         +Exception : 全局异常
     }
 
-    Root --* API
-    Root --* Worker
-    Root --* App
-    Root --* Domain
-    Root --* DAL
-    Root --* Infra
-    Root --* Common
-
-    API ..> App : 依赖
-    Worker ..> App : 依赖
-    App ..> Domain : 依赖
-    DAL ..|> Domain : 实现接口
-    Infra ..> Common : 依赖
-    Domain ..> Common : 依赖
-    App ..> DAL : 依赖
-```
+	    Root --* API
+	    Root --* Worker
+	    Root --* Service
+	    Root --* Domain
+	    Root --* DAL
+	    Root --* Common
+	    
+	    API ..> Service : 依赖
+	    Worker ..> Service : 依赖
+	    Service ..> Domain : 依赖
+	    DAL ..|> Domain : 实现接口
+	    Domain ..> Common : 依赖
+	    Service ..> DAL : 依赖
+	```
 
 ### 模块职责说明
 | 模块 | 职责 | 关键特性 |

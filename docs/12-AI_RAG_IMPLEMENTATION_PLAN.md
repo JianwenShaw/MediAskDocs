@@ -9,16 +9,13 @@
 - 下游：LLM（DeepSeek / OpenAI 兼容 API）+ Milvus（向量库）。
 - 约束：医疗场景必须“谨慎、可追溯、最小化采集”，并具备降级与审计能力。
 
-## 2. 当前代码现状（基于仓库已有结构）
+## 2. 落地方式（以文档为准，避免被“目录结构”卡住）
 
-- 已具备：
-  - LLM 调用：`app/services/llm_client.py`（OpenAI SDK，支持流式）。
-  - RAG 编排骨架：`app/services/rag_pipeline.py`（已串 guardrails + prompt + citations）。
-  - 安全护栏：`app/services/guardrails.py`（PII mask、规则驱动、审计 webhook）。
-  - API 与 SSE：`app/routers/chat.py`、`app/utils/sse.py`。
-- 主要缺口（需实现）：
-  - 检索器 `app/services/retriever.py` 仍为 stub（返回空列表）。
-  - 知识库入库 `app/services/knowledge_store.py` 仍为 stub（未分块、未 embedding、未写入 Milvus）。
+本仓库的文档给出了一套推荐的 AI 服务目录结构（见 `docs/10-PYTHON_AI_SERVICE.md`）。实际代码若已存在不同目录组织方式，**只要能力与接口契约一致即可**，不要求完全同名同路径。
+
+建议把需要实现的“能力缺口”拆成 2 类：
+- **知识库入库**：文档解析/清洗 → 分块 → embedding → 写入向量库（Milvus）。
+- **检索器**：query embedding → Milvus search → 阈值过滤/重排 → 结构化返回（供 citations）。
 
 ## 3. 核心目标（验收口径）
 
@@ -47,9 +44,9 @@
 - `DocumentLoader.load_markdown/load_pdf -> (text, metadata)`
 - `VectorStore.upsert/search`（封装 pymilvus）
 
-建议默认方案：
-- 先走 **OpenAI 兼容 Embedding 接口**（与现有 OpenAI SDK 体系一致），后续只需替换 env 或 provider 实现。
- - 代码侧预留多 Provider 接口（如 openai_compatible / local / cohere），统一通过配置切换。
+建议默认方案（按你的约束取舍）：
+- **本地 embedding 优先**：设备资源有限时选择小模型 + 限并发（见 `docs/13-EMBEDDING_MODEL_SELECTION.md`）。
+- **保留远程 embedding 兜底**：仅在本地跑不稳/演示环境受限时启用；启用前必须走输入侧严格脱敏与审计。
 
 #### 2) 入库：Markdown / PDF → 分块 → Embedding → Milvus
 落地点：`app/services/knowledge_store.py`

@@ -97,8 +97,14 @@ LLM_MODEL=deepseek-chat
 LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=sk-xxx
 
-EMBEDDING_PROVIDER=none
-EMBEDDING_DIM=1536
+# Embedding（RAG 入库/检索必需）
+# - local：本地小模型（优先，适合“数据不出网”）
+# - openai_compatible：远程 embedding provider（仅作为设备资源不足时的兜底；务必先脱敏）
+# - none：禁用 embedding（等于禁用“入库/检索”，只能做纯 LLM 对话/安全护栏）
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
+# 维度以实际模型/实现为准；如需手动指定，保持与向量库 collection 一致
+EMBEDDING_DIM=512
 
 REDIS_URL=
 REDIS_HOST=127.0.0.1
@@ -251,7 +257,7 @@ POST /api/v1/knowledge/ingest
 
 - Header: `X-API-Key: <API_KEY>`
 - 未通过返回 401: `{"error":"Invalid API Key"}`
-- 可选增强: 速率限制、PII 脱敏、敏感词过滤
+- 强制要求（医疗场景必须落实）：输入/输出 PII 脱敏、风险分级与拒答策略、审计字段与 trace_id（实现细则见 `docs/11-AI_GUARDRAILS_PLAN.md`）
 
 ```python
 # app/middleware/auth.py

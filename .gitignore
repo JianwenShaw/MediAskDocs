@@ -40,3 +40,19 @@ build/
 
 
 ./mediask-be/.idea/
+
+### Python / uv ###
+.venv/
+__pycache__/
+*.pyc
+### Proposal artifacts ###
+tmp/
+output/*
+!output/doc/
+output/doc/*
+!output/doc/开题报告-基于大语言模型的智能医疗辅助问诊系统-模板版.docx
+5罗向阳 基于YOLOv10的农作物识别算法研究 开题报告.docx
+郝伟康-开题报告.docx
+.python-version
+pyproject.toml
+uv.lock

@@ -36,11 +36,12 @@
 | 10 | [Python AI 服务设计与落地清单](./10-PYTHON_AI_SERVICE.md) | 架构 | API、配置、目录结构、待办 |
 | 11 | [AI 安全护栏方案](./11-AI_GUARDRAILS_PLAN.md) | 规范 | 风险分级、PII 脱敏、审计与降级 |
 | 12 | [AI/RAG 核心模块实现计划](./12-AI_RAG_IMPLEMENTATION_PLAN.md) | 规划 | 从 MVP 到可用的分阶段实施路线 |
+| 13 | [Embedding 模型选择](./13-EMBEDDING_MODEL_SELECTION.md) | 规划 | 如何选择Embedding模型
 | **前端** |
 | 08 | [前端开发指南](./08-FRONTEND.md) | 运维 | React 快速开始 |
 | **根目录文档** |
 | [PROJECT_PLAN.md](../PROJECT_PLAN.md) | 管理 | 项目规划与需求分析 |
-| [ResearchProposal.md](../ResearchProposal.md) | 管理 | 开题报告 |
+| [THESIS_OUTLINE.md](../THESIS_OUTLINE.md) | 管理 | 论文/答辩主线（研究目标、评测口径、合规审计、演示脚本） |
 
 ---
 
@@ -57,7 +58,8 @@ cd MediAsk/mediask-be
 docker-compose up -d
 
 # 3. 导入数据库
-mysql -uroot -proot mediask < MediAskDocs/docs/07-DATABASE.md
+# `07-DATABASE.md` 是 Markdown 文档（包含 SQL 代码块），不要直接重定向导入。
+# 建议做法：从文档中复制 `sql` 代码块执行，或将代码块整理成单独的 .sql 文件后再导入。
 
 # 4. 启动后端
 mvn spring-boot:run -pl mediask-api
