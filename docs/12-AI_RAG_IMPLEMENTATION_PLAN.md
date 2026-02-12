@@ -49,6 +49,7 @@
 
 建议默认方案：
 - 先走 **OpenAI 兼容 Embedding 接口**（与现有 OpenAI SDK 体系一致），后续只需替换 env 或 provider 实现。
+ - 代码侧预留多 Provider 接口（如 openai_compatible / local / cohere），统一通过配置切换。
 
 #### 2) 入库：Markdown / PDF → 分块 → Embedding → Milvus
 落地点：`app/services/knowledge_store.py`

@@ -97,6 +97,18 @@ LLM_MODEL=deepseek-chat
 LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=sk-xxx
 
+EMBEDDING_PROVIDER=none
+EMBEDDING_DIM=1536
+
+REDIS_URL=
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=
+REDIS_SOCKET_TIMEOUT_SECONDS=2
+REDIS_CONNECT_TIMEOUT_SECONDS=1
+READY_CACHE_TTL_SECONDS=15
+
 MILVUS_MODE=lite
 MILVUS_LITE_PATH=.milvus/mediask.db
 MILVUS_URI=http://localhost:19530
@@ -113,6 +125,8 @@ MILVUS_MODE=milvus
 MILVUS_URI=http://milvus:19530
 MILVUS_COLLECTION=mediask_knowledge
 ```
+
+> `/ready` 会将依赖检查结果缓存到 Redis（默认 TTL=15s），Redis 不可用时会回退到内存缓存；Redis key 采用 `mediask-ai:{业务}:{具体作用}` 命名空间（如 `mediask-ai:health:ready:lite`）。
 
 ### 4.2 本地启动与部署
 
@@ -146,6 +160,14 @@ GET /health
 ```json
 {"status":"healthy"}
 ```
+
+### 5.4 监控指标（Prometheus）
+
+```
+GET /metrics
+```
+
+响应: Prometheus text/plain 指标格式（包含 readiness 指标）。
 
 ### 5.4 Trace ID 规范
 
