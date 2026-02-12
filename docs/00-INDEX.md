@@ -1,100 +1,45 @@
 # MediAsk 文档索引
 
-> 智能医疗辅助问诊系统 - 完整技术文档索引
->
-> **文档定位**：本文档是"地图"，代码仓库是"领土"。文档说明规范和模式，具体实现请参考代码仓库。
+> 代码为准：本文档用于导航，具体行为请以 `mediask-be` 当前源码为准。
 
----
+## 文档分类
 
-## 文档类型说明
-
-| 类型 | 内容 | 定位 |
+| 类型 | 文档 | 说明 |
 |------|------|------|
-| **规范类** | 代码规范、DDD 模式、测试策略 | 约束与原则 |
-| **架构类** | 系统架构、数据库设计 | 设计与决策 |
-| **运维类** | 部署配置、监控告警 | 运行环境 |
-| **根目录** | 项目规划、开题报告 | 项目管理 |
+| 架构 | [01-OVERVIEW.md](./01-OVERVIEW.md) | Java 后端当前架构、模块与依赖 |
+| 规范 | [02-CODE_STANDARDS.md](./02-CODE_STANDARDS.md) | 分层依赖与编码约定 |
+| 配置 | [03-CONFIGURATION.md](./03-CONFIGURATION.md) | 配置文件与环境说明 |
+| 运维 | [04-DEVOPS.md](./04-DEVOPS.md) | Docker 与 CI/CD |
+| 测试 | [05-TESTING.md](./05-TESTING.md) | 测试策略与门禁 |
+| 设计 | [06-DDD_DESIGN.md](./06-DDD_DESIGN.md) | DDD 方法与边界 |
+| 数据库 | [07-DATABASE.md](./07-DATABASE.md) | 以 SQL 初始化脚本为准的库表说明 |
+| 前端 | [08-FRONTEND.md](./08-FRONTEND.md) | 前端开发指南 |
+| AI 规划 | [10-13 系列文档](./10-PYTHON_AI_SERVICE.md) | Python/RAG 相关规划 |
 
----
-
-## 文档结构
-
-| 编号 | 文档 | 类型 | 说明 |
-|------|------|------|------|
-| **必读（规范）** |
-| 00 | 本索引 | 规范 | 文档导航与快速开始 |
-| 02 | [代码规范与最佳实践](./02-CODE_STANDARDS.md) | 规范 | 命名规范、分层架构 |
-| 06 | [DDD 设计指南](./06-DDD_DESIGN.md) | 规范 | 领域驱动设计模式 |
-| **架构设计** |
-| 01 | [系统架构概览](./01-OVERVIEW.md) | 架构 | 架构设计、技术选型 |
-| 07 | [数据库设计](./07-DATABASE.md) | 架构 | ER 图、DDL、索引策略 |
-| **运维与测试** |
-| 03 | [配置管理指南](./03-CONFIGURATION.md) | 运维 | 多环境配置、加密 |
-| 04 | [部署运维手册](./04-DEVOPS.md) | 运维 | Docker、CI/CD、监控 |
-| 05 | [测试策略](./05-TESTING.md) | 规范 | 测试要求与质量标准 |
-| **AI（Python 微服务）** |
-| 10 | [Python AI 服务设计与落地清单](./10-PYTHON_AI_SERVICE.md) | 架构 | API、配置、目录结构、待办 |
-| 11 | [AI 安全护栏方案](./11-AI_GUARDRAILS_PLAN.md) | 规范 | 风险分级、PII 脱敏、审计与降级 |
-| 12 | [AI/RAG 核心模块实现计划](./12-AI_RAG_IMPLEMENTATION_PLAN.md) | 规划 | 从 MVP 到可用的分阶段实施路线 |
-| 13 | [Embedding 模型选择](./13-EMBEDDING_MODEL_SELECTION.md) | 规划 | 如何选择Embedding模型
-| **前端** |
-| 08 | [前端开发指南](./08-FRONTEND.md) | 运维 | React 快速开始 |
-| **根目录文档** |
-| [PROJECT_PLAN.md](../PROJECT_PLAN.md) | 管理 | 项目规划与需求分析 |
-| [THESIS_OUTLINE.md](../THESIS_OUTLINE.md) | 管理 | 论文/答辩主线（研究目标、评测口径、合规审计、演示脚本） |
-
----
-
-## 🚀 快速开始
-
-### 本地开发环境搭建
+## 快速开始
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/xxx/MediAsk.git
-cd MediAsk/mediask-be
+cd mediask-be
+python3 scripts/os_detect.py
 
-# 2. 启动基础设施
-docker-compose up -d
+# macOS
+./scripts/m21.sh clean verify
+./scripts/m21.sh spring-boot:run -pl mediask-api
 
-# 3. 导入数据库
-# `07-DATABASE.md` 是 Markdown 文档（包含 SQL 代码块），不要直接重定向导入。
-# 建议做法：从文档中复制 `sql` 代码块执行，或将代码块整理成单独的 .sql 文件后再导入。
-
-# 4. 启动后端
-mvn spring-boot:run -pl mediask-api
-
-# 5. 访问接口文档
-http://localhost:8989/doc.html
+# 非 macOS
+# mvn clean verify
+# mvn spring-boot:run -pl mediask-api
 ```
 
----
+## 本地访问
 
-## 📖 阅读顺序
+- 服务端口（默认）：`8989`
+- OpenAPI：`http://localhost:8989/v3/api-docs`
+- Swagger UI：`http://localhost:8989/swagger-ui/index.html`
 
-### 新成员
+## 与代码一致性约定
 
-1. [系统架构概览](./01-OVERVIEW.md) - 了解整体设计
-2. [代码规范与最佳实践](./02-CODE_STANDARDS.md) - 熟悉编码规范
-3. [DDD 设计指南](./06-DDD_DESIGN.md) - 理解领域模型
-4. [数据库设计](./07-DATABASE.md) - 理解数据模型
-5. [配置管理指南](./03-CONFIGURATION.md) - 配置开发环境
-
-### 运维人员
-
-1. [部署运维手册](./04-DEVOPS.md) - 掌握部署流程
-2. [配置管理指南](./03-CONFIGURATION.md) - 了解环境配置
-3. [测试策略](./05-TESTING.md) - 了解质量要求
-
-### 测试人员
-
-1. [测试策略](./05-TESTING.md) - 了解测试规范
-2. [代码规范与最佳实践](./02-CODE_STANDARDS.md) - 理解代码结构
-
----
-
-## 🔗 相关链接
-
-- [GitHub 仓库](https://github.com/xxx/MediAsk)
-- [API 文档](http://localhost:8989/doc.html)
-- [Grafana 监控](http://localhost:3000)
+- 依赖版本以根 `pom.xml` 为准。
+- 模块依赖关系以各模块 `pom.xml` 为准。
+- 数据库结构以 `mediask-dal/src/main/resources/sql/init-dev.sql` 为准。
+- API 以 `mediask-api` controller 与 `api-docs/openapi.json` 为准。

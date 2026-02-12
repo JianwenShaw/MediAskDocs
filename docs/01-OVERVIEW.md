@@ -1,293 +1,93 @@
-# 智能医疗辅助问诊系统 - 系统架构概览
+# 系统架构概览（按当前代码）
 
-> 本文档描述系统整体架构设计、技术选型与模块划分
+> 本文档同步当前 `mediask-be` Java 代码实现状态。
 
-## 1. 架构设计理念
+## 1. 架构定位
 
-本项目采用 **"适度微服务化" (Modular Monolith)** 的架构设计理念。在单体应用的基础上，通过模块化隔离业务逻辑，既保证了毕设开发的便捷性（易于部署、调试），又保留了向微服务演进的能力。
+- 架构形态：模块化单体（Modular Monolith）
+- 核心语言：Java 21
+- 构建方式：Maven 多模块
+- 当前可部署模块：`mediask-api`、`mediask-worker`
 
-## 1.1 系统边界与核心用例（索引）
-
-本文档侧重“怎么搭建系统”。关于“系统要做什么、由谁做、怎么验收”，请参考项目规划中的需求分析章节：
-
-- 需求分析与系统功能描述：../PROJECT_PLAN.md#requirements
-
-## 2. 逻辑架构图
+## 2. 模块划分与依赖
 
 ```mermaid
-flowchart TB
-    %% 样式定义
-    classDef client fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
-    classDef gateway fill:#fff8e1,stroke:#ff6f00,stroke-width:2px,color:#000
-    classDef app fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
-    classDef ai fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
-    classDef infra fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
-    classDef external fill:#ffebee,stroke:#c62828,stroke-width:2px,stroke-dasharray: 5 5,color:#000
+flowchart LR
+    API[mediask-api]
+    Worker[mediask-worker]
+    Service[mediask-service]
+    Domain[mediask-domain]
+    Infra[mediask-infra]
+    DAL[mediask-dal]
+    Common[mediask-common]
 
-    User((用户/医生))
-    
-    subgraph ClientLayer ["客户端层 (Frontend)"]
-        Web["Web端 (React SPA)"]:::client
-        H5["移动端 (H5)"]:::client
-    end
+    API --> Service
+    API --> Common
 
-    GW["Nginx 网关 (反向代理/SSL)"]:::gateway
+    Worker --> Domain
+    Worker --> Infra
 
-    subgraph BackendLayer ["Java 后端应用层 (Modular Monolith)"]
-        direction TB
-        API["mediask-api (Web入口)"]:::app
-        Worker["mediask-worker (异步任务)"]:::app
-        
-        subgraph Modules ["核心业务模块 (Domain)"]
-            Auth[认证授权]
-            Appt[挂号预约]
-            EMR[电子病历]
-        end
-    end
+    Service --> Domain
+    Service --> Infra
+    Service --> Common
 
-    subgraph AILayer ["AI 微服务层 (Python)"]
-        AIService["mediask-ai<br/>(FastAPI + LangChain)"]:::ai
-    end
+    Infra --> Domain
+    Infra --> DAL
+    Infra --> Common
 
-    subgraph InfraLayer ["基础设施与中间件 (Infrastructure)"]
-        MySQL["MySQL 8.0<br/>(业务数据)"]:::infra
-        Redis["Redis 7<br/>(缓存/锁)"]:::infra
-        Milvus["Milvus<br/>(向量库)"]:::infra
-        MQ["RocketMQ<br/>(消息队列)"]:::infra
-    end
-
-    subgraph StorageLayer ["文件存储 (Strategy Pattern)"]
-        RustFS["RustFS<br/>(Dev环境)"]:::infra
-        OSS["Aliyun OSS<br/>(Prod环境)"]:::infra
-    end
-
-    subgraph ExternalLayer ["外部服务 (3rd Party)"]
-        DeepSeek["DeepSeek LLM API"]:::external
-    end
-
-    %% 链路关系
-    User --> Web & H5
-    Web & H5 -- "HTTPS / JSON" --> GW
-    GW -- "/api/*" --> API
-    GW -- "/ai/*" --> AIService
-
-    API -- "同步调用" --> Modules
-    API -- "HTTP 调用" --> AIService
-    Worker -- "复用逻辑" --> Modules
-
-    Modules -- "JDBC" --> MySQL
-    Modules -- "Jedis" --> Redis
-    AIService -- "pymilvus" --> Milvus
-    
-    API -- "生产消息 (事务)" --> MQ
-    MQ -- "消费消息" --> Worker
-
-    Modules -.-> RustFS
-    Modules -.-> OSS
-    
-    AIService -- "HTTP / SSE" --> DeepSeek
+    Domain --> Common
+    DAL --> Common
 ```
 
-## 3. 前端技术选型
+## 3. 当前已落地能力（Java）
 
-采用目前工业界最主流的 **React 生态**，构建纯客户端渲染 (CSR) 的单页应用 (SPA)。
+- 认证与鉴权：注册、登录、刷新令牌、登出，JWT + Refresh Token。
+- 用户与权限：用户查询、角色与权限管理。
+- 排班管理：手动创建、自动排班、模板生成、开停诊、号源调整、分页查询、删除。
+- 挂号预约：创建、取消、支付、标记就诊/爽约、医生/患者维度查询。
+- 医生管理：医生档案的创建、更新、查询。
+- AI 反馈指标：AI 复核提交与统计查询（Java 侧数据域已落地）。
+- 诊断连接：`/api/test/**` 连接测试能力。
 
-| 技术分类 | 选型方案 | 选型理由 |
-|---------|---------|---------|
-| **核心框架** | React 19 | Concurrent Mode 优化用户体验 |
-| **开发语言** | TypeScript | 强类型约束，减少运行时错误 |
-| **构建工具** | Vite | 极速冷启动，秒级热更新 |
-| **UI 组件库** | Ant Design 6.0 | 企业级中后台首选，医疗场景组件丰富 |
-| **状态管理** | Zustand / React Query | 轻量级状态管理 + 服务端状态缓存 |
-| **路由管理** | React Router v6 | React 官方推荐 |
-| **HTTP 客户端** | Axios | 统一拦截器处理认证和错误 |
-| **样式方案** | Tailwind CSS | 原子化 CSS，开发效率高 |
+## 4. 当前技术栈（来自 POM）
 
-### 前端部署架构
-- **渲染模式**: SPA (Single Page Application)
-- **构建产物**: 纯静态 HTML/JS/CSS
-- **部署方式**: Nginx 静态托管或对象存储 CDN 加速
-- **优势**: 无需 Node.js 运行时，部署简单，安全性高
+| 分类 | 组件 | 版本 |
+|------|------|------|
+| Java | JDK | 21 |
+| Web | Spring Boot | 3.5.8 |
+| ORM | MyBatis-Plus | 3.5.15 |
+| DB | MySQL 驱动 | 8.3.0 |
+| Cache/Lock | Redis + Redisson | 7.x / 3.40.2 |
+| Security | Spring Security + JJWT | 6.x / 0.12.6 |
+| API 文档 | springdoc-openapi | 2.6.0 |
 
-## 4. 后端技术选型
+## 5. 运行与访问
 
-基于 **Java 21** 新特性构建高性能后端。
+- 默认端口：`8989`（`mediask-api/src/main/resources/application.yml`）
+- Context Path：`/`
+- OpenAPI：`/v3/api-docs`
+- Swagger UI：`/swagger-ui/index.html`
 
-| 技术分类 | 选型方案 | 版本 | 选型理由 |
-|---------|---------|------|---------|
-| **开发语言** | Java | 21 | Virtual Threads 提升高并发性能 |
-| **核心框架** | Spring Boot | 3.3.3 | 原生支持 AOT 编译 |
-| **ORM 框架** | MyBatis-Plus | 3.5.5 | 简化 CRUD，代码生成器 |
-| **数据库** | MySQL | 8.0.33+ | 事务稳定，生态成熟 |
-| **缓存** | Redis | 7.x | 分布式锁、号源池管理 |
-| **向量数据库** | Milvus | 2.3+ | 专业 RAG 检索 |
-| **消息队列** | RocketMQ | 5.0+ | 事务消息保证最终一致性 |
-| **工具库** | Lombok / MapStruct / Knife4j | - | 简化代码、类型安全、接口文档 |
+## 6. 当前实现边界说明
 
-## 4.1 AI 微服务技术选型 (Python)
+- 代码库已包含 AI 相关数据域（如 `ai_conversations`、`ai_messages`、`ai_feedback_reviews`）和对应 Java 能力。
+- Python 微服务（FastAPI/LangChain/LangGraph）、Milvus、RocketMQ、OSS 在 `MediAskDocs` 中主要作为规划内容；当前 Java 后端代码未形成完整落地链路。
 
-AI 能力采用**独立 Python 微服务**架构，与 Java 主业务解耦。
+## 7. 关键接口前缀
 
-| 技术分类 | 选型方案 | 选型理由 |
-|---------|---------|---------|
-| **Web 框架** | FastAPI | 原生 async、自动 OpenAPI、SSE 支持 |
-| **AI 编排** | LangChain | RAG Pipeline、Prompt 管理 |
-| **对话状态机** | LangGraph | 多轮对话状态管理 |
-| **向量数据库** | pymilvus | Milvus Python SDK |
-| **LLM 接入** | OpenAI SDK | DeepSeek 兼容、流式输出 |
+- 认证：`/api/v1/auth`
+- 用户：`/api/v1/users`
+- 权限管理：`/api/v1/admin/authz`
+- 医生：`/api/v1/doctors`
+- 排班：`/api/v1/schedules`
+- 排班模板：`/api/v1/schedule-templates`
+- 预约：`/api/v1/appointments`
+- AI 指标：`/api/v1/ai`
+- 测试：`/api/test`
 
-## 5. 数据存储方案
+## 8. 相关文档
 
-### 5.1 业务数据库: MySQL 8.0
-- **字符集**: utf8mb4
-- **主键策略**: Snowflake 雪花算法 (BIGINT)
-- **事务隔离级别**: READ-COMMITTED
-- **分库分表**: 病历按年分表，挂号按医院哈希分库
-
-### 5.2 向量数据库: Milvus
-- **部署模式**: Standalone (开发) / Cluster (生产)
-- **索引类型**: HNSW (高性能向量检索)
-- **用途**: 医疗知识库 RAG 检索
-
-### 5.3 AI 智能模块 (Python 微服务)
-
-本系统的 AI 核心模块采用**独立 Python 微服务**（FastAPI + LangChain + LangGraph），是毕设的重点亮点模块。
-
-| 功能模块 | 核心能力 | 技术实现 |
-|---------|---------|---------|
-| **RAG 检索增强** | 医疗知识库问答，回答可追溯 | LangChain LCEL + Milvus |
-| **混合检索** | 向量检索 + BM25 关键词检索 | RRF 结果融合算法 |
-| **多轮对话** | 预问诊状态管理，生成预问诊摘要 | LangGraph StateGraph + SSE |
-| **安全过滤** | PII 脱敏、敏感内容拦截 | Guard Rails + 正则过滤 |
-| **文档解析** | PDF/Markdown 解析入库 | LangChain DocumentLoaders |
-
-## 6. 项目模块结构 (DDD 分层)
-
-```mermaid
-classDiagram
-    direction TB
-    
-    class Root ["mediask-root (父工程)"] {
-        +pom.xml : 统一依赖管理
-    }
-
-    class API ["mediask-api (接入层)"] {
-        +Controller : Web接口
-        +Filter : 安全过滤
-        <<Deployable>>
-    }
-
-    class Worker ["mediask-worker (任务层)"] {
-        +Job : 定时任务
-        +Consumer : 消息消费
-        <<Deployable>>
-    }
-
-    class Service ["mediask-service (业务服务层)"] {
-        +Service : 业务编排
-        +DTO : 数据传输对象
-        +Event : 领域事件发布
-    }
-
-    class Domain ["mediask-domain (领域层)"] {
-        +Entity : 核心实体
-        +Repository : 仓储接口
-        <<Core>>
-    }
-
-	    class DAL ["mediask-dal (数据访问层)"] {
-	        +Mapper : MyBatis实现
-	        +Entity : 数据库实体
-	    }
-
-    class Common ["mediask-common (通用层)"] {
-        +Utils : 工具类
-        +Result : 统一响应
-        +Exception : 全局异常
-    }
-
-	    Root --* API
-	    Root --* Worker
-	    Root --* Service
-	    Root --* Domain
-	    Root --* DAL
-	    Root --* Common
-	    
-	    API ..> Service : 依赖
-	    Worker ..> Service : 依赖
-	    Service ..> Domain : 依赖
-	    DAL ..|> Domain : 实现接口
-	    Domain ..> Common : 依赖
-	    Service ..> DAL : 依赖
-	```
-
-### 模块职责说明
-| 模块 | 职责 | 关键特性 |
-|------|------|---------|
-| **mediask-api** | Web 流量入口 | 参数校验、JWT 认证、限流 |
-| **mediask-worker** | 异步任务处理 | 定时任务、消息消费、物理隔离 |
-| **mediask-service** | 业务流程编排 | 事务管理、领域事件发布 |
-| **mediask-domain** | 核心业务规则 | 纯 POJO，不依赖框架 |
-| **mediask-dal** | 数据访问与外部服务 | MyBatis Mapper、Redis、AI、文件存储 |
-| **mediask-common** | 通用工具 | 异常、工具类、常量 |
-
-## 7. 核心工程化能力
-
-| 能力项 | 实现方案 |
-|--------|---------|
-| **高并发处理** | Virtual Threads + Redis 分布式锁 + 乐观锁 |
-| **异步解耦** | RocketMQ 事务消息 + Spring Event |
-| **流式响应** | SSE (Server-Sent Events) 实现 AI 打字机效果 |
-| **全链路追踪** | MDC traceId 贯穿日志 |
-| **接口防护** | Redis Lua 限流 + Idempotency-Key 防重放 |
-| **配置管理** | Jasypt 加密 + 多环境 Profile |
-| **监控告警** | Actuator + Prometheus + Grafana |
-| **CI/CD** | GitHub Actions + Docker 自动化部署 |
-
-## 8. 认证与会话（接口契约）
-
-> 本节描述前后端联调需要稳定遵守的接口契约（`/api/v1` 版本化 + `Result<T>` 统一响应体）。
-
-### 8.1 统一响应体
-
-所有接口统一返回：
-
-```json
-{
-  "code": 0,
-  "msg": "success",
-  "data": {},
-  "traceId": "xxx",
-  "timestamp": 1730000000000
-}
-```
-
-### 8.2 登录：`POST /api/v1/auth/login`
-
-- **请求体**：`{ "account": "...", "password": "..." }`
-- **响应 data**（关键字段）：
-  - `tokenType`: `"Bearer"`
-  - `token`: access token
-  - `expiresIn`: access token 剩余有效期（秒）
-  - `expireAt`: access token 过期时间（秒级时间戳，兼容字段）
-  - `refreshToken`: refresh token（仅用于刷新）
-
-### 8.3 刷新：`POST /api/v1/auth/refresh`
-
-- **请求体**：`{ "refreshToken": "..." }`
-- **响应**：同登录（返回新的 `token` + 轮换后的 `refreshToken`）
-- **安全约束**：refresh token **不能**用于业务接口访问（不能放在 `Authorization` 里当 access token 用）。
-
-### 8.4 当前用户：`GET /api/v1/users/me`
-
-- **请求头**：`Authorization: Bearer <accessToken>`
-- **响应 data**：返回当前登录用户的脱敏信息（如 `userId/username/phone/userType/...`）
-
----
-
-## 相关文档
 - [代码规范与最佳实践](./02-CODE_STANDARDS.md)
 - [配置管理指南](./03-CONFIGURATION.md)
+- [数据库设计](./07-DATABASE.md)
 - [部署运维手册](./04-DEVOPS.md)
-- [测试策略](./05-TESTING.md)
-- [数据库设计](../DATABASE_DESIGN.md)

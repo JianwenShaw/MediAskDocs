@@ -15,10 +15,10 @@
 | `mediask-api` | REST 控制器、JWT 认证、安全配置 | `*Controller`, `*Filter` |
 | `mediask-service` | 应用服务、业务编排、用例实现 | `*ApplicationService` |
 | `mediask-domain` | 领域实体、值对象、领域服务、仓储接口 | `*`, `*DomainService` |
-| `mediask-infra` | 仓储实现、Redis、MQ、AI 客户端 | `*RepositoryImpl`, `*Converter` |
+| `mediask-infra` | 仓储实现、Redis/锁、JWT、事件发布 | `*RepositoryImpl`, `*Converter` |
 | `mediask-dal` | DO 实体、MyBatis-Plus Mapper | `*DO`, `*Mapper` |
 | `mediask-common` | 工具类、异常、常量、响应包装器 | `R<T>`, `BizException` |
-| `mediask-worker` | 定时任务、MQ 消费者 | `*Scheduler` |
+| `mediask-worker` | 定时任务 | `*Scheduler` |
 
 ### 1.2 分层依赖规则
 
@@ -43,7 +43,7 @@
 ```
 
 **核心规则**：
-- Domain 层：纯 Java，不依赖 Spring，不依赖 Infra/DAL
+- Domain 层：不依赖 Infra/DAL；可保留极少量 Spring 依赖用于注解（如 `@Service`）
 - Service 层：使用 Repository 接口（定义在 Domain），不直接用 Mapper
 - Infra 层：实现 Domain 的仓储接口，提供技术能力
 

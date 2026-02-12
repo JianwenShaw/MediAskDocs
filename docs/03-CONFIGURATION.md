@@ -1,331 +1,76 @@
-# 配置管理最佳实践
+# 配置管理指南（按当前代码）
 
-> 本文档描述项目配置文件结构、多环境隔离策略和敏感配置加密方案
+> 本文档基于 `mediask-api/src/main/resources/application*.yml` 的现状整理。
 
-## 1. 配置文件结构
+## 1. 配置文件位置
 
-```
-src/main/resources/
-├── application.yml                    # 公共配置
-├── application-dev.yml                # 开发环境
-├── application-test.yml               # 测试环境
-├── application-prod.yml               # 生产环境
-├── logback-spring.xml                 # 日志配置
-└── mapper/                            # MyBatis XML
+```text
+mediask-api/src/main/resources/
+├── application.yml
+├── application-dev.yml
+├── application-test.yml
+└── application-prod.yml
 ```
 
-## 2. application.yml 公共配置
+## 2. 当前 profile 行为
 
-```yaml
-spring:
-  application:
-    name: mediask-api
-  
-  profiles:
-    active: @spring.profiles.active@  # Maven Profile 注入
-  
-  # 虚拟线程配置（JDK 21）
-  threads:
-    virtual:
-      enabled: true
-  
-  # Jackson 配置
-  jackson:
-    time-zone: GMT+8
-    date-format: yyyy-MM-dd HH:mm:ss
-    default-property-inclusion: non_null
-    serialization:
-      write-dates-as-timestamps: false
+- `application.yml` 中默认：`spring.profiles.active: dev`
+- 未使用 Maven profile 占位符注入。
+- 运行时可通过环境变量/启动参数覆盖。
 
-# MyBatis-Plus 配置
-mybatis-plus:
-  configuration:
-    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
-    map-underscore-to-camel-case: true
-  global-config:
-    db-config:
-      logic-delete-field: deletedAt
-      logic-delete-value: NOW()
-      logic-not-delete-value: 'NULL'
-
-# 接口文档配置
-springdoc:
-  api-docs:
-    enabled: true
-    path: /v3/api-docs
-  swagger-ui:
-    enabled: ${springdoc.swagger-ui.enabled:true}
-    path: /swagger-ui.html
-
-# 日志配置
-logging:
-  level:
-    root: INFO
-    me.jianwen.mediask: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"
-```
-
-## 3. application-dev.yml 开发环境
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/mediask?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai
-    username: root
-    password: root
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
-      connection-timeout: 30000
-  
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      database: 0
-      timeout: 3000ms
-      lettuce:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 2
-
-# 文件存储（开发环境使用本地）
-file:
-  storage:
-    type: local
-    local-path: /tmp/mediask/upload
-
-# 接口文档（开发环境开启）
-springdoc:
-  swagger-ui:
-    enabled: true
-
-# AI模型配置
-ai:
-  deepseek:
-    api-key: ${DEEPSEEK_API_KEY:sk-xxx}
-    base-url: https://api.deepseek.com
-    model: deepseek-chat
-    timeout: 30s
-```
-
-## 4. application-prod.yml 生产环境
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://${DB_HOST:mysql}:3306/mediask?useSSL=true
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
-    hikari:
-      maximum-pool-size: 50
-      minimum-idle: 10
-  
-  data:
-    redis:
-      host: ${REDIS_HOST:redis}
-      port: 6379
-      password: ${REDIS_PASSWORD}
-
-# 文件存储（生产环境使用OSS）
-file:
-  storage:
-    type: oss
-    oss:
-      endpoint: ${OSS_ENDPOINT}
-      access-key-id: ${OSS_ACCESS_KEY}
-      access-key-secret: ${OSS_SECRET_KEY}
-      bucket-name: mediask-prod
-
-# 接口文档（生产环境关闭）
-springdoc:
-  swagger-ui:
-    enabled: false
-
-# 日志级别调整
-logging:
-  level:
-    me.jianwen.mediask: INFO
-```
-
-## 5. 敏感配置加密方案
-
-### 5.1 使用 Jasypt 加密
-
-```xml
-<!-- pom.xml 添加依赖 -->
-<dependency>
-    <groupId>com.github.ulisesbocchio</groupId>
-    <artifactId>jasypt-spring-boot-starter</artifactId>
-    <version>3.0.5</version>
-</dependency>
-```
-
-```yaml
-# application.yml
-jasypt:
-  encryptor:
-    password: ${JASYPT_PASSWORD}  # 环境变量传入密钥
-    algorithm: PBEWithMD5AndDES
-
-# 加密后的配置
-spring:
-  datasource:
-    password: ENC(encryptedPassword)
-```
-
-### 5.2 加密命令
+示例：
 
 ```bash
-# 加密密码
-java -cp jasypt-1.9.3.jar org.jasypt.intf.cli.JasyptPBEStringEncryptionCLI \
-  input="mysecretpassword" \
-  password="$JASYPT_PASSWORD" \
-  algorithm=PBEWithMD5AndDES
-
-# 输出: ENC(encryptedPassword)
+java -jar app.jar --spring.profiles.active=prod
 ```
 
-## 6. Maven Profile 配置
+## 3. application.yml（公共配置）
 
-```xml
-<!-- pom.xml -->
-<profiles>
-    <profile>
-        <id>dev</id>
-        <activation>
-            <activeByDefault>true</activeByDefault>
-        </activation>
-        <properties>
-            <spring.profiles.active>dev</spring.profiles.active>
-        </properties>
-    </profile>
-    
-    <profile>
-        <id>prod</id>
-        <properties>
-            <spring.profiles.active>prod</spring.profiles.active>
-        </properties>
-    </profile>
-</profiles>
-```
+当前重点配置：
 
-```bash
-# 打包时指定环境
-mvn clean package -Pprod
-```
+- `server.port: 8989`
+- `server.servlet.context-path: /`
+- MyBatis-Plus：
+  - `mapper-locations: classpath*:mapper/**/*.xml`
+  - `type-aliases-package: me.jianwen.mediask.dal.entity`
+  - `global-config.db-config.id-type: ASSIGN_ID`
+  - 逻辑删除字段：`deletedAt`
+- JWT：
+  - `security.jwt.secret`
+  - `security.jwt.issuer`
+  - `security.jwt.expire-seconds`
 
-## 7. 配置类示例
+## 4. application-dev.yml（开发环境）
 
-### 7.1 文件存储策略模式
+当前包含：
 
-```java
-public interface FileStorageService {
-    String upload(MultipartFile file);
-    String getUrl(String path);
-}
+- 数据源：Druid + MySQL
+- Redis：主机、端口、密码、连接池
+- 日志级别：`me.jianwen.mediask` 与 MyBatis 调试日志
 
-@Service
-@Profile("dev")
-public class LocalFileStorageService implements FileStorageService {
-    @Value("${file.storage.local-path}")
-    private String localPath;
-    
-    @Override
-    public String upload(MultipartFile file) {
-        // 本地磁盘存储
-    }
-}
+注意：当前开发配置中包含示例/占位敏感信息，部署前需改为环境变量。
 
-@Service
-@Profile("prod")
-public class OssFileStorageService implements FileStorageService {
-    @Value("${file.storage.oss.endpoint}")
-    private String endpoint;
-    
-    @Override
-    public String upload(MultipartFile file) {
-        // 阿里云 OSS 存储
-    }
-}
-```
+## 5. application-test.yml（测试环境）
 
-### 7.2 数据源配置
+当前提供最小化 MySQL/Redis 参数模板，尚未包含完整测试隔离配置。
 
-```java
-@Configuration
-public class DataSourceConfig {
-    
-    @Bean
-    @ConfigurationProperties(prefix = "spring.datasource.hikari")
-    public HikariConfig hikariConfig() {
-        HikariConfig config = new HikariConfig();
-        config.setPoolName("MediAskHikariPool");
-        config.setConnectionTestQuery("SELECT 1");
-        config.setLeakDetectionThreshold(60000);
-        return config;
-    }
-}
-```
+## 6. application-prod.yml（生产环境）
 
-## 8. Logback 配置
+当前通过环境变量读取 MySQL/Redis 连接参数，并关闭 SQL 输出日志实现类。
 
-```xml
-<!-- logback-spring.xml -->
-<configuration>
-    <springProperty scope="context" name="APP_NAME" source="spring.application.name"/>
-    
-    <!-- 开发环境：控制台彩色输出 -->
-    <springProfile name="dev">
-        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-            <encoder>
-                <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %highlight(%-5level) [%X{traceId}] %logger{36} - %msg%n</pattern>
-            </encoder>
-        </appender>
-        <root level="DEBUG">
-            <appender-ref ref="CONSOLE"/>
-        </root>
-    </springProfile>
-    
-    <!-- 生产环境：JSON格式日志 -->
-    <springProfile name="prod">
-        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-            <file>/var/log/${APP_NAME}/${APP_NAME}.log</file>
-            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-                <fileNamePattern>/var/log/${APP_NAME}/${APP_NAME}.%d{yyyy-MM-dd}.log</fileNamePattern>
-                <maxHistory>30</maxHistory>
-            </rollingPolicy>
-            <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
-        </appender>
-        <root level="INFO">
-            <appender-ref ref="FILE"/>
-        </root>
-    </springProfile>
-</configuration>
-```
+## 7. 与文档历史版本差异
 
-## 9. 配置优先级
+以下内容在旧文档中出现，但当前 Java 代码未落地为通用配置：
 
-从高到低：
-1. 命令行参数：`java -jar app.jar --server.port=8081`
-2. 环境变量：`export DB_HOST=mysql-prod`
-3. `application-{profile}.yml`
-4. `application.yml`
-5. 代码中的 `@Value` 默认值
+- Jasypt 加密配置样例
+- `file.storage.*`（本地/OSS 策略）
+- DeepSeek/Milvus/RocketMQ 等外部配置项
+- `logback-spring.xml` 的项目内实现
 
-## 10. 最佳实践
+上述内容若后续落地，应以新增代码与配置为准再补文档。
 
-### ✅ 推荐
-- 敏感配置通过环境变量注入
-- 使用 `@ConfigurationProperties` 批量绑定配置
-- 开发/生产环境完全隔离
-- 配置文件加密存储在 Git
+## 8. 推荐实践（适用于当前项目）
 
-### ❌ 禁止
-- 硬编码数据库密码
-- 生产环境开启 Swagger
-- 将密钥提交到代码仓库
-- 使用默认的加密密钥
+- 敏感配置统一改为环境变量注入。
+- `dev/test/prod` 数据源与 Redis 彻底隔离。
+- 每次新增配置项时同步更新本文档与对应 `application-*.yml` 注释。
