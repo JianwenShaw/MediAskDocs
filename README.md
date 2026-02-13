@@ -19,6 +19,7 @@
 | 11 | [AI 安全护栏方案](./docs/11-AI_GUARDRAILS_PLAN.md) | 规划文档 |
 | 12 | [AI/RAG 实现计划](./docs/12-AI_RAG_IMPLEMENTATION_PLAN.md) | 规划文档 |
 | 13 | [Embedding 模型选择](./docs/13-EMBEDDING_MODEL_SELECTION.md) | 规划文档 |
+| 14 | [后端 Java 开发路线图](./ROADMAP.md) | 后端阶段目标、学习重点、交付清单 |
 
 ## 快速开始（后端）
 

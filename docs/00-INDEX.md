@@ -6,6 +6,7 @@
 
 | 类型 | 文档 | 说明 |
 |------|------|------|
+| 索引 | [00-INDEX.md](./00-INDEX.md) | 文档导航与快速开始 |
 | 架构 | [01-OVERVIEW.md](./01-OVERVIEW.md) | Java 后端当前架构、模块与依赖 |
 | 规范 | [02-CODE_STANDARDS.md](./02-CODE_STANDARDS.md) | 分层依赖与编码约定 |
 | 配置 | [03-CONFIGURATION.md](./03-CONFIGURATION.md) | 配置文件与环境说明 |
@@ -15,6 +16,10 @@
 | 数据库 | [07-DATABASE.md](./07-DATABASE.md) | 以 SQL 初始化脚本为准的库表说明 |
 | 前端 | [08-FRONTEND.md](./08-FRONTEND.md) | 前端开发指南 |
 | AI 规划 | [10-13 系列文档](./10-PYTHON_AI_SERVICE.md) | Python/RAG 相关规划 |
+| 评审 | [14-ARCHITECTURE_REVIEW.md](./14-ARCHITECTURE_REVIEW.md) | 架构评审与优化建议 |
+| 设计 | [15-PERMISSIONS/00-INDEX.md](./15-PERMISSIONS/00-INDEX.md) | 权限、审计与合规设计 |
+| 设计 | [16-LOGGING_DESIGN.md](./16-LOGGING_DESIGN.md) | 工业级日志设计规范 |
+| 路线图 | [ROADMAP.md](../ROADMAP.md) | 后端 Java 分阶段目标与产出路径 |
 
 ## 快速开始
 

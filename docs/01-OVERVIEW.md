@@ -85,7 +85,103 @@ flowchart LR
 - AI 指标：`/api/v1/ai`
 - 测试：`/api/test`
 
-## 8. 相关文档
+## 8. 项目架构大观（含规划项）
+
+> 说明：本图用于展示“全局形态”。其中标注为 `planned` 的组件是当前文档规划项，不代表 Java 后端已全部落地。
+>
+> draw.io 源文件：`MediAskDocs/diagrams/mediask-architecture-panorama.drawio`
+
+```mermaid
+flowchart TB
+    classDef planned fill:#fff3cd,stroke:#c9a227,stroke-width:1px,color:#222;
+    classDef runtime fill:#e8f3ff,stroke:#2b6cb0,stroke-width:1px,color:#222;
+    classDef data fill:#eefaf0,stroke:#2f855a,stroke-width:1px,color:#222;
+    classDef obs fill:#f6f0ff,stroke:#6b46c1,stroke-width:1px,color:#222;
+
+    subgraph C[Clients]
+        WebUser[Admin/Doctor Web\nReact SPA]:::planned
+        H5User[Patient H5\nReact]:::planned
+        ApiCaller[3rd-party / Scripts]:::planned
+    end
+
+    subgraph Edge[Edge]
+        Nginx[Nginx\nStatic + Reverse Proxy]:::planned
+    end
+
+    subgraph FE[Frontend Deploy]
+        WebDist[web dist]:::planned
+        H5Dist[h5 dist]:::planned
+    end
+
+    subgraph Java[Java Backend (Modular Monolith)]
+        Api[mediask-api\nSpring Boot REST]:::runtime
+        Worker[mediask-worker\nSchedulers/Consumers]:::runtime
+        Service[mediask-service\nApplication services]:::runtime
+        Domain[mediask-domain\nDomain model]:::runtime
+        Infra[mediask-infra\nRedis/JWT/Clients]:::runtime
+        Dal[mediask-dal\nMyBatis-Plus]:::runtime
+
+        Api --> Service --> Domain
+        Service --> Infra --> Dal
+        Worker --> Infra
+        Worker --> Domain
+    end
+
+    subgraph AI[Python AI Service]
+        AiSvc[mediask-ai\nFastAPI + SSE]:::planned
+        Guardrails[Risk/PII Guardrails\n+ Audit fields]:::planned
+        RAG[RAG Pipeline\nChunk/Retrieve/Citations]:::planned
+        LLM[DeepSeek / OpenAI-compatible\nLLM API]:::planned
+    end
+
+    subgraph MQ[Messaging]
+        RocketMQ[RocketMQ]:::planned
+    end
+
+    subgraph Stores[Data Stores]
+        MySQL[(MySQL)]:::data
+        Redis[(Redis)]:::data
+        Milvus[(Milvus / Milvus Lite)]:::planned
+    end
+
+    subgraph Obs[Observability]
+        ELK[ELK\nElasticsearch + Logstash + Kibana]:::obs
+        Trace[Tracing\nSkyWalking/Zipkin]:::planned
+    end
+
+    subgraph Deploy[Containerization]
+        Docker[Docker\nAPI/Worker/AI/Nginx]:::planned
+    end
+
+    WebUser --> Nginx
+    H5User --> Nginx
+    ApiCaller --> Nginx
+    Nginx --> Api
+    Nginx --> AiSvc
+    Nginx --> WebDist
+    Nginx --> H5Dist
+
+    Api --> MySQL
+    Api --> Redis
+    Worker --> MySQL
+    Worker --> Redis
+
+    Api --> AiSvc
+    AiSvc --> Guardrails --> RAG --> Milvus
+    RAG --> LLM
+
+    Api --> RocketMQ
+    Worker --> RocketMQ
+
+    Api --> ELK
+    Worker --> ELK
+    AiSvc --> ELK
+    Nginx --> ELK
+    Api --> Trace
+    AiSvc --> Trace
+```
+
+## 9. 相关文档
 
 - [代码规范与最佳实践](./02-CODE_STANDARDS.md)
 - [配置管理指南](./03-CONFIGURATION.md)
