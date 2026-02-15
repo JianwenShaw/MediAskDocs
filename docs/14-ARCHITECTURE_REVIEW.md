@@ -246,4 +246,4 @@ API → App → Domain
 
 - [06-DDD_DESIGN.md](./06-DDD_DESIGN.md) - DDD 设计规范
 - [01-OVERVIEW.md](./01-OVERVIEW.md) - 架构概览
-- [ROADMAP.md](./ROADMAP.md) - 路线图
+- [ROADMAP.md](../ROADMAP.md) - 路线图
