@@ -51,7 +51,7 @@ flowchart LR
 | [W6](#w6) | 2026-03-23 | AI：契约与门面 | 契约先定（OpenAPI）<br/>超时/降级/错误码<br/>日志字段口径对齐 | AI 失败可控 + 证据截图 |
 | [W7](#w7) | 2026-03-30 | AI：闭环落地 | 问诊→结果回写落库<br/>降级路径可演示<br/>补 1 条回归脚本 | AI 闭环演示 + 文档/证据 |
 | [W8](#w8) | 2026-04-06 | 日志闭环（Loki） | 应用日志落盘采集<br/>3 类 Loki 查询固化<br/>定位 1 个预置问题 | Loki 查询截图 + 复现步骤 |
-| [W9](#w9) | 2026-04-13 | 指标闭环（Prometheus） | 关键指标落地<br/>1 张 Grafana 面板<br/>1 个问题证据链 | 面板截图 + 问题定位过程 |
+| [W9](#w9) | 2026-04-13 | 指标闭环（Prometheus） | 关键指标落地<br/>1 张 Grafana 面板<br/>本地缓存可观测（hitRate/TTL/maxSize） | 面板截图 + 问题定位过程 |
 | [W10](#w10) | 2026-04-20 | 答辩资产收口 | 3 条演示脚本收口<br/>证据目录齐全<br/>风险清单闭环 | 10 分钟演示包（脚本+证据） |
 | [W11](#w11) | 2026-04-27 | 缓冲/彩排 | 补漏清零<br/>彩排 2 次<br/>回答追问清单 | 2 次彩排记录 + 问题清零 |
 
@@ -111,6 +111,11 @@ flowchart LR
 | 本地缓存 | `LocalCacheService`（Guava Cache），提供“缓存项定义/命中率/失效策略”统一入口 | 高 |
 | MQ | `EventPublisher`（事件发布）、`EventListener`（事件消费）契约 | 中 |
 | 文件存储 | `FileStorageService`（占位接口 + 本地实现） | 低 |
+
+当前状态（2026-02）：
+- `CacheService`、`RateLimiterService`、`CacheKeyManager` 已落地并在登录/预约场景接入。
+- `LocalCacheService`（Guava）已落地，并在 `HolidayService` 使用。
+- 本地缓存命中率可通过 `GET /api/test/all` 的 `localCache` 字段查看。
 
 #### D. 可解释性（必须）
 
@@ -308,8 +313,20 @@ flowchart LR
 
 ### <a id="w9"></a>W9（2026-04-13）指标闭环（Prometheus）
 
+**本周目标（≤3）**
+1. 关键链路指标落地（QPS/错误率/P99）。
+2. 本地缓存可观测性补齐（命中率 + 策略参数）。
+3. 形成 1 条完整问题证据链（指标 + 日志 + 缓存统计）。
+
+**本周任务**
+- 在统一诊断入口输出本地缓存统计：`size/hitCount/missCount/hitRate/evictionCount`。
+- 同步输出缓存定义参数：`expireAfterWrite(TTL)`、`maximumSize`，避免排障时反查代码。
+- 对至少 1 个缓存场景给出“命中率不达标时”的调优结论（调 TTL、调容量或下线缓存）。
+
 **交付物/验收**
-- 1 张 Grafana 面板覆盖关键链路 QPS/错误率/P99（或等价指标）；提供 1 次问题定位证据链。
+- 1 张 Grafana 面板覆盖关键链路 QPS/错误率/P99（或等价指标）。
+- `GET /api/test/all` 返回 `localCache` 统计且包含 `TTL/maxSize` 信息。
+- 提供 1 次问题定位证据链（指标 + 日志 + 缓存统计）。
 
 ### <a id="w10"></a>W10（2026-04-20）答辩资产收口
 

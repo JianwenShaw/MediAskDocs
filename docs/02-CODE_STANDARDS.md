@@ -251,12 +251,33 @@ public enum XxxStatus {
 ## 7. 常量管理
 
 ```java
-// Redis Key 常量
-public interface RedisKeyConstant {
-    String APPT_LOCK = "mediask:lock:appt:";
-    String SCHEDULE_CACHE = "mediask:schedule:doctor:%s:%s";
+// 统一缓存 Key 管理（推荐）
+public final class CacheKeyManager {
+
+    private static final String KEY_DELIMITER = ":";
+    private static final String AUTH_REFRESH_PREFIX = "auth:refresh";
+
+    private CacheKeyManager() {}
+
+    public static String refreshTokenKey(Long userId, String tokenId) {
+        return String.join(KEY_DELIMITER, AUTH_REFRESH_PREFIX, String.valueOf(userId), tokenId);
+    }
 }
 ```
+
+### 7.1 Redis Key 管理规范（强制）
+
+- 所有 Redis Key 必须通过统一入口生成，禁止在业务类中手写字符串拼接。
+- 统一使用 `:` 作为分隔符，命名模式建议：`业务域:子域:标识`。
+- Key 前缀由 `infra` 层统一管理，`service/domain` 只传业务参数，不关心拼接细节。
+- Pattern 查询（如批量删除）也必须通过统一入口生成，避免前缀漂移。
+- 新增缓存场景时，先在 Key 管理器补方法，再在业务代码接入。
+
+当前项目实现参考：
+- `mediask-infra/src/main/java/me/jianwen/mediask/infra/cache/CacheKeyManager.java`
+- `mediask-infra/src/main/java/me/jianwen/mediask/infra/security/RefreshTokenStore.java`
+- `mediask-infra/src/main/java/me/jianwen/mediask/infra/holiday/HolidayService.java`
+- `mediask-infra/src/main/java/me/jianwen/mediask/infra/diagnostic/TestConnectionInfraService.java`
 
 ---
 

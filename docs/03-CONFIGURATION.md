@@ -74,3 +74,28 @@ java -jar app.jar --spring.profiles.active=prod
 - 敏感配置统一改为环境变量注入。
 - `dev/test/prod` 数据源与 Redis 彻底隔离。
 - 每次新增配置项时同步更新本文档与对应 `application-*.yml` 注释。
+
+## 9. Redis Key 管理（当前实现）
+
+### 9.1 统一入口
+
+当前 Redis Key 由 `infra` 层统一管理：
+
+- `mediask-infra/src/main/java/me/jianwen/mediask/infra/cache/CacheKeyManager.java`
+
+该类负责定义：
+- Key 分隔符（统一 `:`）
+- 业务前缀（如 `auth:refresh`、`holiday`、`test:connection`）
+- Key/Pattern 生成方法（避免业务代码自行拼接）
+
+### 9.2 使用约束
+
+- 业务代码禁止直接硬编码 Redis Key 前缀。
+- 需要新 Key 时，先在 `CacheKeyManager` 增加方法，再由调用方接入。
+- 删除或批量删除操作也必须通过统一入口生成 pattern，保证前缀一致。
+
+### 9.3 已接入示例
+
+- Refresh Token：`RefreshTokenStore` 使用 `refreshTokenKey(...)` 与 `refreshTokenPattern(...)`
+- 节假日缓存：`HolidayService` 使用 `holidayKey(...)`
+- 诊断缓存：`TestConnectionInfraService` 使用 `testConnectionKey(...)`
