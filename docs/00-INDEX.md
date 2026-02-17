@@ -19,6 +19,7 @@
 | 评审 | [14-ARCHITECTURE_REVIEW.md](./14-ARCHITECTURE_REVIEW.md) | 架构评审与优化建议 |
 | 设计 | [15-PERMISSIONS/00-INDEX.md](./15-PERMISSIONS/00-INDEX.md) | 权限、审计与合规设计 |
 | 设计 | [16-LOGGING_DESIGN](./16-LOGGING_DESIGN/00-INDEX.md) | 工业级日志设计规范 |
+| 设计 | [18-SCHEDULING_CORE_UPGRADE.md](./18-SCHEDULING_CORE_UPGRADE.md) | 排班核心升级（节假日、方案版本化） |
 | 路线图 | [ROADMAP.md](../ROADMAP.md) | 后端 Java 分阶段目标与产出路径 |
 
 ## 快速开始

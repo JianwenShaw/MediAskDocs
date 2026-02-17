@@ -27,6 +27,13 @@ erDiagram
     DOCTOR_SCHEDULES ||--o{ APPOINTMENTS : scheduled
     USERS ||--o{ APPOINTMENTS : creates
 
+    DEPARTMENTS ||--o{ DEPARTMENT_SCHEDULE_DEMAND : requires
+    DOCTORS ||--o{ DOCTOR_AVAILABILITY_RULES : prefers
+    DOCTORS ||--o{ DOCTOR_TIME_OFF : leaves
+    CALENDAR_DAY ||--o{ SCHEDULE_PLAN_CONSTRAINT_SNAPSHOT : supports
+    SCHEDULE_PLAN ||--o{ SCHEDULE_PLAN_ITEMS : contains
+    SCHEDULE_PLAN ||--o{ SCHEDULE_PLAN_CONSTRAINT_SNAPSHOT : snapshots
+
     SCHEDULE_TEMPLATES ||--o{ SCHEDULE_TEMPLATE_RULES : has
     APPOINTMENTS ||--o{ APPOINTMENT_EVENTS : emits
     DOCTOR_SCHEDULES ||--o{ SCHEDULE_EVENTS : emits
@@ -43,6 +50,8 @@ erDiagram
 - `hospitals`, `departments`, `doctors`
 - `ai_conversations`, `ai_messages`, `ai_feedback_reviews`, `ai_metrics_daily`, `ai_metrics_dept_daily`
 - `doctor_schedules`, `appointment_slots`, `appointments`
+- `doctor_availability_rules`, `doctor_time_off`, `department_schedule_demand`, `calendar_day`
+- `schedule_plan`, `schedule_plan_items`, `schedule_plan_constraint_snapshot`
 - `schedule_templates`, `schedule_template_rules`, `schedule_exceptions`
 - `appointment_events`, `schedule_events`
 
@@ -64,6 +73,8 @@ source mediask-dal/src/main/resources/sql/init-dev.sql
 - `appointments.uk_appt_no`：预约单号唯一
 - `appointments.uk_patient_start`：患者同一时间段唯一约束
 - `doctor_schedules.uk_doctor_date_period`：医生同日同时段唯一
+- `calendar_day.uk_calendar_day_region`：同地区同自然日唯一
+- `schedule_plan.uk_schedule_plan_code_ver`：方案编码+版本唯一
 - `users.uk_users_username`、`users.uk_users_phone`：登录标识唯一
 
 ## 6. 文档维护规则
