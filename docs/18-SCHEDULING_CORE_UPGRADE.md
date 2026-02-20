@@ -1,111 +1,244 @@
-# 排班核心升级设计说明（V2）
+# 排班引擎升级实施方案（V3.1）
 
-> 更新时间：2026-02-16  
-> 目标：让排班能力与现实医疗场景同步，并具备工程化可追溯能力。
+> 更新时间：2026-02-19  
+> 版本目标：在不引入 OR-Tools 运行依赖的前提下，完成插件化求解架构、JSON DSL 约束、可解释输出、可复现执行与性能增强。  
+> 当前范围：单租户（`DEFAULT` 命名空间），多租户隔离延后。
 
-## 1. 当前已实现什么
+## 1. 升级背景与核心问题
 
-## 1.1 数据模型升级（已落库）
+当前排班能力已具备「DRAFT 生成 + 预检 + 发布/回滚」闭环，但仍存在以下工程问题：
 
-新增并接入以下表结构：
+1. 求解层抽象不统一，`solverConfig.strategy` 与实际求解流程耦合较弱。
+2. 约束规则多为代码内嵌，配置化能力不足，扩展成本高。
+3. 对「无解原因、冲突最小集、规则级扣分」的结构化输出不完整。
+4. 可复现性（同输入 + seed）与并行评估控制有提升空间。
+5. 规则运行时更新、缓存与多实例一致性机制未形成标准实现。
 
-1. `calendar_day`
-   - 作用：表达法定节假日与调休工作日，不再把日历逻辑写死在代码里。
-2. `doctor_availability_rules`
-   - 作用：表达医生长期可排/偏好规则（周几+时段）。
-3. `doctor_time_off`
-   - 作用：表达请假、培训等临时停诊约束。
-4. `department_schedule_demand`
-   - 作用：表达科室按日期+时段的供给需求。
-5. `schedule_plan`
-   - 作用：保存方案头（版本、状态、策略、评分）。
-6. `schedule_plan_items`
-   - 作用：保存方案明细（某日某时段由哪位医生承担）。
-7. `schedule_plan_constraint_snapshot`
-   - 作用：保存当次求解输入快照（规则、请假、需求、日历、参数）。
+## 2. V3.1 设计目标
 
-## 1.2 自动排班主链路升级（已接入）
+### 2.1 功能目标
 
-`POST /api/v1/schedules/auto` 现在执行逻辑：
+1. 引入统一抽象：`Constraint`、`Objective`、`Solver`、`SchedulingEngine`。
+2. 支持插件化求解器：`RuleGreedySolver`（baseline）+ `LocalSearchSolver` + `OrToolsCpSatSolver`（预留）。
+3. 支持约束 JSON DSL：硬约束/软约束、规则参数、权重、AND/OR/NOT 组合。
+4. 支持可复现执行：同输入与同随机种子输出稳定。
+5. 支持无解诊断：冲突报告与简化版最小冲突集。
+6. 支持可解释输出：每条规则触发证据、罚分与分配原因。
+7. 支持增量重排入口（基础版）：受影响窗口重排。
 
-1. 读取医生池、可排规则、请假、需求、节假日日历。
-2. 执行多医生联合排班优化（软硬约束+解释信息）。
-3. 仅生成并落库为 `DRAFT` 方案（不直接生效）。
-4. 返回方案评分、解释、未排满信息和 `planId`。
+### 2.2 非目标（本期明确不做）
 
-该设计避免算法结果直接改动线上排班，符合医疗场景的“先审后发”流程。
+1. 不接入 OR-Tools 实际求解，仅提供 `CP_SAT` 插件接口与自动回退。
+2. 不实现真实多租户字段与隔离策略，统一以 `DEFAULT` 命名空间运行。
+3. 不引入 Spring Cloud 或微服务治理组件。
 
-## 1.3 方案发布与回滚（已接入）
-
-新增方案接口：
-
-1. `GET /api/v1/schedule-plans/{planCode}/versions`：查看方案版本。
-2. `GET /api/v1/schedule-plans/{planId}/precheck`：发布前预检（不落库）。
-3. `POST /api/v1/schedule-plans/{planId}/publish`：发布方案。
-4. `POST /api/v1/schedule-plans/{planId}/rollback`：回滚到指定历史版本（本质是重新发布该版本）。
-
-发布模式支持：
-
-1. `STRICT`：存在有效预约冲突即拒绝发布。
-2. `FORCE`：保留冲突排班并继续发布，同时返回冲突清单。
-
-## 2. 为什么这么做
-
-## 2.1 与现实同步
-
-医院在法定节假日通常是“降载排班”，不是“全停诊”。因此节假日策略改为可配置：
-
-1. `CLOSE`：节假日停排。
-2. `REDUCED`：节假日降载排班（推荐默认）。
-3. `NORMAL`：节假日按平日排班。
-
-并且调休工作日（`is_makeup_workday=1`）优先级高于节假日标记，避免“调休当天仍停排”的业务错误。
-
-## 2.2 架构清晰
-
-采取“求解”和“生效”分离：
-
-1. 自动排班负责“生成方案”。
-2. 发布接口负责“应用方案”。
-
-收益：
-
-1. 可审核：可先看预检和冲突再发布。
-2. 可追溯：可复盘某版本方案为何生成。
-3. 可回滚：旧版本可快速重发布。
-
-## 2.3 质量可控
-
-发布前预检可提前暴露风险：
-
-1. 会阻断的冲突数（`wouldBlock`）。
-2. 预计新建排班数（`toCreateSchedules`）。
-3. 预计关闭排班数（`toCloseSchedules`）。
-
-## 3. 关键流程
+## 3. 总体架构
 
 ```mermaid
-flowchart TD
-    A[AutoScheduleRequest] --> B[ScheduleApplicationService]
-    B --> C[规则/请假/需求/日历]
-    C --> D[OptimizationDomainService]
-    D --> E[schedule_plan* DRAFT]
-    E --> F[precheck]
-    F --> G{publish mode}
-    G -->|STRICT| H[冲突即失败]
-    G -->|FORCE| I[保留冲突并发布]
-    I --> J[doctor_schedules 生效]
-    H --> K[提示冲突清单]
+flowchart LR
+    A[ScheduleController] --> B[ScheduleApplicationService]
+    B --> C[SchedulingEngine]
+    C --> D[ConstraintDslCompiler]
+    C --> E[SolverPluginRegistry]
+    E --> F[RuleGreedySolver]
+    E --> G[LocalSearchSolver]
+    E --> H[OrToolsCpSatSolver-Placeholder]
+    C --> I[ConflictAnalyzer]
+    C --> J[ExplainabilityBuilder]
+    C --> K[schedule_plan* Persistence]
 ```
 
-## 4. 当前边界与后续建议
+## 4. 核心抽象设计
 
-当前已覆盖核心闭环，但仍有可增强点：
+### 4.1 Constraint（约束）
 
-1. 发布接口增加“干跑差异详情”（新增/关闭/保持不变明细）。
-2. 方案明细增加医生负载统计字段，便于管理端可视化。
-3. 增加审计日志（谁在何时以何种模式发布/回滚）。
+1. 约束分类：`HARD`（必须满足）与 `SOFT`（尽量满足）。
+2. 约束结构：`id/type/params/enabled/weight/priority`。
+3. 约束执行结果：`satisfied/penalty/reason/evidence`。
 
-## 5. 结论
+### 4.2 Objective（目标函数）
 
-当前排班能力已从“朴素自动排班”升级为“现实可用、可审计、可回滚”的方案系统，满足毕设核心模块对业务真实性和工程完整性的要求。
+1. 默认采用加权和（weighted-sum）目标。
+2. 目标分项：公平性、偏好匹配、连续性、资深覆盖、周末均衡。
+3. 支持规则级分解输出，便于论文对比实验。
+
+### 4.3 Solver（求解器）
+
+1. 统一插件接口 `SolverPlugin`，对上暴露一致输入输出。
+2. `RuleGreedySolver` 作为基线实现（可解释、稳定、快速）。
+3. `LocalSearchSolver` 作为增强实现（局部迭代优化）。
+4. `OrToolsCpSatSolver` 先占位，`available=false`。
+
+### 4.4 SchedulingEngine（编排器）
+
+职责：
+
+1. 编译 DSL。
+2. 选择 solver（策略、可用性、回退）。
+3. 执行求解。
+4. 生成可解释结果与冲突诊断。
+5. 返回运行元信息（requested/actual solver、seed、fallback reason）。
+
+## 5. JSON DSL 规范（本期）
+
+### 5.1 顶层结构
+
+```json
+{
+  "version": "1.0",
+  "rules": [],
+  "hardExpr": {},
+  "softExpr": {},
+  "objective": {}
+}
+```
+
+### 5.2 规则定义
+
+```json
+{
+  "id": "H_MAX_CONSEC",
+  "kind": "HARD",
+  "type": "MAX_CONSECUTIVE_DAYS",
+  "enabled": true,
+  "weight": 1.0,
+  "params": {
+    "maxDays": 5
+  }
+}
+```
+
+### 5.3 组合表达式
+
+支持：
+
+1. `AND`
+2. `OR`
+3. `NOT`
+4. `RULE_REF`
+
+示例：
+
+```json
+{
+  "op": "AND",
+  "children": [
+    { "ref": "H_MAX_CONSEC" },
+    {
+      "op": "OR",
+      "children": [
+        { "ref": "H_MIN_REST" },
+        { "ref": "H_ALT_REST" }
+      ]
+    }
+  ]
+}
+```
+
+## 6. 可复现性设计
+
+1. 随机源统一为 `SplittableRandom(seed)`，禁止 `Math.random()`。
+2. 医生、日期、时段、规则执行顺序统一稳定排序。
+3. 并行评估采用稳定归并策略与确定性 tie-break。
+4. 快照保存：`inputHash + seed + solverCode + dslHash`。
+
+## 7. 无解诊断与可解释性
+
+### 7.1 无解诊断
+
+输出内容：
+
+1. 冲突时段列表（日期/时段/缺口）。
+2. 冲突规则计数（按规则 ID 聚合）。
+3. 简化最小冲突集（贪心近似）。
+
+### 7.2 可解释性
+
+输出内容：
+
+1. 每条排班分配的 `reasons` 与 `penalties`。
+2. 规则级得分分解。
+3. 软约束扣分明细与命中证据。
+
+## 8. 性能与缓存策略
+
+### 8.1 并行评估
+
+1. 新增独立 `scheduleSolverExecutor` 线程池。
+2. 候选医生评估在阈值以上并行执行。
+3. 小规模问题保持串行以避免线程开销。
+
+### 8.2 增量重排（基础版）
+
+1. 支持按时间窗口与医生集合重排。
+2. 默认冻结存在有效预约的已发布排班。
+3. 输出差异结果（新增/替换/保留）。
+
+### 8.3 DSL 编译缓存
+
+1. L1：Guava 本地缓存（编译后的约束模型）。
+2. L2：Redis 版本键（多实例失效协调）。
+3. 缓存键：`namespace + profileKey + version + dslHash`。
+4. 失效方式：版本递增 + 本地 TTL 双保险。
+
+## 9. Solver 策略与回退机制
+
+1. 策略枚举：`AUTO`、`RULE_GREEDY`、`LOCAL_SEARCH`、`CP_SAT`。
+2. 当请求 `CP_SAT` 且插件不可用时：自动回退 `RULE_GREEDY`。
+3. 回退信息进入：`warnings`、运行元数据、快照。
+
+## 10. 数据与接口改造范围
+
+### 10.1 接口改造
+
+`POST /api/v1/schedules/auto` 新增可选字段：
+
+1. `constraintDslJson`：JSON DSL 原文。
+
+兼容策略：
+
+1. 若未传 DSL，则由现有 `hardConstraints + softGoals` 自动生成默认 DSL。
+
+### 10.2 快照增强
+
+`schedule_plan_constraint_snapshot` 增加写入类型：
+
+1. `DSL_SOURCE`
+2. `SOLVER_RUN_META`
+3. `CONFLICT_REPORT`
+
+## 11. 分阶段实施计划
+
+### 阶段 A（架构骨架）
+
+1. 引入 `SchedulingEngine` 与 `SolverPlugin` 抽象。
+2. 接入 `RuleGreedySolver` 与 `CP_SAT` 占位插件。
+3. 保持现有业务流程可用。
+
+### 阶段 B（DSL + 编译 + 缓存）
+
+1. 实现 JSON DSL 解析、校验、编译。
+2. 完成 Guava 编译缓存与 Redis 版本校验。
+
+### 阶段 C（可解释与诊断）
+
+1. 输出规则级解释。
+2. 输出冲突报告与简化最小冲突集。
+
+### 阶段 D（性能与增量重排）
+
+1. 并行候选评估。
+2. 增量重排入口与差异输出。
+
+## 12. 验收标准
+
+1. 同输入 + 同 seed 在 20 次运行中结果一致。
+2. 求解器可插拔，切换策略不影响上层调用协议。
+3. `CP_SAT` 不可用时自动回退并返回可观测告警。
+4. 每条分配具备可解释信息，冲突场景输出诊断报告。
+5. JSON DSL 支持 HARD/SOFT、权重、AND/OR/NOT。
+6. 编译缓存生效，且多实例版本失效策略可用。
+
+## 13. 当前实现结论（V3.1）
+
+本方案在单租户前提下，完整覆盖「高抽象、插件化、可解释、可复现、可扩展」核心诉求；后续若有时间，可在该架构上平滑演进至真实多租户与 OR-Tools 实求解。
