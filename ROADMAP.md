@@ -208,6 +208,7 @@ flowchart LR
 - 在 Java 侧增加 AI 调用门面（超时、重试、降级、错误映射）。
 - 打通 AI 预问诊入口与结果回写（会话、消息、摘要）。
 - 与 Python AI 服务形成稳定契约（请求/响应、SSE、trace_id）。
+- 固定 Embedding 方案为阿里云百炼 `text-embedding-v4`，不再引入本地 Embedding 分支，确保 Java/Python/文档口径一致。
 
 #### 学习目标
 

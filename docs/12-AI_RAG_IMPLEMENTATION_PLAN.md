@@ -1,6 +1,6 @@
 # AI/RAG 核心模块实现计划（可演示、可追溯、可扩展）
 
-> 目标：在现有 `mediask-ai`（FastAPI）骨架上，补齐“知识入库 → 向量化 → Milvus 检索 → 引用 → LLM 生成”的端到端链路，并支持本地开发与线上演示环境平滑切换。
+> 目标：在现有 `mediask-ai`（FastAPI）骨架上，补齐“知识入库 → 向量化 → Milvus 检索 → 引用 → LLM 生成”的端到端链路，并与论文定案保持一致：Embedding 统一采用阿里云百炼 `text-embedding-v4`。
 
 ## 1. 背景与边界
 
@@ -38,15 +38,16 @@
 
 ### 阶段 1：RAG MVP（2–4 天，优先端到端跑通）
 
-#### 1) 抽象“可替换”能力（Embedding / Loader / VectorStore）
-为避免“Embedding 供应商不确定”阻塞主流程，先将 embedding 抽象为可替换 provider：
+#### 1) 抽象能力边界（Embedding / Loader / VectorStore）
+Embedding 供应商已确定为阿里云百炼，但仍建议保留清晰接口边界，避免与上层流程耦合：
 - `EmbeddingClient.embed_texts(texts) -> vectors`
 - `DocumentLoader.load_markdown/load_pdf -> (text, metadata)`
 - `VectorStore.upsert/search`（封装 pymilvus）
 
 建议默认方案（按你的约束取舍）：
-- **本地 embedding 优先**：设备资源有限时选择小模型 + 限并发（见 `docs/13-EMBEDDING_MODEL_SELECTION.md`）。
-- **保留远程 embedding 兜底**：仅在本地跑不稳/演示环境受限时启用；启用前必须走输入侧严格脱敏与审计。
+- **远程 Embedding 固定为百炼**：统一使用 `text-embedding-v4`。
+- **不再考虑本地部署**：移除本地小模型主线与切换策略，减少实现分叉。
+- **调用前先脱敏与审计**：请求前做 PII 脱敏，调用后记录关键审计字段。
 
 #### 2) 入库：Markdown / PDF → 分块 → Embedding → Milvus
 落地点：`app/services/knowledge_store.py`
@@ -86,9 +87,9 @@
 建议在 `app/config.py` 增补并统一管理（示例字段名，可根据现有命名风格调整）：
 - Embedding：
   - `EMBEDDING_PROVIDER=openai_compatible`
-  - `EMBEDDING_MODEL=...`
-  - `EMBEDDING_BASE_URL=...`
-  - `EMBEDDING_API_KEY=...`
+  - `EMBEDDING_MODEL=text-embedding-v4`
+  - `EMBEDDING_BASE_URL=<阿里百炼兼容端点>`
+  - `EMBEDDING_API_KEY=<阿里百炼 API Key>`
 - Milvus：
   - `MILVUS_URI=http://localhost:19530`
   - `MILVUS_USER=...`、`MILVUS_PASSWORD=...`
@@ -99,7 +100,7 @@
 
 环境切换方式：
 - 本地：默认读取 `.env.dev`，可用 Milvus Lite（`MILVUS_MODE=lite`）。
-- 演示/生产：读取 `.env.prod` 或设置 `APP_ENV=prod` 指向服务器 Milvus；代码不写任何“环境分支逻辑”。
+- 演示/生产：读取 `.env.prod` 或设置 `APP_ENV=prod` 指向服务器 Milvus；Embedding 仍统一走阿里百炼，不区分本地/线上供应商。
 
 ## 6. 交付清单（建议顺序）
 

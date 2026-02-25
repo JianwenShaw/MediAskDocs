@@ -1,6 +1,8 @@
 # MediAsk 技术文档
 
-> 本目录文档以当前 `mediask-be` Java 代码为准（同步时间：2026-02-12）。
+> 基准说明（同步时间：2026-02-25）：Java 相关文档以 `mediask-be` 当前代码为准；AI（10-13）相关文档以 `mediask-ai` 当前代码与方案决策为准。
+
+> 口径同步（2026-02-25）：Embedding 方案已定为阿里云百炼 `text-embedding-v4`（远程 API），不再考虑本地部署分支；详见 `docs/13-EMBEDDING_MODEL_SELECTION.md`。
 
 ## 文档结构
 

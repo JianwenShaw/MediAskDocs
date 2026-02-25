@@ -94,7 +94,7 @@
 
 - **trace_id 口径（优先级）**：
   1. **启用 SkyWalking Agent 时**：以 SkyWalking 注入的 `tid` 作为日志中的 `trace_id`（用于全链路追踪对齐）。
-  2. **未启用 Agent 时**：若请求头存在 `X-Trace-Id` 则沿用；否则生成新值作为 `trace_id`；如实现了该机制，响应头回传 `X-Trace-Id`。
+  2. **未启用 Agent 时**：若请求头存在 `X-Trace-Id` 则沿用；若无 `X-Trace-Id` 但有 `X-Request-Id` 则使用 `X-Request-Id`；两者都没有再生成新值作为 `trace_id`；如实现了该机制，响应头回传 `X-Trace-Id`。
 - **request_id**：若请求头存在 `X-Request-Id` 则沿用；否则生成并回传。`request_id` 用于“同一次请求”的稳定标识（即使没有链路系统也能串起 access/app/audit）。
 - **跨线程传播（必须）**：异步任务/线程池需要传播 MDC（否则日志断链）。
 - **写审计必须带 trace_id**：保证"审计事件 ↔ 请求 ↔ 应用错误"可对齐查询。

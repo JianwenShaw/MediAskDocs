@@ -16,6 +16,7 @@
     *   **Redis**: 用于缓存医生排班信息、用户Session、验证码，提高系统响应速度。
     *   **Vector Database (向量数据库)**: Milvus 用于存储医疗知识库的向量数据，支持RAG检索。
 *   **AI模型接口**: DeepSeek API (或其他OpenAI兼容接口)。
+*   **Embedding 接口**: 阿里云百炼 `text-embedding-v4`（远程 API，固定选型，不再考虑本地部署）。
 
 ### 2.1.1 AI 微服务技术栈 (Python)
 AI 能力采用**独立 Python 微服务**架构，与 Java 主业务解耦，充分发挥 Python 在 AI/LLM 领域的生态优势。
@@ -244,14 +245,15 @@ sequenceDiagram
         *   生成一份**"病情预摘要"**，在医生接诊前展示给医生，减少重复询问时间。
     *   **技术**: Prompt Engineering (角色扮演), 对话状态管理。
 
-2.  **基于 RAG 的本地医疗知识库 (Knowledge Base)**
+2.  **基于 RAG 的医疗知识库 (Knowledge Base)**
     *   **数据源**: 导入《临床诊疗指南》、《国家基本药物目录》、常见药品说明书 (PDF/Text)。
     *   **流程**:
         1.  **文档切片**: 将长文档切分为语义完整的Chunk。
-        2.  **向量化 (Embedding)**: 使用Embedding模型将文本转为向量存入向量数据库。
+        2.  **向量化 (Embedding)**: 调用阿里云百炼 `text-embedding-v4` 将文本转为向量存入向量数据库。
         3.  **混合检索 (Hybrid Search)**: 结合关键词检索 (BM25) 和 向量检索 (Semantic Search) 提高召回准确率。
         4.  **生成**: 将检索到的相关医学知识作为 Context 输入大模型，生成回答。
     *   **目的**: 确保AI回答基于权威指南，而非模型自行编造。
+    *   **实现约束**: Embedding 调用前执行 PII 脱敏与最小化审计，Embedding 服务不可用时按降级策略返回“知识库暂不可用”或退化为无检索保守回答。
 
 3.  **辅助诊疗与用药建议 (CDSS Lite)**
     *   **功能**: 医生在书写病历时，系统实时分析输入内容。

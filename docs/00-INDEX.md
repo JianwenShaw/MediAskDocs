@@ -1,6 +1,8 @@
 # MediAsk 文档索引
 
-> 代码为准：本文档用于导航，具体行为请以 `mediask-be` 当前源码为准。
+> 代码为准：本文档用于导航；Java 相关文档以 `mediask-be` 当前源码为准，AI（10-13）相关文档以 `mediask-ai` 当前源码与方案决策为准。
+
+> 口径同步（2026-02-25）：Embedding 方案已定为阿里云百炼 `text-embedding-v4`（远程 API），不再考虑本地部署分支；详见 `13-EMBEDDING_MODEL_SELECTION.md`。
 
 ## 文档分类
 

@@ -142,7 +142,10 @@ build-backend = "hatchling.build"
 uv add fastapi uvicorn langchain langgraph pymilvus openai
 
 # 实用工具
-uv add sse-starlette aiofiles python-dotenv
+uv add aiofiles python-dotenv
+
+# 可选：若改为 EventSourceResponse 方案再引入
+# uv add sse-starlette
 
 # 开发依赖
 uv add --dev pytest pytest-asyncio httpx ruff black

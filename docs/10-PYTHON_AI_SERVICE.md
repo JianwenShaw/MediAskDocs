@@ -5,7 +5,7 @@
 mediask-ai 是独立 AI 微服务，只提供 AI 能力，不直接处理业务事务。
 
 - 上游: Java 后端 mediask-be 调用。
-- 下游: DeepSeek/兼容 OpenAI API, Milvus 向量库。
+- 下游: DeepSeek/兼容 OpenAI API, 阿里百炼 Embedding API, Milvus 向量库。
 - 交互: HTTP JSON + SSE 流式输出。
 
 ## 2. 目录结构建议
@@ -98,13 +98,14 @@ LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=sk-xxx
 
 # Embedding（RAG 入库/检索必需）
-# - local：本地小模型（优先，适合“数据不出网”）
-# - openai_compatible：远程 embedding provider（仅作为设备资源不足时的兜底；务必先脱敏）
+# - openai_compatible：阿里百炼 Embedding（固定方案）
 # - none：禁用 embedding（等于禁用“入库/检索”，只能做纯 LLM 对话/安全护栏）
-EMBEDDING_PROVIDER=local
-EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
+EMBEDDING_PROVIDER=openai_compatible
+EMBEDDING_MODEL=text-embedding-v4
+EMBEDDING_BASE_URL=<阿里百炼兼容端点>
+EMBEDDING_API_KEY=<你的百炼API Key>
 # 维度以实际模型/实现为准；如需手动指定，保持与向量库 collection 一致
-EMBEDDING_DIM=512
+EMBEDDING_DIM=1536
 
 REDIS_URL=
 REDIS_HOST=127.0.0.1
@@ -275,17 +276,19 @@ async def verify_api_key(request: Request, call_next):
 
 1. 文档加载 (Markdown/PDF)
 2. 分块 (chunk_size 800-1200, overlap 100-200)
-3. 生成向量 (Embedding)
+3. 调用阿里百炼生成向量 (text-embedding-v4)
 4. 写入 Milvus
 
 ### 7.2 查询流程
 
 1. Query 归一化
-2. 混合检索 (向量 + 关键词)
+2. Query 向量化（阿里百炼） + 混合检索 (向量 + 关键词)
 3. 结果融合 (RRF)
 4. 构造 Prompt
 5. 调用 LLM
 6. 返回答案 + 引用
+
+> 说明：若 Embedding API 不可用，按安全降级策略返回“知识库暂不可用”并可退化为无检索保守回答，避免误导性输出。
 
 ## 8. 统一错误与日志
 
