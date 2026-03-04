@@ -251,16 +251,16 @@ public enum XxxStatus {
 ## 7. 常量管理
 
 ```java
-// 统一缓存 Key 管理（推荐）
-public final class CacheKeyManager {
+// 统一限流 Key 管理（推荐）
+public final class RateLimitKeyManager {
 
     private static final String KEY_DELIMITER = ":";
-    private static final String AUTH_REFRESH_PREFIX = "auth:refresh";
+    private static final String RATE_LIMIT_AUTH_LOGIN_ACCOUNT_PREFIX = "rate:limit:auth:login:account";
 
-    private CacheKeyManager() {}
+    private RateLimitKeyManager() {}
 
-    public static String refreshTokenKey(Long userId, String tokenId) {
-        return String.join(KEY_DELIMITER, AUTH_REFRESH_PREFIX, String.valueOf(userId), tokenId);
+    public static String authLoginAccountRateLimitKey(String account) {
+        return String.join(KEY_DELIMITER, RATE_LIMIT_AUTH_LOGIN_ACCOUNT_PREFIX, account);
     }
 }
 ```
@@ -271,10 +271,10 @@ public final class CacheKeyManager {
 - 统一使用 `:` 作为分隔符，命名模式建议：`业务域:子域:标识`。
 - Key 前缀由 `infra` 层统一管理，`service/domain` 只传业务参数，不关心拼接细节。
 - Pattern 查询（如批量删除）也必须通过统一入口生成，避免前缀漂移。
-- 新增缓存场景时，先在 Key 管理器补方法，再在业务代码接入。
+- 需要新 Key 时，先在 `RateLimitKeyManager`（限流）或 `CacheKeyGenerator`（缓存）增加方法，再由调用方接入。
 
 当前项目实现参考：
-- `mediask-infra/src/main/java/me/jianwen/mediask/infra/cache/CacheKeyManager.java`
+- `mediask-infra/src/main/java/me/jianwen/mediask/infra/cache/RateLimitKeyManager.java`
 - `mediask-infra/src/main/java/me/jianwen/mediask/infra/security/RefreshTokenStore.java`
 - `mediask-infra/src/main/java/me/jianwen/mediask/infra/holiday/HolidayService.java`
 - `mediask-infra/src/main/java/me/jianwen/mediask/infra/diagnostic/TestConnectionInfraService.java`

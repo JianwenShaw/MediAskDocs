@@ -81,17 +81,17 @@ java -jar app.jar --spring.profiles.active=prod
 
 当前 Redis Key 由 `infra` 层统一管理：
 
-- `mediask-infra/src/main/java/me/jianwen/mediask/infra/cache/CacheKeyManager.java`
+- `mediask-infra/src/main/java/me/jianwen/mediask/infra/cache/RateLimitKeyManager.java`
 
 该类负责定义：
 - Key 分隔符（统一 `:`）
-- 业务前缀（如 `auth:refresh`、`holiday`、`test:connection`）
-- Key/Pattern 生成方法（避免业务代码自行拼接）
+- 限流键前缀（如 `rate:limit:auth:login:account`、`rate:limit:appointment:create`）
+- Key 生成方法（避免业务代码自行拼接）
 
 ### 9.2 使用约束
 
 - 业务代码禁止直接硬编码 Redis Key 前缀。
-- 需要新 Key 时，先在 `CacheKeyManager` 增加方法，再由调用方接入。
+- 需要新 Key 时，先在 `RateLimitKeyManager`（限流）或 `CacheKeyGenerator`（缓存）增加方法，再由调用方接入。
 - 删除或批量删除操作也必须通过统一入口生成 pattern，保证前缀一致。
 
 ### 9.3 已接入示例
