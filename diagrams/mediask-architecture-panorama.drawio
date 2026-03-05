@@ -55,7 +55,7 @@
         <mxCell id="jDal" parent="laneJava" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f3ff;strokeColor=#2b6cb0;" value="mediask-dal" vertex="1">
           <mxGeometry height="60" width="140" x="600" y="140" as="geometry" />
         </mxCell>
-        <mxCell id="jRocket" parent="laneJava" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3cd;strokeColor=#c9a227;" value="RocketMQ (planned)" vertex="1">
+        <mxCell id="jRocket" parent="laneJava" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3cd;strokeColor=#c9a227;" value="Domain Events (in-process)" vertex="1">
           <mxGeometry height="55" width="170" x="20" y="230" as="geometry" />
         </mxCell>
         <mxCell id="laneAI" parent="1" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3cd;strokeColor=#c9a227;fontStyle=1;startSize=28;" value="Python AI Service (planned)" vertex="1">

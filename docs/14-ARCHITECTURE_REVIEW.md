@@ -13,10 +13,10 @@ mediask-be/
 ├── mediask-api        # API 接入层 - REST 控制器、Security、Request/Response
 ├── mediask-service    # 应用服务层 - 用例编排、Command 处理、DTO 转换
 ├── mediask-domain    # 领域层 - 聚合根、值对象、领域服务、仓储接口
-├── mediask-infra     # 基础设施层 - 仓储实现、Redis、MQ、外部服务
+├── mediask-infra     # 基础设施层 - 仓储实现、Redis、事件发布器、外部服务
 ├── mediask-dal      # 数据访问层 - DO、Mapper
 ├── mediask-common    # 通用层 - 工具、异常、常量
-└── mediask-worker   # 异步任务 - 定时任务、MQ 消费者
+└── mediask-worker   # 异步任务 - 定时任务
 ```
 
 ### 1.2 依赖关系
@@ -32,7 +32,7 @@ API → Service → Domain
 | mediask-api | Service, Common | HTTP 入口、认证授权、API 文档 |
 | mediask-service | Domain, Infra, Common | 用例编排、事务管理 |
 | mediask-domain | Common | 核心业务（纯 POJO，无 Spring 依赖） |
-| mediask-infra | Domain, DAL, Common | 技术实现：Redis、MQ、外部服务 |
+| mediask-infra | Domain, DAL, Common | 技术实现：Redis、事件发布器、外部服务 |
 | mediask-dal | Common | 数据对象、Mapper |
 
 ---

@@ -51,5 +51,4 @@ python3 scripts/os_detect.py
 以下内容可保留在专项文档继续推进，但不视为当前后端已实现：
 
 - Milvus / RAG 在线链路
-- RocketMQ 事务消息链路
 - Python AI 微服务全链路联调

@@ -112,7 +112,6 @@ sequenceDiagram
     participant Appt as 预约域服务
     participant Redis as Redis(号源/锁)
     participant DB as MySQL
-    participant MQ as RocketMQ
     participant Worker as mediask-worker
 
     Patient->>API: 查询医生排班/号源
@@ -127,8 +126,7 @@ sequenceDiagram
     Appt->>Redis: Lua/Lock 扣减号源(原子)
     Redis-->>Appt: success/fail
     Appt->>DB: 写入 appointments + slots
-    Appt->>MQ: 发送事务消息(通知/异步任务)
-    MQ-->>Worker: 消费(短信/站内信等)
+    Appt->>Worker: 触发异步任务(通知/后处理)
     Appt-->>API: 预约创建结果(待支付)
     API-->>Patient: 返回预约单
 ```
@@ -192,7 +190,7 @@ sequenceDiagram
 > NFR 会直接决定架构与测试策略：建议与 [docs/05-TESTING.md](./docs/05-TESTING.md) 保持一致口径。
 
 - **性能**：核心交易接口（创建/支付/取消预约）在压测下满足 P99 < 500ms；查询接口 P99 < 200ms；AI 问答 P99 < 3s（含检索）。
-- **一致性**：号源扣减强一致；通知类副作用最终一致（MQ/重试）。
+- **一致性**：号源扣减强一致；通知类副作用最终一致（事件驱动/重试）。
 - **安全**：JWT + RBAC；敏感数据加密（BCrypt/AES）；接口限流；操作审计。
 - **可观测性**：traceId 贯穿日志；关键业务指标（预约成功率、超时率、AI 调用失败率）可监控。
 - **可用性**：外部 LLM 超时可降级（提示稍后重试/返回规则库建议）；向量库不可用时可走"无检索"保底回答或直接拒答。
@@ -225,7 +223,7 @@ sequenceDiagram
     *   **高并发预约流程**:
         *   **状态机管理**: 待支付 -> 锁定中 -> 预约成功 -> 待就诊 -> 已完成/已爽约。
         *   **抗压设计**: 使用 **Redis List/ZSet** 预加载号源，利用 **Lua 脚本** 或 **Redisson 分布式锁** 保证扣减库存的原子性，彻底杜绝"超卖"现象。
-        *   **削峰填谷**: 引入 **RabbitMQ/RocketMQ** (可选) 异步处理挂号成功后的短信通知、数据库落库操作，提升接口响应速度。
+        *   **异步解耦**: 基于领域事件 + 异步线程池处理挂号成功后的短信通知、统计更新等副作用，提升接口响应速度。
 
 3.  **电子病历 (EMR) 与 处方管理**
     *   **结构化病历书写**:

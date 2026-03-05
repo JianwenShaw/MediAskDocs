@@ -64,7 +64,7 @@ java -jar app.jar --spring.profiles.active=prod
 
 - Jasypt 加密配置样例
 - `file.storage.*`（本地/OSS 策略）
-- DeepSeek/Milvus/RocketMQ 等外部配置项
+- DeepSeek/Milvus 等外部配置项
 - `logback-spring.xml` 的项目内实现
 
 上述内容若后续落地，应以新增代码与配置为准再补文档。

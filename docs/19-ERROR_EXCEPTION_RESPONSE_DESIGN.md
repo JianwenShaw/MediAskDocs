@@ -184,7 +184,7 @@ sequenceDiagram
 
 用于不可预期、需运维介入的系统故障：
 
-- 外部依赖不可用（DB/Redis/MQ/RPC）
+- 外部依赖不可用（DB/Redis/RPC）
 - 基础设施异常
 - 技术框架异常封装上抛
 

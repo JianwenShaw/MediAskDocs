@@ -62,4 +62,4 @@ python3 scripts/os_detect.py
 - OpenAPI JSON: `http://localhost:8989/v3/api-docs`
 - Swagger UI: `http://localhost:8989/swagger-ui/index.html`
 
-> 说明：`MediAskDocs` 中涉及 Milvus/RocketMQ/FastAPI/LangChain 的内容，当前主要是规划，不代表 Java 后端已全部落地。
+> 说明：`MediAskDocs` 中涉及 Milvus/FastAPI/LangChain 的内容，当前主要是规划，不代表 Java 后端已全部落地。

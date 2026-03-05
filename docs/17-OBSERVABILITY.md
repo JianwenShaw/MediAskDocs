@@ -4,7 +4,7 @@
 
 ### 1.1 毕设背景
 
-本系统 MediAsk（智能医疗辅助问诊系统）采用单体多实例架构，涉及 Java 后端（API/Service/Domain/Infra/DAL）、Python AI 服务、MySQL 数据库、Redis 缓存、RocketMQ 消息队列、Milvus 向量数据库等多个组件。
+本系统 MediAsk（智能医疗辅助问诊系统）采用单体多实例架构，涉及 Java 后端（API/Service/Domain/Infra/DAL）、Python AI 服务、MySQL 数据库、Redis 缓存、Milvus 向量数据库等多个组件。
 
 在答辩与论文中，需要展示：
 - 系统架构的可观测性设计
@@ -69,7 +69,6 @@
 |------|-----------|------------------------|
 | Spring MVC | ✅ 自动追踪 | ✅ HTTP 请求指标 |
 | MyBatis-Plus / JDBC | ✅ 自动追踪 | ✅ JDBC 连接池指标 |
-| RocketMQ | ✅ 自动追踪 | ❌ 需额外配置 |
 | **Spring Data Redis（RedisTemplate）** | ❌ 手动埋点 | ✅（基础 JVM/HTTP 指标开箱即用；Redis 客户端指标按能力补齐） |
 | JVM 内存 | ❌ | ✅ 内存/GC 指标 |
 | 日志 traceId | ✅ Logback 集成 | ❌ |
@@ -533,7 +532,6 @@ graph TB
     subgraph 基础设施层
         DB[(MySQL<br/>MyBatis-Plus)]
         R[(Redis<br/>RedisTemplate)]
-        MQ[RocketMQ]
         V[(Milvus<br/>向量数据库)]
         Log[日志文件]
     end
@@ -568,7 +566,6 @@ graph TB
 
     I -->|"自动追踪"| DB
     I -->|"手动埋点"| R
-    I -->|"自动追踪"| MQ
     I -->|"自动追踪"| V
 
     A -.->|"trace_id/request_id 注入"| Log

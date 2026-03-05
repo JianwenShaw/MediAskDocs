@@ -71,7 +71,7 @@ flowchart LR
 ## 6. 当前实现边界说明
 
 - 代码库已包含 AI 相关数据域（如 `ai_conversations`、`ai_messages`、`ai_feedback_reviews`）和对应 Java 能力。
-- Python 微服务（FastAPI/LangChain/LangGraph）、Milvus、RocketMQ、OSS 在 `MediAskDocs` 中主要作为规划内容；当前 Java 后端代码未形成完整落地链路。
+- Python 微服务（FastAPI/LangChain/LangGraph）、Milvus、OSS 在 `MediAskDocs` 中主要作为规划内容；当前 Java 后端代码未形成完整落地链路。
 
 ## 7. 关键接口前缀
 
@@ -134,10 +134,6 @@ flowchart TB
         LLM[DeepSeek / OpenAI-compatible\nLLM API]:::planned
     end
 
-    subgraph MQ[Messaging]
-        RocketMQ[RocketMQ]:::planned
-    end
-
     subgraph Stores[Data Stores]
         MySQL[(MySQL)]:::data
         Redis[(Redis)]:::data
@@ -169,9 +165,6 @@ flowchart TB
     Api --> AiSvc
     AiSvc --> Guardrails --> RAG --> Milvus
     RAG --> LLM
-
-    Api --> RocketMQ
-    Worker --> RocketMQ
 
     Api --> ELK
     Worker --> ELK
