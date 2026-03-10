@@ -1,4 +1,4 @@
-# DDD 设计指南
+# DDD 设计指南（V3 统一语言版）
 
 > 领域驱动设计（DDD）核心概念与实践模式。
 >
@@ -31,18 +31,18 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                      边界上下文                              │
 ├─────────────────────────────────────────────────────────────┤
-│  用户上下文    →  User, Role, Permission                     │
-│  预约上下文    →  Appointment, Schedule, Slot                │
-│  诊疗上下文    →  MedicalRecord, Prescription, Drug          │
-│  AI 问诊      →  Conversation, RAG Engine (Python 微服务)   │
+│  用户上下文      →  User, Role, Permission                   │
+│  门诊挂号上下文  →  ClinicSession, ClinicSlot, RegistrationOrder │
+│  诊疗上下文      →  VisitEncounter, EmrRecord, PrescriptionOrder │
+│  AI 问诊上下文   →  AiSession, AiTurn, RAG Engine            │
 └─────────────────────────────────────────────────────────────┘
                         ↓
               HTTP 调用（跨上下文）
 ```
 
 **跨上下文通信**：
-- 用户上下文 → 预约/诊疗上下文：组合关系
-- 预约/诊疗上下文 → AI 问诊：HTTP 调用（业务解耦）
+- 用户上下文 → 门诊挂号/诊疗上下文：组合关系
+- 门诊挂号/诊疗上下文 → AI 问诊：HTTP 调用（业务解耦）
 
 ---
 
@@ -97,20 +97,21 @@
 **模式**：
 ```java
 // 聚合根示例模式
-public class Appointment {
+public class RegistrationOrder {
 
-    private AppointmentId id;           // 唯一标识
-    private AppointmentNo appointmentNo; // 业务标识
+    private RegistrationOrderId id;      // 唯一标识
+    private RegistrationOrderNo orderNo; // 业务标识
     private UserId patientId;            // 值对象
-    private AppointmentStatus status;    // 值对象
+    private ClinicSessionId sessionId;   // 门诊场次
+    private RegistrationStatus status;   // 值对象
 
     // 工厂方法
-    public static Appointment create(UserId patientId, ScheduleId scheduleId) {
+    public static RegistrationOrder create(UserId patientId, ClinicSessionId sessionId) {
         // 创建逻辑 + 领域事件
     }
 
     // 业务行为（内聚规则）
-    public void pay() { /* 状态流转 */ }
+    public void confirm() { /* 状态流转 */ }
     public void cancel(String reason) { /* 状态流转 */ }
 }
 ```
@@ -125,13 +126,13 @@ public class Appointment {
 **模式**：
 ```java
 // 值对象模式
-public record AppointmentStatus(String code, String description) {
+public record RegistrationStatus(String code, String description) {
 
-    public static final AppointmentStatus PENDING = new AppointmentStatus("PENDING", "待支付");
-    public static final AppointmentStatus CONFIRMED = new AppointmentStatus("CONFIRMED", "已确认");
+    public static final RegistrationStatus CREATED = new RegistrationStatus("CREATED", "已创建");
+    public static final RegistrationStatus CONFIRMED = new RegistrationStatus("CONFIRMED", "已确认");
 
-    public boolean canPayment() {
-        return this.equals(PENDING);
+    public boolean canConfirm() {
+        return this.equals(CREATED);
     }
 }
 ```
@@ -158,16 +159,16 @@ public record AppointmentStatus(String code, String description) {
 **模式**：
 ```java
 // 领域层：仓储接口
-public interface AppointmentRepository {
-    void save(Appointment appointment);
-    Optional<Appointment> findById(AppointmentId id);
-    Optional<Appointment> findByAppointmentNo(AppointmentNo no);
-    boolean existsByPatientAndSchedule(UserId patientId, ScheduleId scheduleId);
+public interface RegistrationOrderRepository {
+    void save(RegistrationOrder order);
+    Optional<RegistrationOrder> findById(RegistrationOrderId id);
+    Optional<RegistrationOrder> findByOrderNo(RegistrationOrderNo no);
+    boolean existsByPatientAndSession(UserId patientId, ClinicSessionId sessionId);
 }
 
 // 基础设施层：仓储实现
 @Repository
-public class AppointmentRepositoryImpl implements AppointmentRepository {
+public class RegistrationOrderRepositoryImpl implements RegistrationOrderRepository {
     // 使用 Mapper / Converter 实现
 }
 ```
@@ -182,18 +183,18 @@ public class AppointmentRepositoryImpl implements AppointmentRepository {
 **模式**：
 ```java
 // 事件定义（领域层）
-public record AppointmentPaidEvent(
-    AppointmentId appointmentId,
+public record RegistrationConfirmedEvent(
+    RegistrationOrderId orderId,
     LocalDateTime occurredOn
 ) { }
 
 // 发布（应用层）
-appointment.getDomainEvents().forEach(eventPublisher::publish);
+registrationOrder.getDomainEvents().forEach(eventPublisher::publish);
 
 // 监听（基础设施层）
 @Async
 @EventListener
-public void handle(AppointmentPaidEvent event) {
+public void handle(RegistrationConfirmedEvent event) {
     // 发送通知等
 }
 ```
@@ -204,13 +205,14 @@ public void handle(AppointmentPaidEvent event) {
 
 | 业务术语 | 领域对象 | 说明 |
 |---------|---------|------|
-| 挂号 | `Appointment` | 患者预约医生的就诊记录 |
-| 挂号单号 | `AppointmentNo` | 唯一业务标识（值对象） |
-| 排班 | `DoctorSchedule` | 医生出诊时间安排 |
-| 号源 | `AvailableSlots` | 可预约的挂号数量 |
-| 就诊序号 | `VisitNumber` | 当天就诊的顺序号 |
-| 病历 | `MedicalRecord` | 结构化诊疗记录 |
-| 处方 | `Prescription` | 药品处方单 |
+| 挂号订单 | `RegistrationOrder` | 患者挂号后的交易实体 |
+| 挂号单号 | `RegistrationOrderNo` | 唯一业务标识（值对象） |
+| 门诊场次 | `ClinicSession` | 医生对外发布的可挂号场次 |
+| 号源 | `ClinicSlot` | 可交易的最小号源单元 |
+| 实际就诊 | `VisitEncounter` | 挂号履约后的就诊事实 |
+| 病历 | `EmrRecord` | 结构化诊疗记录索引头 |
+| 处方 | `PrescriptionOrder` | 处方主实体 |
+| AI 会话 | `AiSession` | 患者问诊主会话 |
 
 ---
 
@@ -241,20 +243,20 @@ public void handle(AppointmentPaidEvent event) {
 **核心原则**：DO 与领域对象分离
 
 ```
-AppointmentDO (数据库表映射) ← Converter → Appointment (领域对象)
+RegistrationOrderDO (数据库表映射) ← Converter → RegistrationOrder (领域对象)
 ```
 
 **仓储实现**：
 ```java
 @Repository
-public class AppointmentRepositoryImpl implements AppointmentRepository {
+public class RegistrationOrderRepositoryImpl implements RegistrationOrderRepository {
 
-    private final AppointmentMapper mapper;
-    private final AppointmentConverter converter;
+    private final RegistrationOrderMapper mapper;
+    private final RegistrationOrderConverter converter;
 
     @Override
-    public void save(Appointment appointment) {
-        AppointmentDO dataObject = converter.toDO(appointment);
+    public void save(RegistrationOrder order) {
+        RegistrationOrderDO dataObject = converter.toDO(order);
         mapper.insert(dataObject);  // 或 updateById
     }
 }
@@ -266,7 +268,7 @@ public class AppointmentRepositoryImpl implements AppointmentRepository {
 |------------------------|---------------------|
 | 实体只有 getter/setter | 实体包含业务行为 |
 | 业务逻辑在 Service | 状态变更内聚在实体 |
-| `appt.setStatus("X")` | `appt.pay()` |
+| `order.setStatus("X")` | `order.confirm()` |
 
 ---
 
@@ -274,12 +276,12 @@ public class AppointmentRepositoryImpl implements AppointmentRepository {
 
 | 构造块 | 参考代码 |
 |--------|----------|
-| 聚合根 | `mediask-domain/src/.../appointment/Appointment.java` |
-| 值对象 | `mediask-domain/src/.../appointment/AppointmentStatus.java` |
-| 仓储接口 | `mediask-domain/src/.../appointment/AppointmentRepository.java` |
-| 仓储实现 | `mediask-infra/src/.../appointment/AppointmentRepositoryImpl.java` |
-| 领域事件 | `mediask-domain/src/.../event/AppointmentCreatedEvent.java` |
-| 应用服务 | `mediask-service/src/.../appointment/AppointmentApplicationService.java` |
+| 聚合根 | `RegistrationOrder` / `ClinicSession` / `EmrRecord` |
+| 值对象 | `RegistrationStatus` / `ClinicType` / `AiSessionId` |
+| 仓储接口 | `RegistrationOrderRepository` / `EmrRecordRepository` |
+| 仓储实现 | `RegistrationOrderRepositoryImpl` / `EmrRecordRepositoryImpl` |
+| 领域事件 | `RegistrationConfirmedEvent` / `AiReviewSubmittedEvent` |
+| 应用服务 | `RegistrationApplicationService` / `EncounterApplicationService` |
 
 ---
 

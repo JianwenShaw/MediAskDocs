@@ -15,7 +15,11 @@
 | 运维 | [04-DEVOPS.md](./04-DEVOPS.md) | Docker 与 CI/CD |
 | 测试 | [05-TESTING.md](./05-TESTING.md) | 测试策略与门禁 |
 | 设计 | [06-DDD_DESIGN.md](./06-DDD_DESIGN.md) | DDD 方法与边界 |
-| 数据库 | [07-DATABASE.md](./07-DATABASE.md) | 以 SQL 初始化脚本为准的库表说明 |
+| 数据库 | [07-DATABASE.md](./07-DATABASE.md) | V3 主数据库设计总览 |
+| 设计 | [07A-SCHEDULING-V3.md](./07A-SCHEDULING-V3.md) | 排班规划、发布门诊与挂号边界说明 |
+| 设计 | [07B-AI-AUDIT-V3.md](./07B-AI-AUDIT-V3.md) | AI、审计、访问监管与 Python 服务边界说明 |
+| 设计 | [07C-AI-TABLES-V3.md](./07C-AI-TABLES-V3.md) | AI 相关表逐表设计说明 |
+| 设计 | [07D-AUDIT-TABLES-V3.md](./07D-AUDIT-TABLES-V3.md) | 审计、访问日志、事件表逐表说明 |
 | 前端 | [08-FRONTEND.md](./08-FRONTEND.md) | 前端开发指南 |
 | AI 规划 | [10-13 系列文档](./10-PYTHON_AI_SERVICE.md) | Python/RAG 相关规划 |
 | 评审 | [14-ARCHITECTURE_REVIEW.md](./14-ARCHITECTURE_REVIEW.md) | 架构评审与优化建议 |

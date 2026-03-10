@@ -1,6 +1,10 @@
--- A2. 权限/审计相关表结构草案
+-- A2. 权限/审计相关表结构草案（已废弃）
 --
--- 说明：本文件为设计草案，不代表当前数据库已落地结构。
+-- 说明：
+-- 1. 本文件保留为早期草案存档，不再作为当前 V3 设计依据。
+-- 2. 当前权限/审计事实来源以 docs/07-DATABASE.md、docs/07D-AUDIT-TABLES-V3.md
+--    与 docs/15-PERMISSIONS/*.md 为准。
+-- 3. 本文件中的表名如 audit_logs 等仍沿用旧版口径，请勿据此继续实现或答辩表述。
 
 -- 角色表（支持继承）
 CREATE TABLE roles (
@@ -146,4 +150,3 @@ CREATE TABLE audit_logs (
     INDEX idx_audit_timestamp (timestamp),
     INDEX idx_audit_trace (trace_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审计日志表';
-
