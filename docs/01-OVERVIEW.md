@@ -70,7 +70,8 @@ flowchart LR
 
 ## 6. 当前实现边界说明
 
-- 代码库已包含 AI 相关数据域（如 `ai_conversations`、`ai_messages`、`ai_feedback_reviews`）和对应 Java 能力。
+- 当前代码库仍可见旧版 AI 数据域命名（如 `ai_conversations`、`ai_messages`、`ai_feedback_reviews`）；它们反映的是现阶段 Java 实现状态，不代表 V3 目标数据库口径。
+- V3 目标数据库模型已统一切换为 `ai_session`、`ai_turn`、`ai_turn_content`、`ai_model_run`、`ai_guardrail_event`、`ai_feedback_task`、`ai_feedback_review` 等表，详见 `docs/07-DATABASE.md` 与 `docs/07B-AI-AUDIT-V3.md`。
 - Python 微服务（FastAPI/LangChain/LangGraph）、Milvus、OSS 在 `MediAskDocs` 中主要作为规划内容；当前 Java 后端代码未形成完整落地链路。
 
 ## 7. 关键接口前缀

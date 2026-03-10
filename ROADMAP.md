@@ -50,7 +50,7 @@
 | 医生管理 | 已落地 | CRUD + 状态管理 |
 | 排班系统 | 已落地（深度较高） | 手动/自动排班、模板、DSL 约束引擎、方案版本化、预检/发布/回滚 |
 | 预约挂号 | 已落地 | 创建/取消/支付/标记就诊/爽约、号源管理、状态机 |
-| AI 数据域 | 部分落地 | `ai_conversations/ai_messages/ai_feedback_reviews` 表已建、指标统计接口可用；Java 侧无 AI 调用链路 |
+| AI 数据域 | 部分落地 | 当前代码仍可见旧版 `ai_conversations/ai_messages/ai_feedback_reviews` 数据域；V3 目标模型已切换到 `ai_session/ai_turn/ai_turn_content/ai_model_run/ai_feedback_task(ai_feedback_review)`，但 Java 侧 AI 调用链路仍未打通 |
 | 病历模块 | DAL 存根 | `MedicalRecordDO/Mapper` 已有，但无表、无领域实体、无 Service、无 Controller |
 | 处方模块 | DAL 存根 | `PrescriptionDO/PrescriptionItemDO/DrugDO` 已有，但无表、无上层实现 |
 | 知识库模块 | DAL 存根 | `KnowledgeDocumentDO/KnowledgeChunkDO` 已有，但无表、无上层实现 |
@@ -254,7 +254,7 @@ flowchart LR
 | 错误映射 | Python 返回的 `code/msg` 映射为 Java 侧 `BizException`（AI 子域 `6xxx`） | 高 |
 | 预问诊入口 | `POST /api/v1/ai/chat`：Java 接收请求 → 转发 Python AI → 返回结果 | 高 |
 | 流式透传 | Java 侧 SSE 透传（Spring WebFlux 或 Servlet 3.1 async） | 中 |
-| 会话管理 | 创建/查询 AI 会话、消息持久化（利用已有 `ai_conversations/ai_messages` 表） | 中 |
+| 会话管理 | 创建/查询 AI 会话、轮次与正文持久化（按 V3 目标模型落到 `ai_session/ai_turn/ai_turn_content` 等表） | 中 |
 | 主诉摘要回写 | AI 生成的主诉摘要与科室建议写回数据库，关联预约 | 中 |
 | traceId 透传 | Java → Python 请求头带 `X-Trace-Id`，保证全链路追踪 | 高 |
 

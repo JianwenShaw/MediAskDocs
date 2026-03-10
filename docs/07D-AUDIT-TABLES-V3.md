@@ -193,6 +193,7 @@
 - `retry_count`：重试次数
 - `next_retry_at`：调度重试时间
 - `published_at`：最终成功时间
+- `domain_event_id`：明确来源于哪条业务事件，保证 outbox 不是脱离业务真相的孤立投递记录
 - `payload_json` / `payload_encrypted` / `payload_hash`：同样采用“最小明文 + 可选密文 + 哈希”分层，避免把病历、AI 原文、处方详情直接扩散到消息链路
 
 这些字段都明显属于“投递系统”，不是领域本身。

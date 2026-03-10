@@ -125,7 +125,7 @@ sequenceDiagram
     API->>Appt: create(patientId,scheduleId,slot)
     Appt->>Redis: Lua/Lock 扣减号源(原子)
     Redis-->>Appt: success/fail
-    Appt->>DB: 写入 appointments + slots
+    Appt->>DB: 写入 registration_order，并更新 clinic_slot 状态
     Appt->>Worker: 触发异步任务(通知/后处理)
     Appt-->>API: 预约创建结果(待支付)
     API-->>Patient: 返回预约单
