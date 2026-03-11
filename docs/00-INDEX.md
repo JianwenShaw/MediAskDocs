@@ -11,7 +11,10 @@
 | 索引 | [00-INDEX.md](./00-INDEX.md) | 文档导航与快速开始 |
 | 架构 | [01-OVERVIEW.md](./01-OVERVIEW.md) | Java 后端当前架构、模块与依赖 |
 | 规范 | [02-CODE_STANDARDS.md](./02-CODE_STANDARDS.md) | 分层依赖与编码约定 |
-| 配置 | [03-CONFIGURATION.md](./03-CONFIGURATION.md) | 配置文件与环境说明 |
+| 配置 | [03-CONFIGURATION.md](./03-CONFIGURATION.md) | 配置管理总纲（原则、环境矩阵、密钥管理） |
+| 配置 | [03A-JAVA_CONFIG.md](./03A-JAVA_CONFIG.md) | Java 后端配置详解 |
+| 配置 | [03B-PYTHON_CONFIG.md](./03B-PYTHON_CONFIG.md) | Python AI 服务配置详解 |
+| 配置 | [03C-INFRASTRUCTURE_CONFIG.md](./03C-INFRASTRUCTURE_CONFIG.md) | 基础设施与可观测性配置 |
 | 运维 | [04-DEVOPS.md](./04-DEVOPS.md) | Docker 与 CI/CD |
 | 测试 | [05-TESTING.md](./05-TESTING.md) | 测试策略与门禁 |
 | 设计 | [06-DDD_DESIGN.md](./06-DDD_DESIGN.md) | DDD 方法与边界 |
