@@ -56,3 +56,5 @@ output/doc/*
 .python-version
 pyproject.toml
 uv.lock
+
+/tmp
