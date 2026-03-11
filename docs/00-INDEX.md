@@ -27,6 +27,7 @@
 | 设计 | [16-LOGGING_DESIGN](./16-LOGGING_DESIGN/00-INDEX.md) | 工业级日志设计规范 |
 | 设计 | [18-SCHEDULING_CORE_UPGRADE.md](./18-SCHEDULING_CORE_UPGRADE.md) | 排班核心升级（节假日、方案版本化） |
 | 设计 | [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) | 错误码、异常与统一响应设计说明 |
+| 设计 | [20-RAG_DATABASE_PGVECTOR_DESIGN.md](./20-RAG_DATABASE_PGVECTOR_DESIGN.md) | PostgreSQL + pgvector 的 RAG 数据库设计草案 |
 | 路线图 | [ROADMAP.md](../ROADMAP.md) | 后端 Java 分阶段目标与产出路径 |
 
 ## 快速开始
