@@ -56,7 +56,7 @@ flowchart LR
 | Java | JDK | 21 |
 | Web | Spring Boot | 3.5.8 |
 | ORM | MyBatis-Plus | 3.5.15 |
-| DB | MySQL 驱动 | 8.3.0 |
+| DB | PostgreSQL 驱动 | 42.x |
 | Cache/Lock | Redis + Redisson | 7.x / 3.40.2 |
 | Security | Spring Security + JJWT | 6.x / 0.12.6 |
 | API 文档 | springdoc-openapi | 2.6.0 |
@@ -72,7 +72,7 @@ flowchart LR
 
 - 当前代码库仍可见旧版 AI 数据域命名（如 `ai_conversations`、`ai_messages`、`ai_feedback_reviews`）；它们反映的是现阶段 Java 实现状态，不代表 V3 目标数据库口径。
 - V3 目标数据库模型已统一切换为 `ai_session`、`ai_turn`、`ai_turn_content`、`ai_model_run`、`ai_guardrail_event`、`ai_feedback_task`、`ai_feedback_review` 等表，详见 `docs/07-DATABASE.md` 与 `docs/07B-AI-AUDIT-V3.md`。
-- Python 微服务（FastAPI/LangChain/LangGraph）、Milvus、OSS 在 `MediAskDocs` 中主要作为规划内容；当前 Java 后端代码未形成完整落地链路。
+- Python 微服务（FastAPI/LangChain/LangGraph）、pgvector（RAG 向量检索）、OSS 在 `MediAskDocs` 中主要作为规划内容；当前 Java 后端代码未形成完整落地链路。
 
 ## 7. 关键接口前缀
 
@@ -136,9 +136,8 @@ flowchart TB
     end
 
     subgraph Stores[Data Stores]
-        MySQL[(MySQL)]:::data
+        PG[(PostgreSQL + pgvector)]:::data
         Redis[(Redis)]:::data
-        Milvus[(Milvus / Milvus Lite)]:::planned
     end
 
     subgraph Obs[Observability]
@@ -158,13 +157,13 @@ flowchart TB
     Nginx --> WebDist
     Nginx --> H5Dist
 
-    Api --> MySQL
+    Api --> PG
     Api --> Redis
-    Worker --> MySQL
+    Worker --> PG
     Worker --> Redis
 
     Api --> AiSvc
-    AiSvc --> Guardrails --> RAG --> Milvus
+    AiSvc --> Guardrails --> RAG --> PG
     RAG --> LLM
 
     Api --> ELK

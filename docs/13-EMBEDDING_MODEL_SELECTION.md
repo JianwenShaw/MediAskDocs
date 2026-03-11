@@ -13,7 +13,7 @@
 - **中文场景适配**：满足医疗中文问答为主的检索语义需求。
 - **工程可落地**：无需本地模型部署与运维，降低环境复杂度。
 - **成本可控**：利用免费额度（100 万 tokens）支撑毕设阶段开发与演示。
-- **架构一致性**：与“Java 后端 + Python AI 服务 + Milvus + DeepSeek”路线保持一致。
+- **架构一致性**：与“Java 后端 + Python AI 服务 + PostgreSQL + pgvector + DeepSeek”路线保持一致。
 
 ## 3. 约束与边界
 
@@ -36,4 +36,4 @@ EMBEDDING_BASE_URL=<阿里百炼兼容端点>
 EMBEDDING_API_KEY=<你的百炼API Key>
 ```
 
-> 说明：向量维度以实际 API 返回与 Milvus collection 配置保持一致。
+> 说明：向量维度以实际 API 返回与 PostgreSQL `knowledge_chunk_index` 的 `VECTOR(1536)` 定义保持一致。

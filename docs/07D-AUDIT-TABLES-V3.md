@@ -2,6 +2,8 @@
 
 > 本文对 `mediask-dal/src/main/resources/sql/07-domain-events.sql` 中的每张表做逐表说明。
 > 重点不是复述 DDL，而是解释为什么审计日志、访问日志、领域事件、Outbox 必须分开，以及每张表在监管、集成和架构演进中的真实作用。
+>
+> 数据库引擎：PostgreSQL 17+（V3 统一迁移，详见 [07-DATABASE.md](./07-DATABASE.md)）。
 
 ## 1. 设计总原则
 

@@ -116,7 +116,8 @@ dependencies = [
     "langgraph>=1.0.7",
     "openai>=2.17.0",
     "pydantic-settings>=2.0.0",
-    "pymilvus>=2.6.8",
+    "psycopg[binary]>=3.2.0",
+    "pgvector>=0.3.0",
 ]
 
 [tool.uv]
@@ -139,7 +140,7 @@ build-backend = "hatchling.build"
 
 ```bash
 # 核心依赖
-uv add fastapi uvicorn langchain langgraph pymilvus openai
+uv add fastapi uvicorn langchain langgraph psycopg pgvector openai
 
 # 实用工具
 uv add aiofiles python-dotenv

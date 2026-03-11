@@ -5,7 +5,7 @@
 mediask-ai 是独立 AI 微服务，只提供 AI 能力，不直接处理业务事务。
 
 - 上游: Java 后端 mediask-be 调用。
-- 下游: DeepSeek/兼容 OpenAI API, 阿里百炼 Embedding API, Milvus 向量库。
+- 下游: DeepSeek/兼容 OpenAI API, 阿里百炼 Embedding API, PostgreSQL + pgvector（向量检索与业务持久化统一实例）。
 - 交互: HTTP JSON + SSE 流式输出。
 
 ## 2. 目录结构建议
@@ -52,7 +52,8 @@ dependencies = [
     "langgraph>=1.0.7",
     "openai>=2.17.0",
     "pydantic-settings>=2.0.0",
-    "pymilvus>=2.6.8",
+    "psycopg[binary]>=3.2.0",
+    "pgvector>=0.3.0",
 ]
 
 [tool.uv]
@@ -116,10 +117,13 @@ REDIS_SOCKET_TIMEOUT_SECONDS=2
 REDIS_CONNECT_TIMEOUT_SECONDS=1
 READY_CACHE_TTL_SECONDS=15
 
-MILVUS_MODE=lite
-MILVUS_LITE_PATH=.milvus/mediask.db
-MILVUS_URI=http://localhost:19530
-MILVUS_COLLECTION=mediask_knowledge
+# PostgreSQL（与 Java 主系统共用同一实例，pgvector 扩展已启用）
+PG_HOST=127.0.0.1
+PG_PORT=5432
+PG_DB=mediask_dev
+PG_USER=postgres
+PG_PASSWORD=
+# Python 直接写入 knowledge_chunk_index / ai_run_citation
 ```
 
 ```bash
@@ -128,12 +132,15 @@ APP_ENV=prod
 LOG_LEVEL=INFO
 DEBUG=false
 
-MILVUS_MODE=milvus
-MILVUS_URI=http://milvus:19530
-MILVUS_COLLECTION=mediask_knowledge
+# PostgreSQL（生产环境）
+PG_HOST=postgres
+PG_PORT=5432
+PG_DB=mediask_prod
+PG_USER=mediask_ai
+PG_PASSWORD=<生产密码>
 ```
 
-> `/ready` 会将依赖检查结果缓存到 Redis（默认 TTL=15s），Redis 不可用时会回退到内存缓存；Redis key 采用 `mediask-ai:{业务}:{具体作用}` 命名空间（如 `mediask-ai:health:ready:lite`）。
+> `/ready` 会将依赖检查结果缓存到 Redis（默认 TTL=15s），Redis 不可用时会回退到内存缓存；Redis key 采用 `mediask-ai:{业务}:{具体作用}` 命名空间（如 `mediask-ai:health:ready`）。
 
 ### 4.2 本地启动与部署
 
@@ -277,18 +284,18 @@ async def verify_api_key(request: Request, call_next):
 1. 文档加载 (Markdown/PDF)
 2. 分块 (chunk_size 800-1200, overlap 100-200)
 3. 调用阿里百炼生成向量 (text-embedding-v4)
-4. 写入 Milvus
+4. 写入 PostgreSQL `knowledge_chunk_index`（向量 + tsvector 关键词索引）
 
 ### 7.2 查询流程
 
 1. Query 归一化
-2. Query 向量化（阿里百炼） + 混合检索 (向量 + 关键词)
+2. Query 向量化（阿里百炼） + pgvector 向量检索 + tsvector 关键词检索
 3. 结果融合 (RRF)
 4. 构造 Prompt
 5. 调用 LLM
 6. 返回答案 + 引用
 
-> 说明：若 Embedding API 不可用，按安全降级策略返回“知识库暂不可用”并可退化为无检索保守回答，避免误导性输出。
+> 说明：若 Embedding API 不可用，按安全降级策略返回“知识库暂不可用”并可退化为无检索保守回答，避免误导性输出。RAG 检索命中结果写入 `ai_run_citation` 表，供引用追溯。
 
 ## 8. 统一错误与日志
 

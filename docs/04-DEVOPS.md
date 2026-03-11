@@ -30,7 +30,7 @@
 
 ## 4. 本地运维建议
 
-- 当前仓库未提供根目录 `docker-compose.yml`，请按环境自行编排 MySQL/Redis/API。
+- 当前仓库未提供根目录 `docker-compose.yml`，请按环境自行编排 PostgreSQL/Redis/API。
 - 启动命令遵循 AGENTS 平台规则：
 
 ```bash
@@ -50,5 +50,5 @@ python3 scripts/os_detect.py
 
 以下内容可保留在专项文档继续推进，但不视为当前后端已实现：
 
-- Milvus / RAG 在线链路
+- pgvector / RAG 在线链路
 - Python AI 微服务全链路联调

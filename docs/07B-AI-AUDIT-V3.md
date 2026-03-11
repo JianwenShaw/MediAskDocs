@@ -152,9 +152,9 @@ V3 的 AI 域建议分为 6 层。
 - 哪些知识库存在
 - 哪篇文档已入库
 - 文档切成了哪些 chunk
-- 向量库里的引用 ID 是多少
+- 向量索引的检索投影（`knowledge_chunk_index`）由 Python 直接写入同一 PostgreSQL 实例
 
-这里刻意只保存“业务索引”和“追溯元数据”，不在 MySQL 里存向量本体。
+这里刻意只保存“业务索引”和“追溯元数据”，向量检索能力通过 pgvector 扩展在同一 PostgreSQL 实例中提供，无需外部向量数据库。
 
 ## 5. Java 与 Python 的持久化边界
 
@@ -188,7 +188,8 @@ V3 的 AI 域建议分为 6 层。
 - tokens、latency、degraded 标记
 - RAG citations、summary、routing artifact
 - 护栏匹配规则与动作
-- 文档入库后的 `vector_ref_id`
+- 文档入库后写入 `knowledge_chunk_index` 的向量与关键词索引
+- RAG 检索命中记录（`ai_run_citation`）
 
 原因：
 
@@ -229,6 +230,8 @@ flowchart LR
     J2 --> M1("ai_model_run")
     J2 --> A1("ai_run_artifact")
     J2 --> G1("ai_guardrail_event")
+    R1 --> CI("ai_run_citation")
+    R1 --> KI("knowledge_chunk_index")
     J2 --> F1("ai_feedback_task")
 ```
 
@@ -402,34 +405,36 @@ AI 问诊原文里经常包含：
 
 所以必须拆成任务表和结果表。
 
-## 8. 知识库为什么只存索引和追溯元数据
+## 8. 知识库的三层模型（业务事实 + 检索投影 + 引用追溯）
 
-因为向量库和业务库承担的职责不一样：
+V3 统一迁移至 PostgreSQL 17+ 后，RAG 数据模型从"业务库 + 外部向量库"变为三层统一模型（详见 [20-RAG_DATABASE_PGVECTOR_DESIGN.md](./20-RAG_DATABASE_PGVECTOR_DESIGN.md)）：
 
-- 向量库负责相似度检索
-- MySQL 负责业务追踪、权限和引用展示
+**业务主事实层**（Java 主导持久化）：
 
-因此在 MySQL 中保留这些就够了：
+- `knowledge_base`：知识库归属、可见性
+- `knowledge_document`：文档来源、入库状态
+- `knowledge_chunk`：chunk 正文、section/page、引用展示
 
-- 知识库是谁的
-- 文档标题、来源、类别
-- chunk 文本和 section/page
-- 向量引用 ID
+**检索投影层**（Python 直接写入 PostgreSQL）：
 
-不需要把 embedding 向量本体塞进主业务库。
+- `knowledge_chunk_index`：向量（`VECTOR(1536)`）+ tsvector 关键词索引，由 Python 在 embedding 完成后直接写入同一 PostgreSQL 实例
 
-这一点和你的 Python AI 服务边界非常契合：
+**引用追溯层**（Python 直接写入 PostgreSQL）：
 
-- Python 负责文档入库、embedding、向量检索
-- Java 负责知识文档的业务索引、可见性和引用追踪
+- `ai_run_citation`：每次 RAG 回答引用了哪些 chunk、相似度分数、排名
 
-所以 `knowledge_document / knowledge_chunk` 的定位是：
+Java 与 Python 的分工因此变为：
+
+- Python 负责文档入库、embedding、写入 `knowledge_chunk_index`、RAG 检索、写入 `ai_run_citation`
+- Java 负责知识文档的业务索引、可见性控制和引用展示
+
+`knowledge_document / knowledge_chunk` 的定位不变：
 
 - 给业务系统看得懂
 - 给前端能展示引用
 - 给运营后台能做内容治理
 
-而不是替代向量库。
+但向量检索不再依赖外部 Milvus，而是通过 pgvector 在同一数据库内完成。
 
 ## 9. 审计域为什么必须重构
 
@@ -520,7 +525,7 @@ sequenceDiagram
     participant User as 用户
     participant Java as Java业务系统
     participant Py as Python AI服务
-    participant DB as MySQL
+    participant DB as PostgreSQL
     participant Audit as 审计/访问日志
 
     User->>Java: 发起 AI 问诊请求
@@ -603,7 +608,8 @@ Java 收到后，对应落库建议：
 
 - `answer` -> `ai_turn_content`
 - `provider_run_id / model_name / latency_ms / tokens_* / is_degraded` -> `ai_model_run`
-- `citations / summary / routing / rag_context` -> `ai_run_artifact`
+- `citations` -> `ai_run_citation`（Python 直接写入 PostgreSQL）
+- `summary / routing / rag_context` -> `ai_run_artifact`（通用调试/中间产物）
 - `risk_level / guardrail_action / matched_rule_codes` -> `ai_guardrail_event`
 
 ### 13.4 不建议的错误模式
@@ -629,9 +635,9 @@ Java 收到后，对应落库建议：
 sequenceDiagram
     participant User as 用户
     participant Java as Java业务系统
-    participant DB as MySQL
+    participant DB as PostgreSQL
     participant Py as Python AI服务
-    participant Vector as Milvus/RAG
+    participant Vector as pgvector/RAG
     participant Audit as 审计与访问监管
 
     User->>Java: 发起 AI 问诊请求
@@ -645,7 +651,7 @@ sequenceDiagram
 
     Py->>Py: 输入脱敏 / 护栏预检
     alt use_rag = true
-        Py->>Vector: 检索知识片段
+        Py->>Vector: pgvector 向量检索 + tsvector 关键词检索
         Vector-->>Py: 返回 chunks + scores
     end
 
@@ -657,6 +663,7 @@ sequenceDiagram
     Java->>DB: 写 ai_model_run
     Java->>DB: 写 ai_run_artifact
     Java->>DB: 写 ai_guardrail_event
+    Note over Py,DB: Python 在 RAG 检索时已直接写入 ai_run_citation
 
     alt 命中需要人工复核
         Java->>DB: 创建 ai_feedback_task
@@ -723,7 +730,7 @@ sequenceDiagram
 - 原文、运行元数据、护栏、复核必须拆表
 - 业务审计、访问监管、领域事件必须分表
 - 只把“需要监管和追溯”的 AI 事实落到业务库
-- 不把向量本体和海量运行细节塞进 MySQL
+- 向量检索统一由 PostgreSQL + pgvector 承载，不再依赖外部向量数据库
 
 ## 16. 一句话总结
 

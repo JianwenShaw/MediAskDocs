@@ -156,8 +156,10 @@ AI 问诊原文里经常包含：
 
 ### 6.1 这张表回答什么问题
 
-- 这次运行产出了哪些结构化结果
-- 比如摘要、引用、路由决策、RAG 上下文快照
+- 这次运行产出了哪些通用结构化中间产物
+- 比如摘要、路由决策、RAG 上下文快照、调试载荷
+
+> **注意**：V3 迁移至 PostgreSQL + pgvector 后，RAG 检索引用（citations）已由专门的 `ai_run_citation` 表承担（详见第 14 节），`ai_run_artifact` 定位为通用调试/中间产物存储。
 
 ### 6.2 为什么需要它
 
@@ -279,7 +281,7 @@ AI 问诊原文里经常包含：
 
 - `owner_type` / `owner_dept_id`：明确知识归属边界
 - `embedding_model`：方便后续重建索引和追溯入库策略
-- `vector_backend`：显式记录外部向量系统，不假设永远只有一种后端
+- `vector_backend`：显式记录向量后端，V3 默认为 `PGVECTOR`（PostgreSQL + pgvector 扩展），不假设永远只有一种后端
 
 ## 11. `knowledge_document`
 
@@ -317,7 +319,7 @@ AI 问诊原文里经常包含：
 - 对应哪个 section/page
 - 在向量库里对应哪个引用 ID
 
-### 12.2 为什么 chunk 文本仍然要留在 MySQL
+### 12.2 为什么 chunk 文本仍然要留在业务主表
 
 因为业务系统有明确需要：
 
@@ -326,24 +328,95 @@ AI 问诊原文里经常包含：
 - 对 RAG 结果做人工抽查
 - 对文档分块质量做运营治理
 
-如果只在向量库里存，业务层的追溯和展示会很痛苦。
+即便向量检索已统一到同一 PostgreSQL 实例（通过 pgvector），chunk 正文仍需保留在 `knowledge_chunk` 业务主表中，以便业务系统直接查询和展示引用。
 
 ### 12.3 关键字段
 
 - `chunk_index`：文档内稳定顺序
-- `content`：引用展示的基础
+- `content`：引用展示的基础（`knowledge_chunk_index` 中的向量由此正文生成）
 - `section` / `page_no`：增强可追溯性
-- `vector_ref_id`：和 Python / Milvus 的桥接点
+- `vector_ref_id`：**已废弃**——V3 统一迁移至 PostgreSQL + pgvector 后，`knowledge_chunk.id` 本身即为 `knowledge_chunk_index` 的稳定锚点，不再需要额外的外部向量库引用 ID
 - `metadata_json`：给未来补充 chunk 标签、清洗策略等扩展位
 
-## 13. 一句话总结
+## 13. `knowledge_chunk_index`
 
-`05-ai.sql` 的设计本质上是在把 AI 领域拆成五种事实：
+> 本表由 [20-RAG_DATABASE_PGVECTOR_DESIGN.md](./20-RAG_DATABASE_PGVECTOR_DESIGN.md) 引入，属于检索投影层。
+
+### 13.1 这张表回答什么问题
+
+- 某个 chunk 的向量表示是什么
+- 关键词索引（tsvector）是什么
+- 用什么模型、什么维度生成的 embedding
+
+### 13.2 为什么必须单独建表
+
+这张表是 `knowledge_chunk` 的检索投影，而不是业务主事实。
+
+分离的原因：
+
+- 业务主事实层（`knowledge_chunk`）由 Java 主导，关注正文、section/page、引用展示
+- 检索投影层由 Python 主导，关注向量、tsvector、embedding 模型版本
+- 两者的写入时机和责任方不同：Java 创建 chunk 记录，Python 在 embedding 完成后写入索引
+- 分离后可以独立重建索引而不影响业务主事实
+
+### 13.3 关键字段
+
+- `chunk_id`：外键指向 `knowledge_chunk.id`，稳定锚点
+- `embedding`：`VECTOR(1536)` 类型，由 pgvector 扩展提供
+- `tsv`：PostgreSQL `tsvector` 类型，用于关键词召回和混合检索
+- `embedding_model`：记录生成向量的模型版本，便于重建索引时判断是否需要重算
+- `indexed_at`：索引写入时间戳
+
+### 13.4 持久化边界
+
+此表由 Python AI 服务直接写入 PostgreSQL，不经过 Java 回传。这是 V3 中 Python 直接写库的两张表之一（另一张是 `ai_run_citation`）。
+
+## 14. `ai_run_citation`
+
+> 本表由 [20-RAG_DATABASE_PGVECTOR_DESIGN.md](./20-RAG_DATABASE_PGVECTOR_DESIGN.md) 引入，属于引用追溯层。
+
+### 14.1 这张表回答什么问题
+
+- 某次 AI 回答引用了哪些知识 chunk
+- 每个引用的相似度分数和排名是多少
+- 引用是否被最终采纳进回答
+
+### 14.2 为什么需要它
+
+V3 之前，RAG 引用信息存放在 `ai_run_artifact` 的 JSON 中，这带来几个问题：
+
+- 无法按 chunk 维度查询"这个知识片段被引用了多少次"
+- 无法做引用质量统计和知识库热度分析
+- JSON 内的引用字段缺乏外键约束，无法保证引用的 chunk 确实存在
+
+`ai_run_citation` 把引用关系从 JSON 提升为独立关系事实，支持：
+
+- 单条引用粒度的追溯
+- 按 chunk/document/knowledge_base 维度的引用统计
+- 引用正确率回归分析
+
+### 14.3 关键字段
+
+- `run_id`：外键指向 `ai_model_run.id`
+- `chunk_id`：外键指向 `knowledge_chunk.id`
+- `rank`：本次检索中的排名
+- `score`：相似度分数（`NUMERIC(6,4)`）
+- `used_in_answer`：是否被最终纳入回答上下文
+
+### 14.4 持久化边界
+
+此表由 Python AI 服务在 RAG 检索完成后直接写入 PostgreSQL。Python 知道检索结果的完整排名和分数，Java 无法也不应二次推测这些执行现场事实。
+
+## 15. 一句话总结
+
+`05-ai.sql` 的设计本质上是在把 AI 领域拆成七种事实：
 
 - 业务会话
 - 高敏原文
 - 执行运行
 - 风险护栏
-- 复核与知识索引
+- 复核
+- 知识索引与业务元数据
+- 检索投影与引用追溯（`knowledge_chunk_index` + `ai_run_citation`）
 
 只有这样，Java 和 Python 的边界才会稳定，后续的监管、复核、性能和扩展性才不会打架。

@@ -103,7 +103,7 @@ public class DoctorSchedule {
 
 ```
 当前：Domain 层（algorithm/constraint/、algorithm/solver/）
-建议：Infra 层（与 Milvus 客户端、AI 服务同级）
+建议：Infra 层（与 pgvector 客户端、AI 服务同级）
 ```
 
 理由：

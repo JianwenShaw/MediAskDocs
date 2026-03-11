@@ -4,7 +4,7 @@
 
 ### 1.1 毕设背景
 
-本系统 MediAsk（智能医疗辅助问诊系统）采用单体多实例架构，涉及 Java 后端（API/Service/Domain/Infra/DAL）、Python AI 服务、MySQL 数据库、Redis 缓存、Milvus 向量数据库等多个组件。
+本系统 MediAsk（智能医疗辅助问诊系统）采用单体多实例架构，涉及 Java 后端（API/Service/Domain/Infra/DAL）、Python AI 服务、PostgreSQL 数据库（含 pgvector 扩展）、Redis 缓存等多个组件。
 
 在答辩与论文中，需要展示：
 - 系统架构的可观测性设计
@@ -41,7 +41,7 @@
 2. **技术完整**：链路追踪（SkyWalking）+ 指标监控（Prometheus）+ 日志聚合（Loki）+ 可视化（Grafana）
 3. **论文加分**：展示对可观测性三支柱（Traces/Metrics/Logs）的整体理解
 4. **工作助力**：掌握 Prometheus + Grafana 是后端开发必备技能
-5. **审计亮点**：审计事件采用 MySQL 权威存储 + Elasticsearch 检索/聚合，用于复杂审计检索、报表统计与长留存（不把全部运行日志搬到 ELK）
+5. **审计亮点**：审计事件采用 PostgreSQL 权威存储 + Elasticsearch 检索/聚合，用于复杂审计检索、报表统计与长留存（不把全部运行日志搬到 ELK）
 
 ### 2.3 组件职责划分
 
@@ -60,7 +60,7 @@
 ### 2.5 Loki vs Elasticsearch（按日志类型分工）
 
 - **运行日志（access/app/security）**：Loki 更适合排障（时间线 + label 过滤 + 低成本聚合）。
-- **审计日志（audit）**：MySQL 做权威存储；Elasticsearch 做检索/聚合（复杂条件、分组统计、趋势报表、长周期留存）。
+- **审计日志（audit）**：PostgreSQL 做权威存储；Elasticsearch 做检索/聚合（复杂条件、分组统计、趋势报表、长周期留存）。
 - **避免误区**：不是“有 ES 就把所有日志都上 ES”。在毕设/单体多实例场景，分层存储更清晰、更可控，也更符合合规审计的思路。
 
 ### 2.4 组件追踪支持情况
@@ -405,7 +405,7 @@ public class RedissonConfig {
 
 如果你的重点是“审计检索/复杂报表/长留存”，建议把 **审计事件** 单独做成两条链路：
 
-- **MySQL（权威存储）**：完整留存、严格权限控制、导出审批、支持防篡改字段（如 `previous_hash`）
+- **PostgreSQL（权威存储）**：完整留存、严格权限控制、导出审批、支持防篡改字段（如 `previous_hash`）
 - **Elasticsearch（索引）**：为检索与统计服务（按 `action/resource/user/department/result` 聚合，按时间趋势分析）
 
 推荐索引名：`mediask-audit-YYYY.MM`（长留存场景下更易做 ILM/归档）。
@@ -530,9 +530,9 @@ graph TB
     end
 
     subgraph 基础设施层
-        DB[(MySQL<br/>MyBatis-Plus)]
+        DB[(PostgreSQL<br/>MyBatis-Plus)]
         R[(Redis<br/>RedisTemplate)]
-        V[(Milvus<br/>向量数据库)]
+        V[(pgvector<br/>向量检索)]
         Log[日志文件]
     end
 
@@ -628,7 +628,7 @@ sequenceDiagram
     participant A as API
     participant S as Service
     participant R as Redis
-    participant DB as MySQL
+    participant DB as PostgreSQL
     participant SW as SkyWalking
 
     U->>A: 发起请求

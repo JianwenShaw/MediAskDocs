@@ -44,7 +44,7 @@ java -jar app.jar --spring.profiles.active=prod
 
 当前包含：
 
-- 数据源：Druid + MySQL
+- 数据源：HikariCP + PostgreSQL
 - Redis：主机、端口、密码、连接池
 - 日志级别：`me.jianwen.mediask` 与 MyBatis 调试日志
 
@@ -52,11 +52,11 @@ java -jar app.jar --spring.profiles.active=prod
 
 ## 5. application-test.yml（测试环境）
 
-当前提供最小化 MySQL/Redis 参数模板，尚未包含完整测试隔离配置。
+当前提供最小化 PostgreSQL/Redis 参数模板，尚未包含完整测试隔离配置。
 
 ## 6. application-prod.yml（生产环境）
 
-当前通过环境变量读取 MySQL/Redis 连接参数，并关闭 SQL 输出日志实现类。
+当前通过环境变量读取 PostgreSQL/Redis 连接参数，并关闭 SQL 输出日志实现类。
 
 ## 7. 与文档历史版本差异
 
@@ -64,7 +64,7 @@ java -jar app.jar --spring.profiles.active=prod
 
 - Jasypt 加密配置样例
 - `file.storage.*`（本地/OSS 策略）
-- DeepSeek/Milvus 等外部配置项
+- DeepSeek/pgvector 等外部配置项
 - `logback-spring.xml` 的项目内实现
 
 上述内容若后续落地，应以新增代码与配置为准再补文档。
