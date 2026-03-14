@@ -195,7 +195,7 @@ deploy/
 | **调试模式** | `DEBUG` | `false` | `true` 时开启详细日志、错误堆栈、Swagger UI |
 | **Swagger UI** | `springdoc.swagger-ui.enabled` | `true` | 生产环境**必须**设为 `false` |
 | **SQL 日志** | `logging.level.me.jianwen.mediask.infrastructure.persistence` | `INFO` | `DEBUG` 时输出完整 SQL（仅 dev/test） |
-| **SkyWalking** | JVM Agent 挂载 | 无 Agent 时自动跳过 | 无 Agent 时 `tid` MDC 字段为空，不影响业务 |
+| **SkyWalking（P2）** | JVM Agent 挂载 | 无 Agent 时自动跳过 | 无 Agent 时 `tid` MDC 字段为空，不影响业务 |
 
 ### 5.2 降级行为定义
 
@@ -205,7 +205,7 @@ deploy/
 | **Redis** | Java 后端启动失败（Redis 为必需依赖） | 启动检查失败，拒绝启动 |
 | **PostgreSQL** | 所有服务启动失败 | 启动检查失败，拒绝启动 |
 | **Python AI 服务** | Java 后端返回 AI 服务不可用错误（ErrorCode 6001） | 业务降级，非 AI 功能正常 |
-| **SkyWalking OAP** | 追踪数据丢失，业务不受影响 | 日志中 `tid` 字段为空 |
+| **SkyWalking OAP（P2）** | 追踪数据丢失，业务不受影响 | 日志中 `tid` 字段为空 |
 | **Loki / Prometheus** | 日志/指标采集中断，业务不受影响 | 运维告警 |
 
 ---
@@ -221,8 +221,8 @@ deploy/
 | **服务间 API Key** | `mediask.ai.api-key` | `API_KEY` | 同一 `.env` 文件或同一密钥源 |
 | **PostgreSQL 连接** | `spring.datasource.*` | `PG_HOST/PORT/DB/USER/PASSWORD` | 指向同一数据库实例 |
 | **Redis 连接** | `spring.data.redis.*` | `REDIS_HOST/PORT/PASSWORD` | 指向同一 Redis 实例 |
-| **Trace ID Header** | `X-Trace-Id`（硬编码） | `X-Trace-Id`（硬编码） | 协议约定，不可配置化 |
-| **响应格式** | `Result<T>` | `{code, msg, data, traceId, timestamp}` | 协议约定，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) |
+| **Request ID Header** | `X-Request-Id`（硬编码） | `X-Request-Id`（硬编码） | 协议约定，不可配置化；`X-Trace-Id` 仅兼容旧口径 |
+| **响应格式** | `Result<T>` | `{code, msg, data, requestId, timestamp}` | 协议约定，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) |
 
 ### 6.2 数据库写入边界
 

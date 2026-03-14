@@ -1,6 +1,6 @@
 # Logback 日志配置
 
-> 本文档收录 Logback 配置片段，用于输出结构化日志并注入 traceId，主文档见 `../00-INDEX.md`
+> 本文档收录 Logback 配置片段，用于输出结构化日志并映射 `requestId`（P0/P1）与可选 `traceId`（P2），主文档见 `../00-INDEX.md`
 
 ---
 
@@ -11,13 +11,13 @@
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- 导入 SkyWalking 变量提供者 -->
-    <include resource="org/apache/skywalking/apm/toolkit/log/logback/ApplicationVariables.json"/>
+    <!-- 如启用 SkyWalking（P2），可取消注释导入其变量提供者 -->
+    <!-- <include resource="org/apache/skywalking/apm/toolkit/log/logback/ApplicationVariables.json"/> -->
 
-    <!-- 控制台输出：包含 traceId -->
+    <!-- 控制台输出：包含 requestId，traceId 为可选 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{tid:-N/A}] [%thread] %-5level %logger{50} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [requestId=%X{requestId:-N/A}] [traceId=%X{traceId:-N/A}] [%thread] %-5level %logger{50} - %msg%n</pattern>
         </encoder>
     </appender>
 
@@ -30,7 +30,7 @@
             <maxHistory>30</maxHistory>
         </rollingPolicy>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{tid:-N/A}] [%thread] %-5level %logger{50} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [requestId=%X{requestId:-N/A}] [traceId=%X{traceId:-N/A}] [%thread] %-5level %logger{50} - %msg%n</pattern>
         </encoder>
     </appender>
 
@@ -68,14 +68,12 @@
                         }
                     </pattern>
                 </pattern>
-                <!-- 输出 SkyWalking 注入的 tid 到 trace_id（同时保留应用自建 traceId/requestId 便于双链路对齐） -->
+                <!-- request_id 为 P0/P1 主串联字段；trace_id 仅在 P2 启用 APM 时存在 -->
                 <mdc>
-                    <includeMdcKeyName>tid</includeMdcKeyName>
-                    <mdcKeyFieldName>tid=trace_id</mdcKeyFieldName>
-                    <includeMdcKeyName>traceId</includeMdcKeyName>
-                    <mdcKeyFieldName>traceId=request_trace_id</mdcKeyFieldName>
                     <includeMdcKeyName>requestId</includeMdcKeyName>
                     <mdcKeyFieldName>requestId=request_id</mdcKeyFieldName>
+                    <includeMdcKeyName>traceId</includeMdcKeyName>
+                    <mdcKeyFieldName>traceId=trace_id</mdcKeyFieldName>
                 </mdc>
             </providers>
         </encoder>
@@ -101,23 +99,23 @@
 ## 2. 依赖配置（mediask-api/pom.xml）
 
 ```xml
-<!-- SkyWalking Logback 工具包（用于日志注入 traceId） -->
-<dependency>
-    <groupId>org.apache.skywalking</groupId>
-    <artifactId>apm-toolkit-logback-1.x</artifactId>
-    <version>9.1.0</version>
-</dependency>
-
 <!-- JSON Encoder（用于输出 JSON Lines 结构化日志） -->
 <dependency>
     <groupId>net.logstash.logback</groupId>
     <artifactId>logstash-logback-encoder</artifactId>
 </dependency>
+
+<!-- SkyWalking Logback 工具包（仅 P2 可选） -->
+<dependency>
+    <groupId>org.apache.skywalking</groupId>
+    <artifactId>apm-toolkit-logback-1.x</artifactId>
+    <version>9.1.0</version>
+</dependency>
 ```
 
 ---
 
-## 3. 启动命令（带 SkyWalking Agent）
+## 3. 启动命令（P2 可选，带 SkyWalking Agent）
 
 ```bash
 # 开发环境
@@ -139,11 +137,11 @@ java -javaagent:/path/to/skywalking-agent/skywalking-agent.jar \
 
 控制台/文件输出：
 ```
-2026-02-14 10:30:45.123 [http-nio-8989-exec-1] INFO  c.m.m.a.controller.LoginController - 用户登录 TID:3f9a8b7c2d1e
-                                                                ↑traceId，自动注入
+2026-02-14 10:30:45.123 [requestId=req_01hrx6m5q4x5v2f6k4w4x1c7pz] [traceId=N/A] [http-nio-8989-exec-1] INFO  c.m.m.a.controller.LoginController - 用户登录
+                                                                ↑默认看 requestId，traceId 仅 P2 启用时出现
 ```
 
 JSON 格式输出：
 ```json
-{"ts":"2026-02-14T10:30:45.123+0800","level":"INFO","service":"mediask-api","env":"prod","trace_id":"3f9a8b7c2d1e","request_trace_id":"t-abc123","request_id":"r-123","logger":"c.m.m.a.controller.LoginController","msg":"用户登录","thread":"http-nio-8989-exec-1"}
+{"ts":"2026-02-14T10:30:45.123+0800","level":"INFO","service":"mediask-api","env":"prod","request_id":"req_01hrx6m5q4x5v2f6k4w4x1c7pz","logger":"c.m.m.a.controller.LoginController","msg":"用户登录","thread":"http-nio-8989-exec-1"}
 ```

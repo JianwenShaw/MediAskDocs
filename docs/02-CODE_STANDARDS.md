@@ -2,7 +2,7 @@
 
 > **设计立场**：本文档为 MediAsk 项目的目标代码规范，与 [01-OVERVIEW.md](./01-OVERVIEW.md) 的六边形架构、6 模块结构保持一致。
 >
-> **注意**：具体代码实现请参考代码仓库，文档仅说明规范和模式。
+> **注意**：本文件用于指导重写阶段的实现，规范优先于旧代码。
 
 ---
 
@@ -12,7 +12,7 @@
 
 | 模块 | 六边形角色 | 职责 | 关键类/接口 |
 |------|-----------|------|------------|
-| `mediask-api` | Interface Adapter（驱动侧适配器） | REST 控制器、JWT 认证、Security 过滤、DTO 序列化 | `*Controller`、`*Request`、`*Response`、`*Assembler` |
+| `mediask-api` | Interface Adapter + Composition Root | REST 控制器、JWT 认证、Security 过滤、DTO 序列化、Spring Boot 启动装配 | `*Controller`、`*Request`、`*Response`、`*Assembler`、`*Application` |
 | `mediask-application` | Application Layer | 用例编排、事务边界、Command/Query 对象 | `*UseCase`、`*Command`、`*Query` |
 | `mediask-domain` | Domain Core + Driven Port | 聚合根、实体、值对象、领域服务、领域事件、Port 接口 | `*`（Entity）、`*Id`（VO）、`*Repository`、`*Port`、`*Event` |
 | `mediask-infrastructure` | Driven Adapter（被驱动侧适配器） | Repository 实现、DO/Mapper、Redis/锁、AI 客户端 | `*RepositoryImpl`、`*DO`、`*Mapper`、`*Converter`、`*Client` |
@@ -23,26 +23,27 @@
 
 ```
 mediask-api → mediask-application → mediask-domain
-                                  → mediask-infrastructure → mediask-domain
+mediask-api → mediask-infrastructure → mediask-domain
 mediask-worker → mediask-application
+mediask-worker → mediask-infrastructure
 所有模块 → mediask-common
 ```
 
 | 规则 | 说明 |
 |------|------|
 | Domain **不依赖**任何其他业务模块 | 纯 Java，不引入 Spring、MyBatis、Redis 等框架依赖 |
-| Application **依赖** Domain + Infrastructure | 编排领域对象，管理事务边界，通过 Port 调用基础设施 |
-| API **仅依赖** Application | Controller 只调用 UseCase，不直接操作 Domain 或 Infrastructure |
-| Infrastructure **依赖** Domain | 实现 Domain 中定义的 Port 接口 |
-| Worker **依赖** Application | 复用应用层用例，不直接操作 Domain 或 Infrastructure |
+| Application **依赖** Domain + Common | 编排领域对象，管理事务边界，只面向 Port 与领域对象编程 |
+| Infrastructure **依赖** Domain + Common | 实现 Domain 中定义的 Port 接口 |
+| API **模块依赖** Application + Infrastructure | 负责 Spring 装配；但 Controller、Assembler、Security 鉴权逻辑只调用 Application |
+| Worker **模块依赖** Application + Infrastructure | 负责任务进程装配；但 Job、Consumer 只调用 Application |
 | Common 被所有模块依赖 | 仅包含无业务语义的技术工具 |
 
 ### 1.3 禁止的依赖方向
 
 | 禁止 | 原因 |
 |------|------|
-| API → Domain | API 层不应绕过 Application 直接操作领域对象 |
-| API → Infrastructure | 同上，职责越界 |
+| API 业务代码 → Domain | Controller/Assembler 不应绕过 Application 直接操作领域对象 |
+| API 业务代码 → Infrastructure | Controller/Assembler/Scheduler 不应直接操作 Repository/Client |
 | Domain → Infrastructure | 违反依赖倒置，领域层必须通过 Port 接口抽象基础设施 |
 | Domain → Application | 内层不依赖外层 |
 | Infrastructure → Application | 被驱动侧不应反向依赖应用层 |
@@ -383,13 +384,13 @@ public class RegistrationOrderConverter {
   "code": 0,
   "msg": "success",
   "data": {},
-  "traceId": "trace-abc-123",
+  "requestId": "req_01hrx6m5q4x5v2f6k4w4x1c7pz",
   "timestamp": 1741234567890
 }
 ```
 
 - `code = 0` 表示成功，非零表示失败
-- `traceId` **必须**出现在每个响应中
+- `requestId` **必须**出现在每个响应中
 - `timestamp` 为 Unix 毫秒时间戳
 
 ```java
@@ -592,12 +593,12 @@ log.error("持久化失败, orderId={}", orderId, exception);
 | `INFO` | 关键业务节点（创建、状态变更、支付、登录） |
 | `DEBUG` | 开发调试信息（生产环境默认关闭） |
 
-### 8.3 TraceId 链路
+### 8.3 Request Context 链路
 
-- `TraceIdFilter` 从请求头 `X-Trace-Id` 读取（或自动生成 UUID）
-- 写入 MDC（`traceId`、`requestUri`），logback 自动输出
-- 跨服务调用（Java → Python）时通过 `X-Trace-Id` 请求头透传
-- 详见 [16-LOGGING_DESIGN/00-INDEX.md](./16-LOGGING_DESIGN/00-INDEX.md) 和 [17-OBSERVABILITY.md](./17-OBSERVABILITY.md)
+- `RequestContextFilter` 从请求头 `X-Request-Id` 读取（或自动生成 UUID），兼容旧头 `X-Trace-Id`
+- 写入 MDC（`requestId`、`requestUri`；P2 可选 `traceId`），logback 自动输出
+- 跨服务调用（Java → Python）时通过 `X-Request-Id` 请求头透传
+- 详见 [16-LOGGING_DESIGN/00-INDEX.md](./16-LOGGING_DESIGN/00-INDEX.md)、[17-OBSERVABILITY.md](./17-OBSERVABILITY.md) 和 [17A-REQUEST_CONTEXT_IMPLEMENTATION.md](./17A-REQUEST_CONTEXT_IMPLEMENTATION.md)
 
 ---
 
@@ -737,7 +738,7 @@ public class CreateRegistrationRequest {
 ### 日志与可观测
 - [ ] 使用占位符，禁止字符串拼接
 - [ ] 关键业务节点有 INFO 日志
-- [ ] 包含 traceId 和关键业务参数
+- [ ] 包含 requestId 和关键业务参数（如启用 APM，再附带 traceId）
 - [ ] 敏感数据（密码、身份证）不出现在日志中
 
 ---

@@ -30,7 +30,9 @@
 
 ## 4. 本地运维建议
 
-- 当前仓库未提供根目录 `docker-compose.yml`，请按环境自行编排 PostgreSQL/Redis/API。
+- 当前仓库未提供根目录 `docker-compose.yml`。
+- 如需一套可直接落地的 P0/P1 基线文件，请参考 `docs/03D-BASELINE_DEPLOYMENT_FILES.md`。
+- 该基线默认只包含 PostgreSQL、Redis、Prometheus、Grafana、Loki、Promtail、Nginx、API、AI，不引入 SkyWalking 或 Elasticsearch。
 - 启动命令遵循 AGENTS 平台规则：
 
 ```bash

@@ -3,6 +3,8 @@
 > **设计立场**：本文档为 MediAsk 系统的目标架构设计，不受现有代码约束，完全基于最佳实践从零规划。
 >
 > **架构决策记录**（ADR）贯穿全文，关键决策以 `[ADR-xxx]` 标注。
+>
+> **当前口径**：本文档与 [14-ARCHITECTURE_REVIEW.md](./14-ARCHITECTURE_REVIEW.md) 共同构成重写基线。
 
 ---
 
@@ -62,7 +64,7 @@
 | **聚合一致性** | 一个聚合根 = 一个事务边界 = 一个 Repository | 跨聚合操作通过领域事件实现最终一致性 |
 | **显式边界** | 限界上下文之间通过防腐层（ACL）或发布语言通信 | 跨上下文仅传递 ID，不传递领域对象 |
 | **敏感数据分离** | 高敏感字段（EMR 原文、AI 会话原文、审计载荷）独立加密存储 | 索引表 + 密文表分离，列表查询永远不触碰密文 |
-| **可观测性优先** | 每个请求全链路可追踪 | request_id / trace_id / span_id 三级标识贯穿 Java → Python → DB |
+| **可观测性优先** | 每个请求都能稳定串联 | `request_id` 贯穿网关 → Java → Python → 审计；`trace_id/span_id` 仅在 P2 APM 时启用 |
 | **务实 DDD** | 核心域深耕聚合根和状态机；支撑域允许贫血模型 | 门诊挂号 / AI 问诊 = 充血模型；用户管理 / 权限 = 简化 CRUD |
 
 ---
@@ -76,18 +78,19 @@
 **理由**：
 1. `mediask-dal` 的职责（DO 对象、MyBatis Mapper）**合并入 `mediask-infrastructure`** — DO 和 Mapper 本质上是持久化适配器的实现细节，不应独立为顶层模块
 2. `mediask-service` **重命名为 `mediask-application`** — 明确其 DDD 应用层定位（用例编排、事务边界、领域对象协调），与 Interface 层（API）解耦
-3. `mediask-api` **精简为纯接口适配层** — 仅负责 HTTP 协议适配（Controller、DTO 序列化、Security 过滤），不包含业务编排逻辑。当未来新增 gRPC、WebSocket、CLI 等入口时，所有用例逻辑可直接复用
+3. `mediask-api` **承担接口适配 + Spring Boot 组合根（Composition Root）** — Controller、DTO、Security 仍保持只调用 Application；但模块本身负责装配 Infrastructure Bean 和应用启动，避免为“纯接口层”再拆一个 bootstrap 模块
 
 ### 6 模块结构
 
 ```
 mediask-be/
-├── mediask-api              # 接口适配层（Interface Adapter）
+├── mediask-api              # 接口适配 + 启动装配层（Interface Adapter + Composition Root）
 │   ├── controller/          # REST 控制器（参数校验、DTO 转换、调用 Application）
 │   ├── security/            # Spring Security + JWT 过滤器
 │   ├── dto/                 # Request / Response / VO
 │   ├── assembler/           # DTO ↔ Domain 转换
-│   └── config/              # Spring Boot 自动配置
+│   ├── config/              # Spring Boot 配置与 Bean 装配
+│   └── boot/                # 启动入口（Spring Boot main class）
 │
 ├── mediask-application      # 应用层（Application Layer）
 │   ├── outpatient/          # 门诊挂号用例
@@ -148,16 +151,17 @@ flowchart LR
     Worker[mediask-worker<br/>异步任务]
 
     API --> App
+    API --> Infra
     API --> Common
 
     App --> Domain
-    App --> Infra
     App --> Common
 
     Infra --> Domain
     Infra --> Common
 
     Worker --> App
+    Worker --> Infra
     Worker --> Common
 
     Domain --> Common
@@ -168,10 +172,10 @@ flowchart LR
 | 规则 | 说明 |
 |------|------|
 | Domain **不依赖** 任何其他业务模块 | 领域层是纯 Java，不引入 Spring、MyBatis、Redis 等框架依赖 |
-| Application **依赖** Domain + Infrastructure | 编排领域对象，管理事务边界，通过 Port 调用基础设施 |
-| API **仅依赖** Application | Controller 只调用 UseCase，不直接操作 Domain 或 Infrastructure |
-| Infrastructure **依赖** Domain | 实现 Domain 中定义的 Port 接口（Repository、ExternalServicePort） |
-| Worker **依赖** Application | 异步任务复用应用层用例，不直接操作 Domain 或 Infrastructure |
+| Application **依赖** Domain + Common | 编排领域对象，定义用例与事务边界；仅面向 Port 与领域对象编程 |
+| Infrastructure **依赖** Domain + Common | 实现 Domain 中定义的 Port 接口（Repository、ExternalServicePort） |
+| API **模块依赖** Application + Infrastructure + Common | 作为组合根负责 Spring 装配；但 `controller/security/assembler` 代码只调用 Application |
+| Worker **模块依赖** Application + Infrastructure + Common | 作为独立进程复用用例与基础设施；但 `job/consumer` 代码只调用 Application |
 | Common 被所有模块依赖 | 仅包含无业务语义的技术工具 |
 
 ---
@@ -232,7 +236,7 @@ flowchart TB
 | **Published Language** | 排班 → 门诊挂号：发布 ClinicSession | 排班上下文产出 ClinicSession 数据，门诊上下文消费 |
 | **Domain Event** | 挂号完成 → 诊疗；诊疗结束 → AI | Spring ApplicationEventPublisher（进程内） |
 | **ACL (Anti-Corruption Layer)** | Java → Python AI 服务 | Infrastructure 层的 `AiServiceClient` 封装 HTTP 调用，将 Python 响应转换为 Java 领域对象 |
-| **Event Subscriber** | 审计上下文监听所有业务事件 | 通过领域事件订阅，异步写入审计表 |
+| **Event Subscriber** | 审计报表、统计投影、可选 ES 同步 | 基于已落库的审计/事件事实异步构建派生视图，不承担权威审计写入 |
 
 ---
 
@@ -293,8 +297,8 @@ flowchart TB
  6. 聚合根执行业务规则 → registrationOrder.confirm()
  7. 聚合根产生领域事件 → RegistrationConfirmedEvent
  8. UseCase 保存聚合根 → RegistrationOrderRepository.save() (Driven Port)
- 9. UseCase 发布事件 → EventPublisher.publish(event) (Driven Port)
-10. 审计上下文异步消费事件 → 写入 audit_event
+ 9. UseCase 同事务写入 `audit.audit_event` / 按需写入 `audit.audit_payload`
+10. UseCase 发布事件 → EventPublisher.publish(event) (Driven Port)
 11. UseCase 返回结果 → Controller → assembler 转为 Response DTO
 ```
 
@@ -331,7 +335,7 @@ flowchart TB
 | 分类 | 组件 | 用途 |
 |------|------|------|
 | 框架 | FastAPI + Uvicorn | 异步 HTTP 服务、SSE 流式输出 |
-| LLM | LangChain + LangGraph | LLM 编排、Agent 工作流 |
+| LLM/RAG 编排 | OpenAI 兼容 SDK + 自研 `RagPipeline` | 模型调用、检索编排、降级与引用输出 |
 | 向量 | pgvector (psycopg) | 向量相似度检索 |
 | Embedding | Alibaba Bailian text-embedding-v4 | 1536 维文本向量化 |
 | DB | psycopg[binary] | PostgreSQL 异步驱动 |
@@ -348,11 +352,12 @@ flowchart TB
 
 | 组件 | 用途 |
 |------|------|
-| SkyWalking 9.1 | 分布式追踪、拓扑图、APM |
 | Prometheus + Micrometer | 指标采集（JVM、HTTP、连接池、Redis） |
 | Grafana 10.x | 统一可视化仪表盘 |
 | Loki + Promtail | 运行时日志聚合 |
-| Elasticsearch 8.x | SkyWalking 存储后端 + 审计事件索引 |
+| `request_id` | 跨网关、Java、Python、审计的请求串联主线 |
+| SkyWalking 9.1（P2） | 分布式追踪、拓扑图、APM |
+| Elasticsearch 8.x（P2） | SkyWalking 存储后端；审计 ES 投影仅作为可选能力 |
 
 ---
 
@@ -369,14 +374,15 @@ sequenceDiagram
     participant LLM as DeepSeek API
 
     Client->>API: POST /api/v1/ai/chat
-    API->>API: 创建 ai_session / ai_turn (Java 写入)
-    API->>AI: POST /api/v1/chat/stream<br/>X-Trace-Id / X-API-Key
+    API->>PG: 创建 ai_session / ai_turn
+    API->>PG: 预创建 ai_model_run(status=RUNNING)
+    API->>AI: POST /api/v1/chat/stream<br/>X-Request-Id / X-API-Key / model_run_id
     AI->>PG: 向量检索 knowledge_chunk_index<br/>(Python 直接读)
     AI->>LLM: 带上下文的 Prompt
     LLM-->>AI: SSE Token 流
-    AI->>PG: 写入 ai_run_citation<br/>(Python 直接写)
+    AI->>PG: 写入 ai_run_citation(model_run_id=model_run_id)<br/>(Python 直接写)
     AI-->>API: SSE 流式响应 + 结构化元数据
-    API->>PG: 写入 ai_model_run / ai_run_artifact<br/>(Java 写入)
+    API->>PG: 更新 ai_model_run / 写入 ai_run_artifact / ai_guardrail_event
     API-->>Client: SSE 转发
 ```
 
@@ -385,19 +391,20 @@ sequenceDiagram
 | 数据 | 写入方 | 原因 |
 |------|--------|------|
 | `ai_session`、`ai_turn`、`ai_turn_content` | **Java** | 会话生命周期由业务系统管理 |
-| `ai_model_run`、`ai_run_artifact`、`ai_guardrail_event` | **Java** | 从 Python 响应中提取，Java 负责持久化 |
+| `ai_model_run` | **Java 预创建并最终更新** | Java 生成稳定 `model_run_id`，Python 基于该 `model_run_id` 写引用记录，执行完成后由 Java 回填元数据 |
+| `ai_run_artifact`、`ai_guardrail_event` | **Java** | 从 Python 响应中提取，Java 负责持久化 |
 | `ai_feedback_task`、`ai_feedback_review` | **Java** | 人工审核流程完全在 Java 侧 |
 | `knowledge_base`、`knowledge_document`、`knowledge_chunk` | **Java** | 知识库元数据属于业务事实层 |
 | `knowledge_chunk_index` | **Python** | 向量化与分词在 Python 完成，直接写入检索投影层 |
-| `ai_run_citation` | **Python** | 检索命中记录在 Python 检索管道中产生 |
+| `ai_run_citation` | **Python** | 检索命中记录在 Python 检索管道中产生，但必须引用 Java 预先分配的 `model_run_id` |
 
 ### 7.3 认证与追踪
 
 | 机制 | 实现 |
 |------|------|
 | 服务间认证 | `X-API-Key` 请求头（Java → Python） |
-| 链路追踪 | `X-Trace-Id` 请求头透传，Python 侧注入到所有日志和 DB 操作 |
-| 降级策略 | Embedding API 不可用时返回保守无 RAG 响应，`ai_model_run.is_degraded = true` |
+| 请求上下文串联 | `X-Request-Id` 请求头透传，Python 侧注入日志和 DB 操作；`X-Trace-Id` 仅兼容旧口径 |
+| 降级策略 | 检索或 Embedding 不可用时返回保守辅助问诊响应，`ai_model_run.is_degraded = true` |
 
 ---
 
@@ -406,6 +413,8 @@ sequenceDiagram
 ### 8.1 数据库总览
 
 PostgreSQL 17+ 单实例，58 张表分布在 7 个 SQL 文件中。详见 [docs/07-DATABASE.md](./07-DATABASE.md)。
+
+其中审计监管表物理落在 `audit` schema，领域事件与 Outbox 物理落在 `event` schema；本文为简化叙述默认省略 schema 前缀。
 
 | SQL 文件 | 表数量 | 领域 |
 |----------|--------|------|
@@ -433,12 +442,12 @@ PostgreSQL 17+ 单实例，58 张表分布在 7 个 SQL 文件中。详见 [docs
 │  VECTOR(1536) + TSVECTOR + authority_score + freshness    │
 │  回答：每个块如何被检索（向量 + 关键词 + 排序权重）         │
 └──────────────────────┬───────────────────────────────────┘
-                       │ chunk_id + run_id
+                       │ chunk_id + model_run_id
                        ▼
 ┌──────────────────────────────────────────────────────────┐
 │  第三层：引用溯源层（Python 管理）                         │
 │  ai_run_citation                                          │
-│  run_id + chunk_id + rank + score + used_in_answer        │
+│  model_run_id + chunk_id + retrieval_rank + fusion_score  │
 │  回答：AI 回答引用了哪些块、排序如何、是否实际使用         │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -493,30 +502,36 @@ Client → Nginx → mediask-api
 
 ## 10. 可观测性架构
 
-### 10.1 三大支柱
+### 10.1 P0/P1 观测基线
 
 | 支柱 | 工具 | 数据源 |
 |------|------|--------|
-| **Traces** | SkyWalking 9.1 | Java Agent 自动埋点 + Python 手动 Span + Redis 自定义 Span |
+| **Request Correlation** | `request_id` + 结构化日志 | 网关、Java、Python、审计表 |
 | **Metrics** | Prometheus + Micrometer | Spring Boot Actuator（JVM、HTTP、HikariCP、Redisson） |
-| **Logs** | Loki + Promtail | 结构化 JSON 日志（logback-spring.xml），包含 request_id / trace_id |
+| **Logs** | Loki + Promtail | 结构化 JSON 日志（logback-spring.xml），P0/P1 至少包含 `request_id` |
+
+`P2` 如需 APM 拓扑和端到端 Span，再追加 `SkyWalking + Elasticsearch`，不改变现有日志与审计口径。
 
 ### 10.2 请求标识体系
 
 | 标识 | 来源 | 范围 |
 |------|------|------|
-| `request_id` | `X-Request-Id` 请求头（网关生成或自动生成） | 单次 HTTP 请求 |
-| `request_trace_id` | `X-Trace-Id` 请求头（跨系统透传） | 跨 Java / Python 服务 |
-| `trace_id` | SkyWalking Agent 注入 | APM 追踪维度 |
+| `request_id` | `X-Request-Id` 请求头（网关生成或自动生成） | 网关、Java、Python、审计统一串联主键 |
+| `trace_id` | SkyWalking / OpenTelemetry 等 APM 注入（P2 可选） | APM 追踪维度 |
 
-### 10.3 审计日志双写
+请求上下文命名的完整实现口径见 [docs/17A-REQUEST_CONTEXT_IMPLEMENTATION.md](./17A-REQUEST_CONTEXT_IMPLEMENTATION.md)。
+
+### 10.3 审计写入基线
 
 ```
-业务操作 → Domain Event → AuditEventSubscriber
-                              │
-                              ├── PostgreSQL audit_event + audit_payload (权威存储)
-                              └── Elasticsearch mediask-audit-YYYY.MM (查询索引，ILM 管理)
+业务操作 → Application UseCase (@Transactional)
+                             │
+                             ├── 同事务写入 audit.audit_event / audit.audit_payload
+                             ├── 访问敏感正文时写入 audit.data_access_log
+                             └── 按需写入 event.domain_event_stream / event.outbox_event
 ```
+
+如后续确有复杂聚合检索、长周期报表或超长留存需求，可从 PostgreSQL 异步投影到 Elasticsearch；ES 不作为 P0/P1 审计写入依赖。
 
 详见 [docs/17-OBSERVABILITY.md](./17-OBSERVABILITY.md)。
 
@@ -544,11 +559,15 @@ flowchart LR
     end
 
     subgraph Obs[可观测性]
-        SW[SkyWalking OAP<br/>:11800/:12800]
-        SWUI[SkyWalking UI<br/>:8080]
         Prom[Prometheus<br/>:9090]
         Grafana[Grafana<br/>:3000]
         Loki[Loki<br/>:3100]
+        PT[Promtail]
+    end
+
+    subgraph ObsP2[P2 可选 APM]
+        SW[SkyWalking OAP<br/>:11800/:12800]
+        SWUI[SkyWalking UI<br/>:8080]
         ES[(Elasticsearch 8<br/>:9200)]
     end
 
@@ -562,14 +581,18 @@ flowchart LR
     Worker --> Redis
     AI --> PG
 
-    API -.-> SW
-    AI -.-> SW
-    SW --> ES
-    SWUI --> SW
     Prom --> API
     Prom --> AI
     Grafana --> Prom
     Grafana --> Loki
+    PT --> Loki
+    API -.-> PT
+    AI -.-> PT
+
+    API -.-> SW
+    AI -.-> SW
+    SW --> ES
+    SWUI --> SW
 ```
 
 ### 11.2 Docker Compose 服务编排
@@ -582,13 +605,13 @@ flowchart LR
 | `nginx` | nginx:alpine | 80 / 443 |
 | `postgres` | pgvector/pgvector:pg17 | 5432 |
 | `redis` | redis:7-alpine | 6379 |
-| `skywalking-oap` | apache/skywalking-oap-server:9.1.0 | 11800 / 12800 |
-| `skywalking-ui` | apache/skywalking-ui:9.1.0 | 8080 |
-| `elasticsearch` | elasticsearch:8.11.0 | 9200 |
 | `prometheus` | prom/prometheus:v2.48.0 | 9090 |
 | `grafana` | grafana/grafana:10.2.0 | 3000 |
 | `loki` | grafana/loki:2.9.0 | 3100 |
 | `promtail` | grafana/promtail:2.9.0 | -- |
+| `skywalking-oap` (`P2`) | apache/skywalking-oap-server:9.1.0 | 11800 / 12800 |
+| `skywalking-ui` (`P2`) | apache/skywalking-ui:9.1.0 | 8080 |
+| `elasticsearch` (`P2`) | elasticsearch:8.11.0 | 9200 |
 
 ---
 
@@ -685,11 +708,14 @@ flowchart TB
         Redis[(Redis 7<br/>Cache + Lock)]:::data
     end
 
-    subgraph Observability[可观测性]
-        SW[SkyWalking<br/>Tracing + APM]:::obs
+    subgraph Observability[可观测性基线]
         PromGraf[Prometheus + Grafana<br/>Metrics + Dashboard]:::obs
         LokiStack[Loki + Promtail<br/>Log Aggregation]:::obs
-        ES[(Elasticsearch<br/>Trace Storage + Audit Index)]:::obs
+    end
+
+    subgraph ObservabilityP2[P2 可选 APM]
+        SW[SkyWalking<br/>Tracing + APM]:::obs
+        ES[(Elasticsearch<br/>Trace Storage<br/>Audit Projection (P2))]:::obs
     end
 
     Web --> Nginx
@@ -707,13 +733,13 @@ flowchart TB
     AiSvc --> PG
     RAGPipe --> PG
 
-    API -.-> SW
-    AiSvc -.-> SW
-    SW --> ES
     API -.-> PromGraf
     AiSvc -.-> PromGraf
     API -.-> LokiStack
     AiSvc -.-> LokiStack
+    API -.-> SW
+    AiSvc -.-> SW
+    SW --> ES
 ```
 
 ---

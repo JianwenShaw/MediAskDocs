@@ -6,7 +6,7 @@
 
 ### 核心职责
 
-将父线程的 MDC（Mapped Diagnostic Context）上下文（如 `traceId`、`requestUri`）传播到异步子线程，确保异步任务的日志能够关联到原始请求的链路追踪 ID。
+将父线程的 MDC（Mapped Diagnostic Context）上下文（如 `requestId`、`requestUri`）传播到异步子线程，确保异步任务的日志能够关联到原始请求。
 
 ---
 
@@ -18,7 +18,7 @@ MDC（Mapped Diagnostic Context）是 SLF4J 提供的一种线程级别的日志
 
 ```
 Thread A (主请求线程)
-├── MDC {traceId: "abc123", requestUri: "/api/schedule"}
+├── MDC {requestId: "req_abc123", requestUri: "/api/schedule"}
 ├── 日志输出: [abc123] 用户查询排班
 └── 发起异步任务 → Thread B (异步线程)
     ├── MDC {}  ← 空！无法继承父线程上下文
@@ -34,7 +34,7 @@ Thread A (主请求线程)
 | 领域事件处理 | `eventTaskExecutor` | 异步发布、处理领域事件 |
 | 排班求解计算 | `scheduleSolverExecutor` | 复杂排班算法的异步求解 |
 
-这些异步任务的日志如果无法关联到原始请求的 `traceId`，将严重影响问题排查和链路追踪。
+这些异步任务的日志如果无法关联到原始请求的 `requestId`，将严重影响问题排查。
 
 ---
 
@@ -73,7 +73,7 @@ public class MdcTaskDecorator implements TaskDecorator {
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        主请求线程                                │
-│  TraceIdFilter: MDC.put("traceId", "abc123")                   │
+│  RequestContextFilter: MDC.put("requestId", "req_abc123")      │
 │                              │                                  │
 │                              ▼                                  │
 │  Service 调用异步任务 executor.execute(task)                   │
@@ -83,7 +83,7 @@ public class MdcTaskDecorator implements TaskDecorator {
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    MdcTaskDecorator.decorate()                  │
-│  1. MDC.getCopyOfContextMap() → {traceId: "abc123"}            │
+│  1. MDC.getCopyOfContextMap() → {requestId: "req_abc123"}      │
 │  2. 返回包装后的 Runnable                                      │
 └─────────────────────────────────────────────────────────────────┘
                                │
@@ -91,7 +91,7 @@ public class MdcTaskDecorator implements TaskDecorator {
 ┌─────────────────────────────────────────────────────────────────┐
 │                      异步子线程执行                              │
 │  包装Runnable执行:                                              │
-│  1. MDC.setContextMap({traceId: "abc123"}) ← 恢复上下文        │
+│  1. MDC.setContextMap({requestId: "req_abc123"}) ← 恢复上下文  │
 │  2. runnable.run() → 执行业务逻辑                               │
 │  3. MDC.clear() → 清理上下文                                    │
 └─────────────────────────────────────────────────────────────────┘
@@ -135,17 +135,17 @@ public Executor eventTaskExecutor() {
 在 `CommonConstants` 中定义：
 
 ```java
-public static final String MDC_TRACE_ID = "traceId";      // 链路追踪 ID
+public static final String MDC_REQUEST_ID = "requestId";   // 请求 ID
 public static final String MDC_USER_ID = "userId";        // 用户 ID
 public static final String MDC_REQUEST_URI = "requestUri"; // 请求 URI
 ```
 
 ### 5.2 上下文写入
 
-`TraceIdFilter` 在请求入口处写入：
+`RequestContextFilter` 在请求入口处写入：
 
 ```java
-MDC.put(CommonConstants.MDC_TRACE_ID, traceId);
+MDC.put(CommonConstants.MDC_REQUEST_ID, requestId);
 MDC.put(CommonConstants.MDC_REQUEST_URI, request.getRequestURI());
 // 可扩展：MDC.put(CommonConstants.MDC_USER_ID, userId);
 ```
@@ -157,7 +157,7 @@ MDC.put(CommonConstants.MDC_REQUEST_URI, request.getRequestURI());
 ### 6.1 未配置 MdcTaskDecorator
 
 ```
-[http-nio-8080-exec-1] INFO  c.m.s.api.filter.TraceIdFilter   - 收到请求: /api/schedule/generate
+[http-nio-8080-exec-1] INFO  c.m.s.api.filter.RequestContextFilter - 收到请求: /api/schedule/generate
 [event-1] INFO  c.m.s.d.event.AppointmentEventListener    - 事件处理开始
 [event-1] ERROR c.m.s.d.event.AppointmentEventListener    - 处理失败  ← 无法关联到原始请求
 ```
@@ -165,9 +165,9 @@ MDC.put(CommonConstants.MDC_REQUEST_URI, request.getRequestURI());
 ### 6.2 配置 MdcTaskDecorator 后
 
 ```
-[http-nio-8080-exec-1] INFO  c.m.s.api.filter.TraceIdFilter   - 收到请求: /api/schedule/generate
-[event-1] INFO  c.m.s.d.event.AppointmentEventListener    - [abc123] 事件处理开始
-[event-1] ERROR c.m.s.d.event.AppointmentEventListener    - [abc123] 处理失败  ← 成功关联链路
+[http-nio-8080-exec-1] INFO  c.m.s.api.filter.RequestContextFilter - 收到请求: /api/schedule/generate
+[event-1] INFO  c.m.s.d.event.AppointmentEventListener    - [req_abc123] 事件处理开始
+[event-1] ERROR c.m.s.d.event.AppointmentEventListener    - [req_abc123] 处理失败  ← 成功关联请求
 ```
 
 ---
@@ -197,9 +197,9 @@ MDC.put(CommonConstants.MDC_REQUEST_URI, request.getRequestURI());
 |------|------|
 | `MdcTaskDecorator` | MDC 上下文传播装饰器 |
 | `AsyncConfig` | 异步任务线程池配置 |
-| `TraceIdFilter` | 请求入口，生成/读取 traceId 写入 MDC |
+| `RequestContextFilter` | 请求入口，生成/读取 requestId 写入 MDC |
 | `CommonConstants` | MDC 键常量定义 |
-| `Result` | 响应封装，从 MDC 获取 traceId 返回 |
+| `Result` | 响应封装，从 MDC 获取 requestId 返回 |
 
 ---
 

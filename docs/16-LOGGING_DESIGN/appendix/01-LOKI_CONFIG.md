@@ -127,9 +127,8 @@ scrape_configs:
             ts: ts
             level: level
             msg: msg
-            trace_id: trace_id
             request_id: request_id
-            request_trace_id: request_trace_id
+            trace_id: trace_id
             env: env
             service: service
             http_status: http.status
@@ -158,11 +157,11 @@ docker-compose -f docker-compose.loki.yml up -d
 # 查询特定服务的所有日志
 {job="mediask", service="mediask-api"}
 
-# 查询包含 traceId 的日志
-{job="mediask"} | json | trace_id="t-abc123"
-
 # 查询某个 request_id 在各类日志中的串联（排障常用）
 {job="mediask"} | json | request_id="r-123"
+
+# 启用 P2 APM 后，可按 trace_id 过滤
+{job="mediask"} | json | trace_id="t-abc123"
 
 # 查询 ERROR 级别日志
 {job="mediask", level="ERROR"}

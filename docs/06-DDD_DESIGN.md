@@ -2,7 +2,7 @@
 
 > 领域驱动设计（DDD）核心概念与实践模式。
 >
-> **注意**：具体代码实现请参考代码仓库，文档仅说明概念和模式。
+> **注意**：本文件用于指导重写阶段的领域建模与分层实现，规范优先于旧代码。
 
 ---
 
@@ -50,28 +50,21 @@
 
 ```
 ┌─────────────────────────────────────────┐
-│  用户接口层 (API Layer)                 │
-│  Controller / Request / Response / VO   │
-└───────────────────┬─────────────────────┘
-                    │ 依赖
-                    ▼
+│  API / Worker（组合根 + 驱动侧适配器）  │
+│  Controller / Job / Security / Boot     │
+└──────────────┬──────────────┬───────────┘
+               │ 调用          │ 装配
+               ▼              ▼
+┌─────────────────────────┐   ┌─────────────────────────┐
+│  应用层 (Application)   │   │ 基础设施层 (Infra)      │
+│  UseCase / Tx / ACL     │   │ RepoImpl / Client / MQ  │
+└──────────────┬──────────┘   └──────────────┬──────────┘
+               │ 依赖抽象                    │ 实现 Port
+               └──────────────┬──────────────┘
+                              ▼
 ┌─────────────────────────────────────────┐
-│  应用层 (Application Layer)             │
-│  ApplicationService / Event Publisher   │
-└───────────────────┬─────────────────────┘
-                    │ 依赖
-                    ▼
-┌─────────────────────────────────────────┐
-│  领域层 (Domain Layer) ← 核心！         │
-│  Entity / ValueObject / DomainService   │
-│  Repository 接口 / DomainEvent          │
-└───────────────────┬─────────────────────┘
-                    │ 实现（依赖倒置）
-                    ▼
-┌─────────────────────────────────────────┐
-│  基础设施层 (Infrastructure Layer)      │
-│  RepositoryImpl / Mapper / Converter    │
-│  外部服务客户端 / Redis / 事件总线      │
+│  领域层 (Domain) ← 核心！               │
+│  Aggregate / ValueObject / Port / Event │
 └─────────────────────────────────────────┘
 ```
 
@@ -79,8 +72,10 @@
 
 | 规则 | 说明 |
 |------|------|
-| 上层依赖下层 | API → Application → Domain → Infra |
+| 业务调用链 | API/Worker → Application → Domain |
+| 运行时装配链 | API/Worker → Infrastructure → Domain |
 | Domain 独立 | 纯 Java，不依赖 Spring / Infra / DAL |
+| Application 不依赖 Infra | 应用层只依赖 Domain Port，不依赖具体适配器实现 |
 | Infra 实现接口 | Repository 接口定义在 Domain，Impl 在 Infra |
 
 ---

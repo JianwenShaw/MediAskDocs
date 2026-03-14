@@ -1,6 +1,6 @@
-# PostgreSQL + pgvector RAG 数据库设计草案（V1）
+# PostgreSQL + pgvector RAG 数据库设计（Baseline）
 
-> 状态：Draft
+> 状态：Authoritative Baseline
 >
 > 适用阶段：毕业设计 `P0 / P1`
 >
@@ -73,7 +73,6 @@ flowchart LR
 
     P --> IDX
     P --> CIT
-    P --> RUN
 ```
 
 ## 4. 分层模型
@@ -171,7 +170,7 @@ flowchart LR
 - `id BIGINT`
 - `knowledge_base_id BIGINT`
 - `document_id BIGINT`
-- `chunk_no INT`
+- `chunk_index INT`
 - `section_title VARCHAR(255)`
 - `page_no INT`
 - `char_start INT`
@@ -224,19 +223,19 @@ flowchart LR
 
 - `id BIGINT`
 - `model_run_id BIGINT`
-- `turn_id BIGINT`
 - `chunk_id BIGINT`
-- `cite_rank INT`
+- `retrieval_rank INT`
 - `vector_score DOUBLE PRECISION`
-- `text_score DOUBLE PRECISION`
+- `keyword_score DOUBLE PRECISION`
 - `fusion_score DOUBLE PRECISION`
 - `rerank_score DOUBLE PRECISION`
-- `used_in_prompt BOOLEAN`
+- `used_in_answer BOOLEAN`
 - `snippet TEXT`
 - `created_at TIMESTAMPTZ`
 
 设计要点：
 
+- `model_run_id` 必须引用 Java 预创建的 `ai_model_run.id`
 - `ai_run_artifact` 仍可保留，用于通用 JSON 产物
 - `citations` 不建议只做 JSON，应该显式建表，便于统计、审计、抽查和复盘
 
@@ -272,7 +271,7 @@ flowchart LR
 - `source_type VARCHAR(16)`：`VECTOR / TEXT / FUSED`
 - `raw_rank INT`
 - `vector_score DOUBLE PRECISION`
-- `text_score DOUBLE PRECISION`
+- `keyword_score DOUBLE PRECISION`
 - `fusion_score DOUBLE PRECISION`
 - `rerank_score DOUBLE PRECISION`
 - `selected BOOLEAN`
@@ -355,26 +354,26 @@ CREATE INDEX idx_kci_doc_active
 
 ### 8.1 入库链路
 
-1. 解析 Markdown / PDF
-2. 清洗文本并保留标题、页码、章节等元数据
-3. 分块
-4. 生成 `content_hash`
-5. 调用 Embedding API
-6. 写入 `knowledge_chunk`
-7. 写入 `knowledge_chunk_index`
-8. 更新 `knowledge_document.document_status=ACTIVE`
+1. Java 或离线任务解析原始文档
+2. Java 清洗文本并保留标题、页码、章节等元数据
+3. Java 分块并持久化 `knowledge_chunk`
+4. Java 调用 Python 索引接口
+5. Python 调用 Embedding API
+6. Python 写入 `knowledge_chunk_index`
+7. Java 更新 `knowledge_document.document_status=ACTIVE`
 
 ### 8.2 查询链路
 
 1. 对查询做术语归一和 PII 脱敏
-2. 生成 query embedding
-3. 向量召回 `top 30~50`
-4. 关键词召回 `top 30~50`
-5. 用 `RRF` 融合
-6. 可选：对融合后的 `top 10` 做 rerank
-7. 选出最终 `top 5`
-8. 写入 `ai_run_citation`
-9. 将最终上下文送入 LLM 生成
+2. 使用 Java 预创建的 `model_run_id`
+3. 生成 query embedding
+4. 向量召回 `top 30~50`
+5. 关键词召回 `top 30~50`
+6. 用 `RRF` 融合
+7. 可选：对融合后的 `top 10` 做 rerank
+8. 选出最终 `top 5`
+9. 写入 `ai_run_citation(model_run_id, chunk_id, ...)`
+10. 将最终上下文送入 LLM 生成
 
 ### 8.3 过滤条件
 

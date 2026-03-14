@@ -112,9 +112,8 @@ description = "MediAsk AI Service"
 requires-python = ">=3.11.14"
 dependencies = [
     "fastapi[standard]>=0.128.1",
-    "langchain>=1.2.8",
-    "langgraph>=1.0.7",
     "openai>=2.17.0",
+    "httpx>=0.28.0",
     "pydantic-settings>=2.0.0",
     "psycopg[binary]>=3.2.0",
     "pgvector>=0.3.0",
@@ -140,7 +139,7 @@ build-backend = "hatchling.build"
 
 ```bash
 # 核心依赖
-uv add fastapi uvicorn langchain langgraph psycopg pgvector openai
+uv add fastapi uvicorn openai httpx psycopg pgvector
 
 # 实用工具
 uv add aiofiles python-dotenv

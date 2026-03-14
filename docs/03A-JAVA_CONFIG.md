@@ -242,100 +242,54 @@ management:
 
 ## 4. 数据源配置
 
-### 4.1 PostgreSQL + Druid
+### 4.1 PostgreSQL + HikariCP
 
-使用 `druid-spring-boot-3-starter` 替代 Spring Boot 默认的 HikariCP，获得内置监控、SQL 防火墙、慢 SQL 日志等能力。
+重写基线统一使用 Spring Boot 默认的 `HikariCP`。
+
+原因：
+
+1. Spring Boot 原生支持最好，配置与运维复杂度最低
+2. 与 Micrometer / Prometheus / Actuator 集成最直接
+3. 连接池职责应保持单一，不把 SQL 防火墙、监控页面等能力耦合进 JDBC 连接池
+4. 对本项目的 PostgreSQL 主库与 pgvector 场景，HikariCP 已足够稳定
 
 ```yaml
 spring:
   datasource:
-    type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql://${PG_HOST:localhost}:${PG_PORT:5432}/${PG_DB:mediask}
     username: ${PG_USER:mediask}
     password: ${PG_PASSWORD}                          # 加密存储，由 PostProcessor 解密
-    druid:
-      # ---- 连接池核心参数 ----
-      initial-size: 5                                  # 初始化连接数
-      min-idle: 5                                      # 最小空闲连接
-      max-active: 20                                   # 最大活跃连接
-      max-wait: 30000                                  # 获取连接最大等待 30 秒
-
-      # ---- 连接生命周期 ----
-      min-evictable-idle-time-millis: 600000           # 连接最小空闲时间 10 分钟
-      max-evictable-idle-time-millis: 1800000          # 连接最大空闲时间 30 分钟
-      time-between-eviction-runs-millis: 60000         # 空闲检测间隔 1 分钟
-
-      # ---- 连接有效性检测 ----
-      validation-query: SELECT 1                       # PostgreSQL 验证查询
-      test-while-idle: true                            # 空闲时检测（推荐开启）
-      test-on-borrow: false                            # 借出时不检测（性能考虑）
-      test-on-return: false                            # 归还时不检测
-
-      # ---- 连接泄漏检测 ----
-      remove-abandoned: true                           # 开启泄漏回收
-      remove-abandoned-timeout: 300                    # 连接超过 5 分钟未归还视为泄漏
-      log-abandoned: true                              # 记录泄漏连接的堆栈
-
-      # ---- 预处理缓存（PostgreSQL 支持） ----
-      pool-prepared-statements: true                   # 开启 PSCache
-      max-pool-prepared-statement-per-connection-size: 20
-
-      # ---- 内置过滤器 ----
-      filters: stat,wall,slf4j                         # 监控统计 + SQL防火墙 + 日志
-      filter:
-        stat:
-          enabled: true
-          log-slow-sql: true                           # 记录慢 SQL
-          slow-sql-millis: 2000                        # 慢 SQL 阈值 2 秒
-          merge-sql: true                              # 合并相同 SQL 统计
-        wall:
-          enabled: true
-          config:
-            multi-statement-allow: false                # 禁止多语句执行
-            delete-where-none-check: true               # 禁止无 WHERE 的 DELETE
-            truncate-allow: false                       # 禁止 TRUNCATE
-            drop-table-allow: false                     # 禁止 DROP TABLE
-        slf4j:
-          enabled: true
-          statement-executable-sql-log-enable: true     # 输出可执行 SQL（含参数）
-
-      # ---- 监控页面 ----
-      stat-view-servlet:
-        enabled: true                                  # 生产环境覆盖为 false 或限制 IP
-        url-pattern: /druid/*
-        login-username: ${DRUID_MONITOR_USER:admin}
-        login-password: ${DRUID_MONITOR_PASS:admin}    # 生产环境必须修改
-        reset-enable: false                            # 禁止重置统计数据
-        allow: ""                                      # 允许访问的 IP（空 = 全部允许）
-      web-stat-filter:
-        enabled: true
-        url-pattern: /*
-        exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*"
+    hikari:
+      pool-name: MediAskHikariPool
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 600000                            # 10 分钟
+      max-lifetime: 1800000                           # 30 分钟
+      connection-timeout: 30000                       # 30 秒
+      validation-timeout: 5000
+      keepalive-time: 300000                          # 5 分钟
+      leak-detection-threshold: 60000                 # 60 秒，仅开发/联调环境建议开启
 ```
 
 ### 4.2 连接池调优建议
 
 | 参数 | dev | staging/prod | 说明 |
 |------|-----|-------------|------|
-| `initial-size` | 2 | 5 | 开发环境减少启动开销 |
-| `min-idle` | 2 | 5–10 | 开发环境减少资源占用 |
-| `max-active` | 5 | 20–50 | 公式：`connections ≈ (core_count * 2) + effective_spindle_count` |
-| `max-wait` | 10000 | 30000 | 开发环境更快速失败 |
-| `remove-abandoned-timeout` | 120 | 300 | 开发环境更激进地检测泄漏 |
-| `stat-view-servlet.enabled` | true | false 或限制 IP | 生产环境不应公开监控页 |
+| `minimum-idle` | 2 | 5–10 | 开发环境减少资源占用 |
+| `maximum-pool-size` | 5 | 20–50 | 结合 CPU、数据库连接上限和压测结果调优 |
+| `connection-timeout` | 10000 | 30000 | 开发环境更快速失败 |
+| `max-lifetime` | 900000 | 1800000 | 应小于数据库端连接生命周期 |
+| `leak-detection-threshold` | 30000 | 0 或按需开启 | 生产环境默认关闭，定位问题时临时启用 |
 
-### 4.3 Druid vs HikariCP 选型理由
+### 4.3 为什么不选 Druid 作为重写基线
 
-| 维度 | HikariCP | Druid |
-|------|----------|-------|
-| 连接获取性能 | 极致快（字节码优化） | 略逊，但差距在业务场景中可忽略 |
-| 内置监控 | 无，需外部集成 | **StatViewServlet + WebStatFilter，开箱即用** |
-| SQL 防火墙 | 无 | **WallFilter，防 SQL 注入 / 危险操作** |
-| 慢 SQL 日志 | 无 | **内置，可配置阈值** |
-| 连接泄漏检测 | 仅阈值告警 | **主动回收 + 堆栈记录** |
-| PSCache | 不支持 | **支持，对 PostgreSQL 友好** |
-| 生态 | Spring Boot 默认 | 国内广泛使用，文档丰富 |
+`Druid` 并非不能用，但不作为本项目重写基线，原因如下：
+
+1. 连接池、SQL 防火墙、监控页面耦合度较高，不利于职责清晰
+2. Spring Boot 3 + Micrometer + Prometheus 体系下，HikariCP 的指标链路更自然
+3. 本项目已采用参数化 SQL、MyBatis-Plus、统一日志与可观测方案，没必要再把一套重型监控/防火墙能力塞进连接池
+4. 毕设与重写阶段更看重稳定、简单、低维护成本，而不是功能堆叠
 
 ---
 
@@ -451,7 +405,7 @@ GET    /swagger-ui/**               # 仅 dev/test/staging
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36}
-                     [traceId=%X{traceId},requestId=%X{requestId}] - %msg%n</pattern>
+                     [requestId=%X{requestId},traceId=%X{traceId:-N/A}] - %msg%n</pattern>
         </encoder>
     </appender>
 
@@ -473,8 +427,8 @@ GET    /swagger-ui/**               # 仅 dev/test/staging
         <appender name="JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
             <file>${LOG_PATH}/${APP_NAME}-json.log</file>
             <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-                <includeMdcKeyName>traceId</includeMdcKeyName>
                 <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>traceId</includeMdcKeyName>
                 <includeMdcKeyName>userId</includeMdcKeyName>
                 <includeMdcKeyName>requestUri</includeMdcKeyName>
             </encoder>
@@ -530,15 +484,17 @@ logging:
 
 | MDC Key | 来源 | 说明 |
 |---------|------|------|
-| `traceId` | `TraceIdFilter` 从 `X-Trace-Id` 读取或生成 | 跨服务链路标识 |
-| `requestId` | `TraceIdFilter` 从 `X-Request-Id` 读取或生成 | 单次请求标识 |
+| `requestId` | `RequestContextFilter` 从 `X-Request-Id` 读取或生成，兼容旧头 `X-Trace-Id` | P0/P1 请求串联主键 |
+| `traceId` | SkyWalking / OpenTelemetry 注入（P2 可选） | APM 追踪 ID |
 | `userId` | `SecurityContext` 中提取 | 当前认证用户 ID |
-| `requestUri` | `TraceIdFilter` 提取 | 请求路径 |
-| `tid` | SkyWalking Agent 注入 | APM 追踪 ID（Agent 存在时自动注入） |
+| `requestUri` | `RequestContextFilter` 提取 | 请求路径 |
+| `tid` | SkyWalking Agent 注入 | APM 原始上下文（仅 Agent 存在时自动注入） |
 
 ---
 
-## 8. SkyWalking Agent 配置
+## 8. SkyWalking Agent 配置（P2 可选）
+
+> P0/P1 默认不启用 SkyWalking。只有在需要 APM 拓扑、端到端 Span 分析或答辩展示增强时再启用。
 
 ```bash
 # JVM 启动参数

@@ -24,7 +24,7 @@
 - 主体：`user_id`、`username`、`role`、`department`
 - 行为：`action`、`action_name`
 - 客体：`resource_type`、`resource_id`、`resource_name`（可选）
-- 上下文：`client_ip`、`user_agent`、`trace_id`
+- 上下文：`client_ip`、`user_agent`、`request_id`（P2 可选 `trace_id`）
 - 结果：`success`、`fail_reason`
 - 时间：`timestamp`、`created_at`
 
@@ -62,4 +62,3 @@
 3. 写入不可变存储（WORM）或第三方审计存证系统（P3+）
 
 示意见：`MediAskDocs/docs/15-PERMISSIONS/appendix/A1-CODE_SNIPPETS.md`
-

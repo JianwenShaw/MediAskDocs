@@ -1,7 +1,7 @@
 # 19-错误码、异常与统一响应设计说明
 
 > 更新时间：2026-02-25  
-> 适用范围：`mediask-api`、`mediask-common`、`mediask-service`、`mediask-infra`、Python AI 服务
+> 适用范围：`mediask-api`、`mediask-common`、`mediask-application`、`mediask-infrastructure`、Python AI 服务
 
 ---
 
@@ -11,14 +11,14 @@ MediAsk 后端采用统一响应体 + 业务异常机制，但随着模块增多
 
 - 异常语义在部分场景存在错配（例如跨业务域复用错误码）
 - 参数异常覆盖不完整，部分错误会落入通用系统异常
-- `traceId` 已在响应结构中预留，但链路注入不完整
+- `requestId` 需要成为统一响应体中的稳定请求标识，但当前注入不完整
 - 系统异常类存在但落地不充分，分层边界不够清晰
 
 本次设计升级目标：
 
 1. 建立稳定、可观测、可演进的错误处理主链路
 2. 确保前后端对错误语义理解一致
-3. 提升线上排障效率（traceId + 错误码 + 日志统一）
+3. 提升线上排障效率（requestId + 错误码 + 日志统一）
 4. 在不破坏现有 API 契约的前提下平滑升级
 
 ---
@@ -41,20 +41,20 @@ MediAsk 后端采用统一响应体 + 业务异常机制，但随着模块增多
 
 ### 2.3 可观测性优先
 
-- 每个请求具备稳定 `traceId`
-- `traceId` 同时出现在：请求头、响应头、响应体、日志上下文（MDC）
+- 每个请求具备稳定 `requestId`
+- `requestId` 同时出现在：请求头、响应头、响应体、日志上下文（MDC）
 - 业务日志必须带 code + 关键上下文
 
 ### 2.4 向后兼容
 
-- 维持既有统一响应结构：`code/msg/data/traceId/timestamp`
+- 统一响应结构收敛为：`code/msg/data/requestId/timestamp`
 - 不修改既有接口路径与 DTO 契约
 
 ### 2.5 跨语言一致性（Java + Python）
 
 - Java 主服务与 Python AI 服务必须共享同一套响应语义
 - Python 服务不另造“第二套错误码体系”，避免前端/网关双重适配
-- 统一 `traceId` 透传规则，保证跨进程排障可串联
+- 统一 `requestId` 透传规则，保证跨进程排障可串联
 
 ---
 
@@ -75,7 +75,7 @@ MediAsk 后端采用统一响应体 + 业务异常机制，但随着模块增多
   - `code`：业务码（0 成功，非 0 失败）
   - `msg`：提示信息
   - `data`：业务数据
-  - `traceId`：链路追踪标识
+  - `requestId`：请求标识
   - `timestamp`：响应时间戳
 
 ### 3.3 异常体系
@@ -97,23 +97,24 @@ MediAsk 后端采用统一响应体 + 业务异常机制，但随着模块增多
 - 兜底 `Exception`
 - 鉴权拒绝异常（403）
 
-### 3.4 traceId 链路
+### 3.4 Request Context 链路
 
 新增过滤器：
 
-- `mediask-api/src/main/java/me/jianwen/mediask/api/filter/TraceIdFilter.java`
+- `mediask-api/src/main/java/me/jianwen/mediask/api/filter/RequestContextFilter.java`
 
 接入点：
 
-- `SecurityConfig` 中将 `TraceIdFilter` 挂入过滤链
+- `SecurityConfig` 中将 `RequestContextFilter` 挂入过滤链
 
 行为：
 
-1. 优先读取请求头 `X-Trace-Id`
-2. 若无则自动生成（UUID 去横线）
-3. 写入 MDC：`traceId`、`requestUri`
-4. 回写响应头 `X-Trace-Id`
-5. 响应体 `Result.traceId` 自动读取 MDC 值
+1. 优先读取请求头 `X-Request-Id`
+2. 若无但存在兼容旧头 `X-Trace-Id`，则接受并规范化
+3. 若两者都无，则自动生成（UUID 去横线）
+4. 写入 MDC：`requestId`、`requestUri`
+5. 回写响应头 `X-Request-Id`
+6. 响应体 `Result.requestId` 自动读取 MDC 值
 
 ---
 
@@ -122,27 +123,27 @@ MediAsk 后端采用统一响应体 + 业务异常机制，但随着模块增多
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant F as TraceIdFilter
+    participant F as RequestContextFilter
     participant S as Security Filters
     participant A as API Controller
     participant SV as Service/Domain
     participant H as GlobalExceptionHandler
 
-    C->>F: HTTP Request (optional X-Trace-Id)
-    F->>F: set/generate traceId + MDC
+    C->>F: HTTP Request (optional X-Request-Id)
+    F->>F: set/generate requestId + MDC
     F->>S: continue
     S->>A: authenticated/authorized request
     A->>SV: invoke business logic
 
     alt 正常
         SV-->>A: data
-        A-->>C: Result.ok(data, traceId)
+        A-->>C: Result.ok(data, requestId)
     else 业务异常
         SV-->>H: throw BizException
-        H-->>C: Result.fail(code,msg,traceId)
+        H-->>C: Result.fail(code,msg,requestId)
     else 系统异常
         SV-->>H: throw SysException/Exception
-        H-->>C: Result.fail(systemCode,msg,traceId)
+        H-->>C: Result.fail(systemCode,msg,requestId)
     end
 
     F->>F: clear MDC
@@ -154,9 +155,9 @@ sequenceDiagram
 
 ### 5.1 可观测性增强
 
-- 新增 `TraceIdFilter`
-- `Result` 使用 `CommonConstants.MDC_TRACE_ID` 读取 traceId，去除硬编码字符串
-- 安全链路与业务链路响应都能携带 traceId
+- 新增 `RequestContextFilter`
+- `Result` 使用 `CommonConstants.MDC_REQUEST_ID` 读取 requestId，去除硬编码字符串
+- 安全链路与业务链路响应都能携带 requestId
 
 ### 5.2 异常分类增强
 
@@ -206,14 +207,14 @@ sequenceDiagram
 
 建议最少覆盖以下测试场景：
 
-1. 无 `X-Trace-Id` 时自动生成并透传
-2. 有 `X-Trace-Id` 时原值透传
+1. 无 `X-Request-Id` 时自动生成并透传
+2. 有 `X-Request-Id` 时原值透传
 3. `@Valid` 校验失败 -> `PARAM_INVALID`
 4. 缺失必填参数 -> `PARAM_MISSING`
 5. 参数类型错误 -> `PARAM_INVALID`
 6. `BizException` -> 对应业务码
 7. `SysException` -> 对应系统码
-8. 401/403 场景返回体结构完整且带 traceId
+8. 401/403 场景返回体结构完整且带 requestId
 
 ## 8. 跨服务统一协议（Java ↔ Python AI）
 
@@ -223,20 +224,24 @@ sequenceDiagram
 
 - Java 侧需要为 Python 单独写一套适配转换
 - 前端收到同类错误但 `code/msg` 语义不一致
-- 链路追踪断裂，出现“Java 有 traceId，Python 无法关联”的排障断点
+- 请求串联断裂，出现“Java 有 requestId，Python 无法关联”的排障断点
 
-结论：**必须统一**，且建议以 Java 现有 `Result<T>` 语义为主协议。
+结论：**必须统一错误语义和请求标识口径**，但不强制 Python AI 服务在成功场景下复用 Java 对外的 `Result<T>` 包装。
 
-### 8.2 推荐统一响应契约（服务间）
+### 8.2 推荐统一错误响应契约（服务间）
 
-Python AI 服务对 Java 的 HTTP 返回，建议固定如下结构：
+Python AI 服务作为内部服务：
+
+- **成功响应**：返回端点自己的业务载荷（如 chat 的 answer/citations）
+- **失败响应**：统一返回错误封装，便于 Java Client 稳定映射
+
+错误响应建议固定如下结构：
 
 ```json
 {
     "code": 0,
     "msg": "success",
-    "data": {},
-    "traceId": "5c28b9f7c79e4f9fb9400f0f9bcaf5d2",
+    "requestId": "req_01hrx6m5q4x5v2f6k4w4x1c7pz",
     "timestamp": 1761234567890
 }
 ```
@@ -245,8 +250,7 @@ Python AI 服务对 Java 的 HTTP 返回，建议固定如下结构：
 
 - `code`: 整型，0 成功，非 0 失败
 - `msg`: 文本，面向可读性
-- `data`: 任意对象或 `null`
-- `traceId`: 必填；优先透传 `X-Trace-Id`
+- `requestId`: 必填；优先透传 `X-Request-Id`
 - `timestamp`: 毫秒时间戳
 
 ### 8.3 错误码分层建议
@@ -261,15 +265,15 @@ Python AI 服务对 Java 的 HTTP 返回，建议固定如下结构：
     - 服务不可用：`6001`
     - 兜底系统故障：`9999`
 
-### 8.4 traceId 透传规范
+### 8.4 requestId 透传规范
 
-- Java -> Python：请求头带 `X-Trace-Id`
-- Python -> Java：响应头回写 `X-Trace-Id`
-- Python 日志：每条业务日志必须包含 `traceId`
+- Java -> Python：请求头带 `X-Request-Id`
+- Python -> Java：响应头回写 `X-Request-Id`
+- Python 日志：每条业务日志必须包含 `requestId`
 
 建议 Python 中间件实现：
 
-1. 读取 `X-Trace-Id`，无则生成
+1. 读取 `X-Request-Id`，无则生成
 2. 注入 logger context
 3. 响应体与响应头同时回写
 
@@ -277,9 +281,10 @@ Python AI 服务对 Java 的 HTTP 返回，建议固定如下结构：
 
 当 Java 调用 Python AI 服务时，建议：
 
-- 优先信任 Python 返回的 `code/msg/traceId`
+- 优先信任 Python 返回的 `code/msg/requestId`
 - 对网络错误、反序列化错误做兜底映射（`6001/6003/9999`）
 - 保持 Java 对外响应结构不变，避免把 Python 特有错误泄露给前端
+- Java 对 Python 的成功响应使用端点专属 DTO 映射，不强制套 `Result<T>`
 
 ### 8.6 迁移落地步骤
 
@@ -287,7 +292,7 @@ Python AI 服务对 Java 的 HTTP 返回，建议固定如下结构：
 2. **Python 实现**：补统一响应封装和异常中间件
 3. **Java 适配**：新增 Python Client 的错误映射层
 4. **联调验证**：覆盖成功/超时/异常/熔断场景
-5. **可观测性验收**：随机抽样确认 traceId 可跨服务追踪
+5. **可观测性验收**：随机抽样确认 requestId 可跨服务追踪
 
 ---
 
@@ -295,7 +300,7 @@ Python AI 服务对 Java 的 HTTP 返回，建议固定如下结构：
 
 ### 9.1 P0（短期）
 
-- 补齐 API 层异常与 traceId 的自动化测试（MockMvc）
+- 补齐 API 层异常与 requestId 的自动化测试（MockMvc）
 - 梳理所有 `IllegalArgumentException/IllegalStateException` 抛出点，逐步业务化
 
 ### 9.2 P1（中期）
@@ -317,7 +322,7 @@ Python AI 服务对 Java 的 HTTP 返回，建议固定如下结构：
 - 业务异常：`mediask-common/src/main/java/me/jianwen/mediask/common/exception/BizException.java`
 - 系统异常：`mediask-common/src/main/java/me/jianwen/mediask/common/exception/SysException.java`
 - 全局异常处理：`mediask-api/src/main/java/me/jianwen/mediask/api/advice/GlobalExceptionHandler.java`
-- traceId 过滤器：`mediask-api/src/main/java/me/jianwen/mediask/api/filter/TraceIdFilter.java`
+- 请求上下文过滤器：`mediask-api/src/main/java/me/jianwen/mediask/api/filter/RequestContextFilter.java`
 - 安全配置：`mediask-api/src/main/java/me/jianwen/mediask/api/config/SecurityConfig.java`
 
 ---

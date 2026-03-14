@@ -227,14 +227,19 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
-    # 生产使用 SkyWalking Agent
+    # P0/P1 默认不启用 SkyWalking Agent
     environment:
       JAVA_OPTS: >-
-        -javaagent:/opt/skywalking-agent/skywalking-agent.jar
-        -DSW_AGENT_NAME=mediask-api
-        -DSW_OAP_SERVER_ADDRESS=skywalking-oap:11800
-    volumes:
-      - ./skywalking-agent:/opt/skywalking-agent:ro
+        -XX:MaxRAMPercentage=75.0
+    # 如启用 P2 APM，可追加：
+    # environment:
+    #   JAVA_OPTS: >-
+    #     -XX:MaxRAMPercentage=75.0
+    #     -javaagent:/opt/skywalking-agent/skywalking-agent.jar
+    #     -DSW_AGENT_NAME=mediask-api
+    #     -DSW_OAP_SERVER_ADDRESS=skywalking-oap:11800
+    # volumes:
+    #   - ./skywalking-agent:/opt/skywalking-agent:ro
 
   mediask-ai:
     deploy:
@@ -412,7 +417,7 @@ http {
         '"body_bytes_sent":$body_bytes_sent,'
         '"request_time":$request_time,'
         '"upstream_response_time":"$upstream_response_time",'
-        '"http_x_trace_id":"$http_x_trace_id"'
+        '"http_x_request_id":"$http_x_request_id"'
         '}';
 
     access_log /var/log/nginx/access.log main_json;
@@ -459,10 +464,15 @@ server {
     # ---- 生产环境强制 HTTPS ----
     # return 301 https://$host$request_uri;
 
-    # ---- Trace ID 生成 ----
-    # 如果请求未携带 X-Trace-Id，由 Nginx 生成
-    map $http_x_trace_id $trace_id {
-        default $http_x_trace_id;
+    # ---- Request ID 生成 ----
+    # 先优先使用 X-Request-Id；若缺失则兼容旧口径 X-Trace-Id；再缺失则由 Nginx 生成
+    map $http_x_request_id $request_id_from_header {
+        default $http_x_request_id;
+        ""      $http_x_trace_id;
+    }
+
+    map $request_id_from_header $mediask_request_id {
+        default $request_id_from_header;
         ""      $request_id;
     }
 
@@ -485,7 +495,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Trace-Id $trace_id;
+        proxy_set_header X-Request-Id $mediask_request_id;
 
         proxy_connect_timeout 10s;
         proxy_send_timeout 30s;
@@ -515,7 +525,7 @@ server {
     # ---- AI SSE 流式接口 ----
     location /api/v1/ai/chat/stream {
         proxy_pass http://java_backend;
-        proxy_set_header X-Trace-Id $trace_id;
+        proxy_set_header X-Request-Id $mediask_request_id;
 
         # SSE 特殊配置
         proxy_buffering off;                   # 关闭缓冲，支持流式输出
@@ -559,57 +569,14 @@ server {
 
 ## 5. 可观测性栈配置
 
-### 5.1 docker-compose.observability.yml
+### 5.1 docker-compose.observability.yml（P0/P1 基线）
+
+> 如需一套按目录组织好的“基线部署文件清单”，直接参考 `docs/03D-BASELINE_DEPLOYMENT_FILES.md`。
 
 ```yaml
 version: "3.9"
 
 services:
-  # ---- 分布式追踪 ----
-  elasticsearch:
-    image: elasticsearch:8.11.0
-    container_name: mediask-elasticsearch
-    restart: unless-stopped
-    ports:
-      - "9200:9200"
-    environment:
-      TZ: Asia/Shanghai
-      discovery.type: single-node
-      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
-      xpack.security.enabled: "false"
-    volumes:
-      - es-data:/usr/share/elasticsearch/data
-    deploy:
-      resources:
-        limits:
-          memory: 1.5G
-
-  skywalking-oap:
-    image: apache/skywalking-oap-server:9.1.0
-    container_name: mediask-skywalking-oap
-    restart: unless-stopped
-    ports:
-      - "11800:11800"    # gRPC（Agent 上报）
-      - "12800:12800"    # HTTP（UI 查询）
-    environment:
-      TZ: Asia/Shanghai
-      SW_STORAGE: elasticsearch
-      SW_STORAGE_ES_CLUSTER_NODES: elasticsearch:9200
-    depends_on:
-      - elasticsearch
-
-  skywalking-ui:
-    image: apache/skywalking-ui:9.1.0
-    container_name: mediask-skywalking-ui
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      TZ: Asia/Shanghai
-      SW_OAP_ADDRESS: http://skywalking-oap:12800
-    depends_on:
-      - skywalking-oap
-
   # ---- 指标 ----
   prometheus:
     image: prom/prometheus:v2.48.0
@@ -662,12 +629,13 @@ services:
       - loki
 
 volumes:
-  es-data:
   prometheus-data:
   grafana-data:
   loki-data:
   promtail-positions:
 ```
+
+> 如需 `P2` 链路追踪能力，再额外追加 `skywalking-oap`、`skywalking-ui` 与 `elasticsearch` 服务，不纳入默认基线。
 
 ### 5.2 Prometheus 配置
 
@@ -780,12 +748,13 @@ scrape_configs:
             timestamp: "@timestamp"
             level: level
             message: message
-            trace_id: traceId
             request_id: requestId
+            trace_id: traceId
             user_id: userId
             logger: logger_name
       - labels:
           level:
+          request_id:
           trace_id:
       - timestamp:
           source: timestamp
@@ -805,15 +774,21 @@ scrape_configs:
             timestamp: timestamp
             level: level
             message: event
+            request_id: request_id
             trace_id: trace_id
       - labels:
           level:
+          request_id:
           trace_id:
 ```
 
 ---
 
-## 6. Elasticsearch 审计索引配置
+## 6. Elasticsearch 审计投影配置（P2 可选）
+
+> 仅在 `audit` schema 的月分区、索引和汇总查询已不足以满足复杂聚合、长留存报表或高频跨维检索时启用。
+>
+> Elasticsearch 只接收来自 PostgreSQL 权威审计表的异步投影，不参与 P0/P1 审计写入主链路。
 
 ### 6.1 索引模板
 
@@ -885,7 +860,7 @@ scrape_configs:
 }
 ```
 
-**审计数据保留策略**：
+**审计投影保留策略**：
 
 | 阶段 | 时间 | 存储 | 说明 |
 |------|------|------|------|

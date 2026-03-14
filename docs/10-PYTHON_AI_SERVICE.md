@@ -1,44 +1,57 @@
 # MediAsk AI 服务 - Python 模块设计与落地清单
 
+> 定位：`mediask-ai` 是 Java 主系统的内部 AI 执行服务。
+>
+> 当前口径：本文件为重写基线；Python 负责 RAG 检索、LLM 调用、护栏执行、流式输出，以及检索投影/引用追溯写库，不维护业务主事实。
+
 ## 1. 定位与边界
 
-mediask-ai 是独立 AI 微服务，只提供 AI 能力，不直接处理业务事务。
+`mediask-ai` 只提供 AI 能力，不处理业务事务，不持有患者/挂号/病历等业务主事实。
 
-- 上游: Java 后端 mediask-be 调用。
-- 下游: DeepSeek/兼容 OpenAI API, 阿里百炼 Embedding API, PostgreSQL + pgvector（向量检索与业务持久化统一实例）。
-- 交互: HTTP JSON + SSE 流式输出。
+- 上游：Java 后端 `mediask-be`
+- 下游：DeepSeek / OpenAI 兼容 LLM API、阿里百炼 Embedding API、PostgreSQL + pgvector
+- 交互：内部 HTTP JSON + SSE
+
+边界冻结如下：
+
+- Java 负责：`ai_session`、`ai_turn`、`ai_turn_content`、`ai_model_run`、`knowledge_base`、`knowledge_document`、`knowledge_chunk`
+- Python 负责：`knowledge_chunk_index`、`ai_run_citation`
+- Python 不直接维护业务会话主事实
+- AI 输出定位为“辅助问诊、风险提示、建议就医/推荐科室”，不输出诊断结论与处方建议
 
 ## 2. 目录结构建议
 
-```
+```text
 app/
     api/
         v1/
-            chat.py              # /api/v1/chat
-            knowledge.py         # /api/v1/knowledge
+            chat.py              # /api/v1/chat, /api/v1/chat/stream
+            knowledge.py         # /api/v1/knowledge/index, /api/v1/knowledge/search
     core/
-        settings.py            # Pydantic Settings
-        logging.py             # 日志格式与trace_id
+        settings.py              # Pydantic Settings
+        logging.py               # 结构化日志
+        errors.py                # 错误码与异常映射
     middleware/
-        auth.py                # API Key 校验
-        trace.py               # 透传X-Trace-Id
+        auth.py                  # X-API-Key 校验
+        request_context.py       # X-Request-Id 透传与日志上下文
     services/
         llm/
-            base.py              # LLM 接口
-            deepseek.py          # DeepSeek 实现
+            client.py            # OpenAI-compatible LLM client
         rag/
-            ingest.py            # 文档入库
-            retrieve.py          # 检索
-            prompt.py            # Prompt 构造
+            indexer.py           # knowledge_chunk_index upsert
+            retriever.py         # 混合检索 + citations
+            pipeline.py          # chat/chat_stream 主流程
+            normalize.py         # 术语归一/PII 预处理
     schemas/
         chat.py
         knowledge.py
+        common.py
     main.py
 ```
 
 ## 3. 依赖与运行
 
-使用 uv 管理依赖，保持与 [09-PYTHON_ENV.md](./09-PYTHON_ENV.md) 一致。
+使用 `uv` 管理依赖，保持与 [09-PYTHON_ENV.md](./09-PYTHON_ENV.md) 一致。
 
 ```toml
 [project]
@@ -48,9 +61,8 @@ description = "MediAsk AI Service"
 requires-python = ">=3.11.14"
 dependencies = [
     "fastapi[standard]>=0.128.1",
-    "langchain>=1.2.8",
-    "langgraph>=1.0.7",
     "openai>=2.17.0",
+    "httpx>=0.28.0",
     "pydantic-settings>=2.0.0",
     "psycopg[binary]>=3.2.0",
     "pgvector>=0.3.0",
@@ -66,30 +78,23 @@ dev-dependencies = [
 ]
 ```
 
+说明：
+
+- `P0` 不强依赖 LangChain/LangGraph；优先使用轻量、自控的 `Retriever + RagPipeline`
+- 如果后续进入 `P1/P2` 需要多步 Agent 编排，再评估是否引入更重的框架
+
 ## 4. 配置项
 
 ### 4.1 多环境切换规则
 
 加载优先级（从高到低）：
-1. `ENV_FILE`：显式指定 env 文件路径（如 `.env.prod`）。
-2. `APP_ENV`：自动选择 `.env.{APP_ENV}`，不存在则回退到 `.env`。
-3. 默认：若存在 `.env.dev` 则使用 `.env.dev`，否则使用 `.env`。
 
-常用示例：
-
-```bash
-# 本地开发（默认）
-APP_ENV=dev
-
-# 生产环境
-APP_ENV=prod
-
-# 或显式指定
-ENV_FILE=.env.prod
-```
+1. `ENV_FILE`
+2. `APP_ENV`
+3. `.env.dev` / `.env`
 
 ```bash
-# .env.dev (本地默认)
+# .env.dev
 APP_ENV=dev
 API_KEY=mediask-ai-secret-key
 LOG_LEVEL=INFO
@@ -98,223 +103,243 @@ LLM_MODEL=deepseek-chat
 LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=sk-xxx
 
-# Embedding（RAG 入库/检索必需）
-# - openai_compatible：阿里百炼 Embedding（固定方案）
-# - none：禁用 embedding（等于禁用“入库/检索”，只能做纯 LLM 对话/安全护栏）
 EMBEDDING_PROVIDER=openai_compatible
 EMBEDDING_MODEL=text-embedding-v4
 EMBEDDING_BASE_URL=<阿里百炼兼容端点>
 EMBEDDING_API_KEY=<你的百炼API Key>
-# 维度以实际模型/实现为准；如需手动指定，保持与向量库 collection 一致
 EMBEDDING_DIM=1536
 
-REDIS_URL=
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-REDIS_DB=0
-REDIS_PASSWORD=
-REDIS_SOCKET_TIMEOUT_SECONDS=2
-REDIS_CONNECT_TIMEOUT_SECONDS=1
-READY_CACHE_TTL_SECONDS=15
-
-# PostgreSQL（与 Java 主系统共用同一实例，pgvector 扩展已启用）
 PG_HOST=127.0.0.1
 PG_PORT=5432
 PG_DB=mediask_dev
-PG_USER=postgres
-PG_PASSWORD=
-# Python 直接写入 knowledge_chunk_index / ai_run_citation
-```
-
-```bash
-# .env.prod（生产）
-APP_ENV=prod
-LOG_LEVEL=INFO
-DEBUG=false
-
-# PostgreSQL（生产环境）
-PG_HOST=postgres
-PG_PORT=5432
-PG_DB=mediask_prod
 PG_USER=mediask_ai
-PG_PASSWORD=<生产密码>
+PG_PASSWORD=
+
+RAG_TOP_K=5
+RAG_VECTOR_TOP_K=30
+RAG_KEYWORD_TOP_K=30
+RAG_SCORE_THRESHOLD=0.20
+READY_CACHE_TTL_SECONDS=15
 ```
 
-> `/ready` 会将依赖检查结果缓存到 Redis（默认 TTL=15s），Redis 不可用时会回退到内存缓存；Redis key 采用 `mediask-ai:{业务}:{具体作用}` 命名空间（如 `mediask-ai:health:ready`）。
+说明：
+
+- Python 数据库账号只需要所有表 `SELECT` 权限，以及 `knowledge_chunk_index`、`ai_run_citation` 的写权限
+- `model_run_id` 由 Java 预分配并通过请求显式传入，Python 不自行生成业务运行主键
 
 ### 4.2 本地启动与部署
-
-本地开发：
 
 ```bash
 uv sync
 make dev
 ```
 
-生产/演示环境（示例）：
-
 ```bash
-# 方式一：环境变量切换
 APP_ENV=prod make run
-
-# 方式二：显式指定 env 文件
-ENV_FILE=.env.prod make run
 ```
 
 ## 5. API 设计
 
+> 这些接口是 **Java → Python 的内部服务契约**，不是浏览器直连接口。
+
 ### 5.1 健康检查
 
-```
+```http
 GET /health
-```
-
-响应:
-
-```json
-{"status":"healthy"}
-```
-
-### 5.4 监控指标（Prometheus）
-
-```
+GET /ready
 GET /metrics
 ```
 
-响应: Prometheus text/plain 指标格式（包含 readiness 指标）。
+### 5.2 Request ID 规范
 
-### 5.4 Trace ID 规范
+- 若请求头包含 `X-Request-Id`，直接透传
+- 若无 `X-Request-Id` 但有兼容旧头 `X-Trace-Id`，接受并规范化为 `request_id`
+- 两者都没有时，内部生成 UUID v4
+- `request_id` 通过 Header 传递，不作为 `/chat` 请求体必填字段
 
-本服务支持链路追踪的 Trace ID 透传与生成规则：
+### 5.3 对话接口
 
-- 若请求头包含 `X-Trace-Id`，直接透传并写入日志与响应头。
-- 若无 `X-Trace-Id`，但包含 `X-Request-Id`，则使用 `X-Request-Id`。
-- 两者都没有时，服务内部生成 UUID v4 作为 `trace_id`。
-
-调用方式建议：
-
-- **直接调用 AI 服务**：调用方可自行生成并传入 `X-Trace-Id`；否则服务会自动生成。
-- **经 Spring Boot 服务转发**：Spring Boot 生成并透传 `X-Trace-Id`，保证全链路一致。
-
-### 5.2 对话接口
-
-```
+```http
 POST /api/v1/chat
 ```
 
-请求:
+请求：
+
+Header：
+
+```http
+X-Request-Id: req_01hrx6m5q4x5v2f6k4w4x1c7pz
+```
 
 ```json
 {
-    "session_id": "s-123",
-    "message": "头痛三天，可能是什么原因？",
-    "use_rag": true,
-    "stream": false
+  "model_run_id": 9001001,
+  "turn_id": 8002001,
+  "session_uuid": "ai-sess-001",
+  "department_id": 101,
+  "scene_type": "PRE_CONSULTATION",
+  "message": "头痛三天，伴有低烧，应该先看什么科？",
+  "context_summary": "患者女性，28岁，无已知慢病",
+  "use_rag": true,
+  "stream": false
 }
 ```
 
-响应:
+响应：
 
 ```json
 {
-    "answer": "...",
-    "citations": [
-        {"doc_id": "kb-001", "score": 0.82, "snippet": "..."}
-    ],
-    "trace_id": "t-abc"
+  "model_run_id": 9001001,
+  "provider_run_id": "deepseek-run-abc",
+  "answer": "建议尽快线下就医，优先考虑神经内科或发热门诊分诊。",
+  "summary": "头痛三天伴低烧，建议线下就医并优先分诊。",
+  "citations": [
+    {
+      "chunk_id": 7003001,
+      "retrieval_rank": 1,
+      "fusion_score": 0.82,
+      "snippet": "持续头痛伴发热应结合感染风险进行线下评估。"
+    }
+  ],
+  "risk_level": "medium",
+  "guardrail_action": "caution",
+  "matched_rule_codes": ["medical_triage_only"],
+  "tokens_input": 502,
+  "tokens_output": 168,
+  "latency_ms": 1860,
+  "is_degraded": false
 }
 ```
 
-### 5.3 流式对话
+说明：`request_id` 由响应头 `X-Request-Id` 回写，不要求重复放入业务响应体。
 
+响应头：
+
+```http
+X-Request-Id: req_01hrx6m5q4x5v2f6k4w4x1c7pz
 ```
+
+### 5.4 流式对话
+
+```http
 POST /api/v1/chat/stream
 ```
 
-返回 SSE, 事件名: message/end/error。使用 FastAPI 的 `StreamingResponse` 手写 SSE 格式，不依赖第三方库。
+SSE 事件：
 
-### 5.4 知识库检索
+- `message`：流式文本片段
+- `meta`：在结束前返回一次结构化元数据（`citations/risk_level`）；`request_id` 由 Header 串联
+- `end`：正常结束
+- `error`：异常结束
 
-```
+### 5.5 知识检索
+
+```http
 POST /api/v1/knowledge/search
 ```
 
-请求:
-
-```json
-{"query": "高血压饮食注意事项", "top_k": 5}
-```
-
-### 5.5 知识库入库
-
-```
-POST /api/v1/knowledge/ingest
-```
-
-请求:
+请求：
 
 ```json
 {
-    "source": "markdown",
-    "content": "# 诊疗指南...",
-    "metadata": {"doc_id": "kb-1001", "category": "guideline"}
+  "model_run_id": 9001001,
+  "query": "高血压饮食注意事项",
+  "top_k": 5,
+  "knowledge_base_ids": [1001]
 }
 ```
 
+### 5.6 知识索引
+
+```http
+POST /api/v1/knowledge/index
+```
+
+请求：
+
+```json
+{
+  "document_id": 6001001,
+  "knowledge_base_id": 5001001,
+  "chunks": [
+    {
+      "chunk_id": 7003001,
+      "content": "高血压患者应减少钠盐摄入。",
+      "page_no": 3,
+      "section_title": "生活方式管理"
+    }
+  ]
+}
+```
+
+说明：
+
+- `knowledge_document` 与 `knowledge_chunk` 必须先由 Java 持久化
+- Python 只负责为这些稳定 `chunk_id` 生成索引投影
+
 ## 6. 认证与安全
 
-- Header: `X-API-Key: <API_KEY>`
-- 未通过返回 401: `{"error":"Invalid API Key"}`
-- 强制要求（医疗场景必须落实）：输入/输出 PII 脱敏、风险分级与拒答策略、审计字段与 trace_id（实现细则见 `docs/11-AI_GUARDRAILS_PLAN.md`）
-
-```python
-# app/middleware/auth.py
-@app.middleware("http")
-async def verify_api_key(request: Request, call_next):
-        api_key = request.headers.get("X-API-Key")
-        if api_key != settings.API_KEY:
-                return JSONResponse(status_code=401, content={"error": "Invalid API Key"})
-        return await call_next(request)
-```
+- Header：`X-API-Key: <API_KEY>`
+- 未通过返回 `401 {"error":"Invalid API Key"}`
+- 强制要求：输入/输出 PII 脱敏、风险分级、拒答策略、审计字段与 `request_id`
 
 ## 7. RAG 流程
 
-### 7.1 入库流程
+### 7.1 索引流程
 
-1. 文档加载 (Markdown/PDF)
-2. 分块 (chunk_size 800-1200, overlap 100-200)
-3. 调用阿里百炼生成向量 (text-embedding-v4)
-4. 写入 PostgreSQL `knowledge_chunk_index`（向量 + tsvector 关键词索引）
+1. Java 或离线任务完成原始文档解析与分块
+2. Java 写入 `knowledge_document` / `knowledge_chunk`
+3. Java 调用 Python `/api/v1/knowledge/index`
+4. Python 调用百炼 Embedding
+5. Python 写入 `knowledge_chunk_index`
 
 ### 7.2 查询流程
 
-1. Query 归一化
-2. Query 向量化（阿里百炼） + pgvector 向量检索 + tsvector 关键词检索
-3. 结果融合 (RRF)
-4. 构造 Prompt
-5. 调用 LLM
-6. 返回答案 + 引用
+1. Java 预创建 `ai_model_run`
+2. Java 传入 `model_run_id`
+3. Python 做查询归一、PII 预处理
+4. Query 向量化
+5. pgvector 向量检索 + tsvector 关键词检索
+6. RRF 融合与阈值过滤
+7. Python 写入 `ai_run_citation(model_run_id, chunk_id, ...)`
+8. 调用 LLM
+9. 返回 answer + citations + guardrail + run metadata
 
-> 说明：若 Embedding API 不可用，按安全降级策略返回“知识库暂不可用”并可退化为无检索保守回答，避免误导性输出。RAG 检索命中结果写入 `ai_run_citation` 表，供引用追溯。
+### 7.3 输出边界
+
+Python 输出应固定在以下范围：
+
+- 症状整理
+- 风险提示
+- 建议就医
+- 推荐科室/就诊方向
+- 引用依据
+
+不输出：
+
+- 诊断结论
+- 处方建议
+- 具体药物剂量
 
 ## 8. 统一错误与日志
 
 ### 8.1 错误格式
 
 ```json
-{"code": "AI_400", "message": "Bad request", "trace_id": "t-abc"}
+{"code": "AI_400", "message": "Bad request", "request_id": "req_01hrx6m5q4x5v2f6k4w4x1c7pz"}
 ```
 
-### 8.2 Trace 透传
+### 8.2 日志要求
 
-- 请求头优先使用 `X-Trace-Id`，若不存在则生成 UUID
-- 日志字段包含 `trace_id` 便于链路追踪
+- 结构化 JSON 日志
+- 必须包含：`request_id`、`model_run_id`、`turn_id`、`latency_ms`、`is_degraded`
+- 不记录未脱敏的患者原文
 
 ## 9. 测试策略
 
-- 单元测试: LLM/RAG 逻辑使用 Mock
-- 接口测试: `httpx.AsyncClient` + FastAPI TestClient
-- 覆盖率: 关键路径 80%+
+- 单元测试：`Retriever`、`RagPipeline`、护栏规则、降级路径
+- 接口测试：`httpx.AsyncClient`
+- 关键覆盖：`model_run_id` 透传、`ai_run_citation` 写入、SSE `meta/end/error`
 
 ## 10. Makefile 约定
 
@@ -324,26 +349,25 @@ PORT ?= 8000
 APP ?= app.main:app
 
 run:
-    uv run uvicorn $(APP) --host $(HOST) --port $(PORT)
+	uv run uvicorn $(APP) --host $(HOST) --port $(PORT)
 
 dev:
-    uv run uvicorn $(APP) --reload --host $(HOST) --port $(PORT)
+	uv run uvicorn $(APP) --reload --host $(HOST) --port $(PORT)
 
 test:
-    uv run pytest -v --cov=app
+	uv run pytest -v --cov=app
 
 lint:
-    uv run ruff check app/ tests/
+	uv run ruff check app/ tests/
 
 clean:
-    rm -rf .pytest_cache .coverage .ruff_cache __pycache__
+	rm -rf .pytest_cache .coverage .ruff_cache __pycache__
 ```
 
 ## 11. 待办清单
 
-- [ ] 完善 `pyproject.toml` 依赖
-- [ ] 增补 `Makefile` 命令
-- [ ] API Key 中间件与 Trace 中间件
-- [ ] RAG pipeline 最小可用实现
-- [ ] pytest + 基础用例
-- [ ] SSE 流式输出与错误事件
+- [ ] `model_run_id` 预创建与回传协议
+- [ ] `knowledge/index` 批量 upsert
+- [ ] `ai_run_citation` 写库与幂等
+- [ ] `chat/stream` 的 `meta` 事件
+- [ ] 最小黄金问答集

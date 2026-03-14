@@ -1,6 +1,6 @@
 # AI 表设计逐表说明（V3）
 
-> 本文对 `mediask-dal/src/main/resources/sql/05-ai.sql` 中的每张表做逐表、逐重点字段说明。
+> 本文对 V3 AI 相关表做逐表、逐重点字段说明。
 > 目标不是重复 DDL，而是解释这些表为什么存在、关键字段为什么要这样设计、它们在“Java 主业务系统 + Python AI 服务”架构里分别承担什么职责。
 
 ## 1. 设计总原则
@@ -145,6 +145,7 @@ AI 问诊原文里经常包含：
 
 - `provider_run_id`：Python 侧执行主键，便于跨系统追踪
 - `provider_name`：明确这次执行来自 `PYTHON_AI` 还是其他 provider
+- `id`：由 Java 在调用 Python 前预创建，作为稳定 `model_run_id`
 - `trace_id`：全链路最关键字段，必须稳定透传
 - `rag_enabled`：区分纯 LLM 回答和 RAG 回答
 - `retrieval_provider`：便于未来把检索能力切换到别的系统时仍可追踪
@@ -307,7 +308,7 @@ AI 问诊原文里经常包含：
 - `document_uuid`：文档稳定标识
 - `source_uri`：方便追溯来源
 - `content_hash`：支持去重和重入库判定
-- `ingest_status`：把入库过程显式化，而不是只看 Python 日志
+- `document_status`：把入库过程和启用状态显式化，而不是只看日志
 - `ingested_by_service`：明确是谁做的入库
 
 ## 12. `knowledge_chunk`
@@ -317,7 +318,7 @@ AI 问诊原文里经常包含：
 - 文档被切成了哪些块
 - 每块文本内容是什么
 - 对应哪个 section/page
-- 在向量库里对应哪个引用 ID
+- 在检索系统里对应哪个稳定锚点
 
 ### 12.2 为什么 chunk 文本仍然要留在业务主表
 
@@ -334,7 +335,7 @@ AI 问诊原文里经常包含：
 
 - `chunk_index`：文档内稳定顺序
 - `content`：引用展示的基础（`knowledge_chunk_index` 中的向量由此正文生成）
-- `section` / `page_no`：增强可追溯性
+- `section_title` / `page_no`：增强可追溯性
 - `vector_ref_id`：**已废弃**——V3 统一迁移至 PostgreSQL + pgvector 后，`knowledge_chunk.id` 本身即为 `knowledge_chunk_index` 的稳定锚点，不再需要额外的外部向量库引用 ID
 - `metadata_json`：给未来补充 chunk 标签、清洗策略等扩展位
 
@@ -363,7 +364,7 @@ AI 问诊原文里经常包含：
 
 - `chunk_id`：外键指向 `knowledge_chunk.id`，稳定锚点
 - `embedding`：`VECTOR(1536)` 类型，由 pgvector 扩展提供
-- `tsv`：PostgreSQL `tsvector` 类型，用于关键词召回和混合检索
+- `search_tsv`：PostgreSQL `tsvector` 类型，用于关键词召回和混合检索
 - `embedding_model`：记录生成向量的模型版本，便于重建索引时判断是否需要重算
 - `indexed_at`：索引写入时间戳
 
@@ -397,15 +398,15 @@ V3 之前，RAG 引用信息存放在 `ai_run_artifact` 的 JSON 中，这带来
 
 ### 14.3 关键字段
 
-- `run_id`：外键指向 `ai_model_run.id`
+- `model_run_id`：外键指向 `ai_model_run.id`，由 Java 预创建后传给 Python
 - `chunk_id`：外键指向 `knowledge_chunk.id`
-- `rank`：本次检索中的排名
-- `score`：相似度分数（`NUMERIC(6,4)`）
+- `retrieval_rank`：本次检索中的排名
+- `vector_score` / `keyword_score` / `fusion_score` / `rerank_score`：用于回溯召回与重排效果
 - `used_in_answer`：是否被最终纳入回答上下文
 
 ### 14.4 持久化边界
 
-此表由 Python AI 服务在 RAG 检索完成后直接写入 PostgreSQL。Python 知道检索结果的完整排名和分数，Java 无法也不应二次推测这些执行现场事实。
+此表由 Python AI 服务在 RAG 检索完成后直接写入 PostgreSQL。前提是 Java 已预创建 `ai_model_run` 并把 `model_run_id` 传给 Python。Python 知道检索结果的完整排名和分数，Java 无法也不应二次推测这些执行现场事实。
 
 ## 15. 一句话总结
 

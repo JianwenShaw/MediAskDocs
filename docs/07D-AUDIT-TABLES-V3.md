@@ -1,6 +1,6 @@
 # 审计与事件表设计逐表说明（V3）
 
-> 本文对 `mediask-dal/src/main/resources/sql/07-domain-events.sql` 中的每张表做逐表说明。
+> 本文对 V3 审计、访问日志、领域事件相关表做逐表说明。
 > 重点不是复述 DDL，而是解释为什么审计日志、访问日志、领域事件、Outbox 必须分开，以及每张表在监管、集成和架构演进中的真实作用。
 >
 > 数据库引擎：PostgreSQL 17+（V3 统一迁移，详见 [07-DATABASE.md](./07-DATABASE.md)）。
@@ -12,6 +12,9 @@
 - 访问过什么，比修改了什么，在医疗场景里同样重要
 - 领域事件应服务于业务编排，不应沦为审计替代品
 - Outbox 是工程可靠性机制，不是业务真相表
+- 审计监管表物理落在 `audit` schema，业务事件与 Outbox 物理落在 `event` schema，但仍共享同一 PostgreSQL 实例与事务边界
+- 权威审计写入必须在业务事务内同步完成；异步监听只用于报表、投影或可选 ES 同步
+- `audit_event`、`data_access_log` 采用 append-only + 按月分区，归档与清理基于分区完成
 
 ## 2. `audit_event`
 
@@ -20,7 +23,7 @@
 - 谁在什么时间做了什么操作
 - 操作的目标资源是什么
 - 是否成功
-- 请求链路 trace_id 是什么
+- 请求链路 request_id 是什么
 
 ### 2.2 为什么必须有审计头表
 
@@ -37,7 +40,8 @@
 
 ### 2.3 关键字段
 
-- `trace_id`：跨 Java、Python、异步任务排查的主线索
+- `request_id`：跨网关、Java、Python、审计排查的主线索
+- `trace_id`：P2 启用 APM 时用于额外对齐 SkyWalking / OpenTelemetry
 - `operator_user_id`：明确是谁操作的
 - `operator_role_code`：保留操作时的角色视角，避免后续角色变更后回溯困难
 - `action_code`：标准化操作类型，如 CREATE、UPDATE、EXPORT、AI_REVIEW
@@ -48,10 +52,11 @@
 
 `audit_event` 至少应具备以下查询索引：
 
-- `idx_audit_event_trace (trace_id)`
+- `idx_audit_event_request (request_id)`
 - `idx_audit_event_user_time (operator_user_id, occurred_at)`
 - `idx_audit_event_resource (resource_type, resource_id, occurred_at)`
 - `idx_audit_event_action (action_code, occurred_at)`
+- `brin_audit_event_occurred_at (occurred_at)`
 
 其中 `idx_audit_event_action` 是 P1 阶段必须补齐的索引，因为审计平台最常见的问题之一就是：
 
@@ -90,6 +95,7 @@
 - `before_payload_encrypted`：变更前值密文
 - `after_payload_encrypted`：变更后值密文
 - `*_masked`：给普通审计场景提供受控预览，不必每次解密
+- `*_hash`：用于完整性校验、对账与差异比对，避免频繁解密大载荷
 
 ### 3.4 这张表的真正价值
 
@@ -131,6 +137,7 @@
 - `resource_type` / `resource_id`：看了什么
 - `patient_user_id`：如果是患者相关敏感数据，这个字段很关键
 - `access_result` / `deny_reason`：不只是记录允许，还要记录拒绝
+- `request_id` / `trace_id`：默认靠 `request_id` 对齐；启用 APM 时再补 `trace_id`
 
 ### 4.4 为什么这张表在医疗系统里非常重要
 
@@ -164,7 +171,8 @@
 - `event_payload_json`：仅承载最小化、脱敏后的事件内容
 - `event_payload_encrypted`：需要保留的敏感事件明细密文
 - `payload_hash`：用于对账、去重与安全追踪
-- `trace_id`：便于与调用链串联
+- `request_id`：便于与业务请求和审计链串联
+- `trace_id`：P2 启用 APM 时便于与 Span 链路对齐
 
 ## 6. `outbox_event`
 
@@ -245,12 +253,27 @@
 - 事件如何可靠投递
 - 投递后如何归档
 
+### 8.3 物理落库策略
+
+- `audit.audit_event`
+- `audit.audit_payload`
+- `audit.data_access_log`
+- `event.domain_event_stream`
+- `event.outbox_event`
+- `event.integration_event_archive`
+
+这样做的原因是：
+
+- 不引入独立数据库，就能获得清晰的权限边界与备份治理边界
+- 审计写入仍可与业务写入保持同事务提交，不产生跨库双写问题
+- 未来如果要做 Elasticsearch 审计索引，也应从 `audit.audit_event` 异步投影，而不是把 ES 变成权威写入链路的一部分
+
 ## 9. 典型场景串起来怎么理解
 
 比如医生完成 AI 复核：
 
 - Java 写 `audit_event`
-  - 表示“某医生执行了 AI 复核操作”
+  - 表示“某医生执行了 AI 复核操作”，并与业务事务同提交
 - 如果有敏感前后值，写 `audit_payload`
 - 如果有人查看 AI 原文，再写 `data_access_log`
 - 同时业务上发生“AI 复核已完成”，写 `domain_event_stream`

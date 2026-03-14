@@ -398,33 +398,33 @@ redis_client = aioredis.Redis(
 
 ---
 
-## 10. 链路追踪配置
+## 10. 请求上下文与日志配置
 
-### 10.1 Trace ID 中间件
+### 10.1 Request Context 中间件
 
 ```python
 from starlette.middleware.base import BaseHTTPMiddleware
 from uuid import uuid4
 
-class TraceIdMiddleware(BaseHTTPMiddleware):
+class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         # 从请求头读取或生成
-        trace_id = (
-            request.headers.get("X-Trace-Id")
-            or request.headers.get("X-Request-Id")
+        request_id = (
+            request.headers.get("X-Request-Id")
+            or request.headers.get("X-Trace-Id")  # deprecated alias
             or str(uuid4())
         )
 
         # 注入到请求 state（供下游使用）
-        request.state.trace_id = trace_id
+        request.state.request_id = request_id
 
         # 注入到日志上下文
-        # structlog.contextvars.bind_contextvars(trace_id=trace_id)
+        # structlog.contextvars.bind_contextvars(request_id=request_id)
 
         response = await call_next(request)
 
         # 写入响应头
-        response.headers["X-Trace-Id"] = trace_id
+        response.headers["X-Request-Id"] = request_id
         return response
 ```
 
@@ -450,7 +450,7 @@ structlog.configure(
   "timestamp": "2026-03-11T10:30:00.123+08:00",
   "level": "info",
   "event": "RAG 检索完成",
-  "trace_id": "abc-123-def",
+  "request_id": "req_01hrx6m5q4x5v2f6k4w4x1c7pz",
   "session_id": "sess-456",
   "top_k": 5,
   "results_count": 3,
