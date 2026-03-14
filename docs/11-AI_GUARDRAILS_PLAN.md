@@ -48,7 +48,10 @@
 
 ## 6. 审计与可追溯
 ### 6.1 字段
-- trace_id, user_id, session_id, risk_level, action, input_hash, output_hash, model, latency_ms
+- request_id, user_id, session_id, risk_level, action, input_hash, output_hash, model, latency_ms
+
+说明：
+- `request_id` 为 P0/P1 默认串联字段；若后续启用 APM，再额外补充 `trace_id`
 
 ### 6.2 规则
 - 只记录脱敏文本或哈希。
@@ -61,7 +64,7 @@
 {
   "event": "ai_guardrails",
   "timestamp": 1738800000,
-  "trace_id": "t-abc",
+  "request_id": "req_01hrx6m5q4x5v2f6k4w4x1c7pz",
   "user_id": "u-001",
   "session_id": "s-001",
   "model": "deepseek-chat",
@@ -83,7 +86,7 @@
 
 ### 7.1 SSE 错误事件建议
 ```json
-{ "event": "error", "data": { "error": "stream_error", "trace_id": "t-abc" } }
+{ "event": "error", "data": { "error": "stream_error", "request_id": "req_01hrx6m5q4x5v2f6k4w4x1c7pz" } }
 ```
 
 ## 8. 配置化
@@ -129,7 +132,7 @@
 
 ## 12. 合规与数据最小化建议
 - 最小化采集: 只记录脱敏内容与摘要。
-- 保留策略: 明确日志保留周期，允许按 trace_id 追溯。
+- 保留策略: 明确日志保留周期，允许按 `request_id` 追溯；若启用 APM 再补 `trace_id`。
 - 权限控制: 审计日志仅对合规角色开放。
 
 ## 13. 技术选型（允许新增依赖）

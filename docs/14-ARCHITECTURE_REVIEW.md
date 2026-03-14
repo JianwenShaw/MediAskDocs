@@ -68,7 +68,7 @@
 1. Java 创建 `ai_session`
 2. Java 创建 `ai_turn`
 3. Java 预创建 `ai_model_run(status=RUNNING)`
-4. Java 将 `model_run_id`、`turn_id`、`session_uuid`、`trace_id` 传给 Python
+4. Java 将 `model_run_id`、`turn_id`、`session_uuid` 和 Header `X-Request-Id` 传给 Python
 5. Python 执行检索、生成、护栏
 6. Python 用 `model_run_id` 直接写 `ai_run_citation`
 7. Python 回传 answer / guardrail / tokens / latency

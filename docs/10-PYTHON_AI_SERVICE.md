@@ -325,8 +325,10 @@ Python 输出应固定在以下范围：
 
 ### 8.1 错误格式
 
+成功响应保持端点自有载荷；失败响应统一返回错误封装：
+
 ```json
-{"code": "AI_400", "message": "Bad request", "request_id": "req_01hrx6m5q4x5v2f6k4w4x1c7pz"}
+{"code": 6001, "msg": "AI service unavailable", "requestId": "req_01hrx6m5q4x5v2f6k4w4x1c7pz", "timestamp": 1761234567890}
 ```
 
 ### 8.2 日志要求
@@ -339,7 +341,8 @@ Python 输出应固定在以下范围：
 
 - 单元测试：`Retriever`、`RagPipeline`、护栏规则、降级路径
 - 接口测试：`httpx.AsyncClient`
-- 关键覆盖：`model_run_id` 透传、`ai_run_citation` 写入、SSE `meta/end/error`
+- 关键覆盖：`model_run_id` 透传、`request_id` 透传、`ai_run_citation` 写入、SSE `meta/end/error`
+- 联调覆盖：成功、超时、异常映射、无检索结果降级
 
 ## 10. Makefile 约定
 
@@ -370,4 +373,5 @@ clean:
 - [ ] `knowledge/index` 批量 upsert
 - [ ] `ai_run_citation` 写库与幂等
 - [ ] `chat/stream` 的 `meta` 事件
+- [ ] Java ↔ Python 统一错误响应与 `request_id` 透传
 - [ ] 最小黄金问答集

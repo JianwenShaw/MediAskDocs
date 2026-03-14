@@ -228,19 +228,19 @@ sequenceDiagram
 
 结论：**必须统一错误语义和请求标识口径**，但不强制 Python AI 服务在成功场景下复用 Java 对外的 `Result<T>` 包装。
 
-### 8.2 推荐统一错误响应契约（服务间）
+### 8.2 推荐统一失败响应契约（服务间）
 
 Python AI 服务作为内部服务：
 
 - **成功响应**：返回端点自己的业务载荷（如 chat 的 answer/citations）
 - **失败响应**：统一返回错误封装，便于 Java Client 稳定映射
 
-错误响应建议固定如下结构：
+失败响应建议固定如下结构：
 
 ```json
 {
-    "code": 0,
-    "msg": "success",
+    "code": 6001,
+    "msg": "AI service unavailable",
     "requestId": "req_01hrx6m5q4x5v2f6k4w4x1c7pz",
     "timestamp": 1761234567890
 }
@@ -248,7 +248,7 @@ Python AI 服务作为内部服务：
 
 字段约束：
 
-- `code`: 整型，0 成功，非 0 失败
+- `code`: 整型，非 0 失败
 - `msg`: 文本，面向可读性
 - `requestId`: 必填；优先透传 `X-Request-Id`
 - `timestamp`: 毫秒时间戳
@@ -269,7 +269,7 @@ Python AI 服务作为内部服务：
 
 - Java -> Python：请求头带 `X-Request-Id`
 - Python -> Java：响应头回写 `X-Request-Id`
-- Python 日志：每条业务日志必须包含 `requestId`
+- Python 日志：每条业务日志必须包含 `request_id`
 
 建议 Python 中间件实现：
 
