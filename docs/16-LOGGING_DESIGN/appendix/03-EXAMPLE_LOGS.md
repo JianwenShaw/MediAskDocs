@@ -9,7 +9,7 @@
 ### 1.1 INFO 级别
 
 ```json
-{"ts":"2026-02-13T22:00:00Z","level":"INFO","service":"mediask-api","env":"prod","request_id":"req_01hrx6m5q4x5v2f6k4w4x1c7pz","logger":"c.m.m.s.appointment.AppointmentService","msg":"预约创建成功","event":"appointment.create","appointment_id":10001,"doctor_id":201}
+{"ts":"2026-02-13T22:00:00Z","level":"INFO","service":"mediask-api","env":"prod","request_id":"req_01hrx6m5q4x5v2f6k4w4x1c7pz","logger":"c.m.m.a.outpatient.RegistrationService","msg":"挂号创建成功","event":"registration.create","registration_order_id":10001,"doctor_id":201}
 ```
 
 ### 1.2 WARN 级别
@@ -21,7 +21,7 @@
 ### 1.3 ERROR 级别
 
 ```json
-{"ts":"2026-02-13T22:00:02Z","level":"ERROR","service":"mediask-api","env":"prod","request_id":"req_01hrx6m5q4x5v2f6k4w4x1c7pz","logger":"c.m.m.s.appointment.AppointmentService","msg":"预约创建失败","event":"appointment.create.fail","appointment_id":10002,"error":{"code":"APPOINTMENT_SLOT_FULL","msg":"该时段预约已满"},"exception.type":"BizException"}
+{"ts":"2026-02-13T22:00:02Z","level":"ERROR","service":"mediask-api","env":"prod","request_id":"req_01hrx6m5q4x5v2f6k4w4x1c7pz","logger":"c.m.m.a.outpatient.RegistrationService","msg":"挂号创建失败","event":"registration.create.fail","registration_order_id":10002,"error":{"code":"REGISTRATION_SLOT_FULL","msg":"当前号源已满"},"exception.type":"BizException"}
 ```
 
 ---
@@ -67,13 +67,13 @@
 ### 4.2 权限不足
 
 ```json
-{"ts":"2026-02-13T22:00:01Z","level":"WARN","service":"mediask-api","env":"prod","request_id":"req_01hrx6m5q4x5v2f6k4w4x1c7pz","event":"authz.deny","action":"PATIENT_VIEW_ALL_RECORDS","resource":{"type":"MEDICAL_RECORD","id":"*"},"user":{"id":100,"role":"patient"},"client":{"ip":"203.0.113.10","ua":"Mozilla/5.0"},"security":{"rule_id":"rbac_deny","decision":"deny","reason":"患者角色无权限查看所有病历"}}
+{"ts":"2026-02-13T22:00:01Z","level":"WARN","service":"mediask-api","env":"prod","request_id":"req_01hrx6m5q4x5v2f6k4w4x1c7pz","event":"authz.deny","action":"PATIENT_VIEW_OTHER_EMR","resource":{"type":"MEDICAL_RECORD","id":"*"},"user":{"id":100,"role":"patient"},"client":{"ip":"203.0.113.10","ua":"Mozilla/5.0"},"security":{"rule_id":"rbac_deny","decision":"deny","reason":"患者角色无权限查看他人病历"}}
 ```
 
 ### 4.3 限流触发
 
 ```json
-{"ts":"2026-02-13T22:00:02Z","level":"WARN","service":"mediask-api","env":"prod","request_id":"req_01hrx6m5q4x5v2f6k4w4x1c7pz","event":"rate_limit.hit","action":"API_QUERY","resource":{"type":"API","path":"/api/v1/records"},"client":{"ip":"203.0.113.10","ua":"Python-urllib/3.10"},"security":{"rule_id":"api_rate_limit","decision":"deny","reason":"请求频率超限（> 100 req/min）"}}
+{"ts":"2026-02-13T22:00:02Z","level":"WARN","service":"mediask-api","env":"prod","request_id":"req_01hrx6m5q4x5v2f6k4w4x1c7pz","event":"rate_limit.hit","action":"API_QUERY","resource":{"type":"API","path":"/api/v1/emr"},"client":{"ip":"203.0.113.10","ua":"Python-urllib/3.10"},"security":{"rule_id":"api_rate_limit","decision":"deny","reason":"请求频率超限（> 100 req/min）"}}
 ```
 
 ---
@@ -88,21 +88,21 @@
 
 ```java
 @RestController
-@RequestMapping("/api/v1/appointments")
-public class AppointmentController {
+@RequestMapping("/api/v1/registrations")
+public class RegistrationController {
 
-    private static final Logger log = LoggerFactory.getLogger(AppointmentController.class);
+    private static final Logger log = LoggerFactory.getLogger(RegistrationController.class);
 
     @PostMapping
-    public R<AppointmentResponse> createAppointment(
-            @RequestBody CreateAppointmentRequest request,
+    public R<RegistrationResultDTO> createRegistration(
+            @RequestBody CreateRegistrationRequest request,
             @RequestHeader(value = "X-Request-Id", required = false) String requestId) {
 
         // MDC 已由 Filter 初始化（requestId/traceId 等），此处直接使用
-        log.info("创建预约请求，appointmentId={}", request.getAppointmentId());
+        log.info("创建挂号请求，clinicSlotId={}", request.getClinicSlotId());
 
         // 业务调用
-        AppointmentResultDTO result = appointmentService.createAppointment(request);
+        RegistrationResultDTO result = registrationService.createRegistration(request);
 
         return R.ok(result);
     }

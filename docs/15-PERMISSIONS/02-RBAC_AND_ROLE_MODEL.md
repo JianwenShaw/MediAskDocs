@@ -11,9 +11,9 @@ RBAC 解决“能不能做”（功能权限），不解决“能看哪些数据
 建议权限码统一为：
 
 - 形式：`<domain>:<action>`
-- 示例：`schedule:query`、`schedule:create`、`appointment:cancel`
+- 示例：`schedule:query`、`registration:create`、`registration:cancel`
 - 约束：
-  - `domain` 使用业务领域名（`schedule`、`appointment`、`doctor`、`authz`、`ai` 等）
+  - `domain` 使用业务领域名或稳定资源名（`schedule`、`registration`、`emr`、`prescription`、`doctor`、`authz`、`ai` 等）
   - `action` 使用动词集合（`query/read/create/update/delete/approve/audit/auto` 等）
 
 说明：当前代码/测试侧已存在的权限码（例如排班的 `schedule:query/create/update/delete/auto`）应作为现状基线，新增命名需在此基础上扩展，避免同一资源出现两套 action（如 `read` 与 `query` 并存）长期难以治理。
@@ -78,4 +78,3 @@ RBAC 解决“能不能做”（功能权限），不解决“能看哪些数据
 - 变更行为必须审计（谁给谁授予/移除了什么）
 - 高敏感角色/权限走审批流（见 `04-SENSITIVE_OPERATIONS.md`）
 - 变更后需要权限缓存失效（若采用缓存）
-

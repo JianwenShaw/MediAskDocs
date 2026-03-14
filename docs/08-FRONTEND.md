@@ -19,7 +19,7 @@
 mediask-fe/
 ├── apps/
 │   ├── web/              # 管理端/医生端 (React SPA)
-│   └── h5/               # 患者端 H5 (预留)
+│   └── h5/               # 患者端 H5 (P0 主链路入口)
 ├── packages/
 │   └── shared/           # 共享包 (API client, types, hooks)
 ├── pnpm-workspace.yaml
@@ -34,6 +34,40 @@ packages:
   - "apps/*"
   - "packages/*"
 ```
+
+### 2.2 P0 页面与接口范围
+
+前端开发以毕设主链路为准，不按“完整 HIS 后台”平铺展开。
+
+| 端 | 页面/模块 | 目标 | 对应接口 |
+|----|-----------|------|---------|
+| **患者 H5** | 登录/身份确认 | 进入个人数据域 | `/api/v1/auth` |
+| **患者 H5** | AI 问诊会话页 | 输入症状、展示引用与风险提示 | `/api/v1/ai` |
+| **患者 H5** | 科室/门诊推荐结果页 | 承接 AI 导诊结论 | `/api/v1/departments`、`/api/v1/clinic-sessions` |
+| **患者 H5** | 挂号提交与我的挂号 | 创建并查看 `registration_order` | `/api/v1/registrations` |
+| **医生 Web** | 登录与工作台首页 | 进入接诊主流程 | `/api/v1/auth`、`/api/v1/encounters` |
+| **医生 Web** | 接诊列表/详情 | 查看挂号记录与 AI 摘要 | `/api/v1/registrations`、`/api/v1/encounters`、`/api/v1/ai` |
+| **医生 Web** | 病历编辑页 | 创建/修改病历与诊断 | `/api/v1/emr` |
+| **医生 Web** | 处方编辑页 | 创建处方与处方项 | `/api/v1/prescriptions` |
+| **管理员/审计端** | 审计查询页（最小版） | 展示审计与访问日志 | `/api/v1/audit` |
+
+P0 不要求前端先做完整排班工作台、复杂权限配置树、P2 级观测大盘。
+
+### 2.3 建议路由收敛
+
+| 端 | 路由 | 说明 |
+|----|------|------|
+| **患者 H5** | `/login` | 登录 |
+| **患者 H5** | `/ai/session/:sessionId` | AI 问诊 |
+| **患者 H5** | `/triage/result/:sessionId` | 导诊结果与引用 |
+| **患者 H5** | `/registrations/new` | 挂号提交 |
+| **患者 H5** | `/registrations` | 我的挂号 |
+| **医生 Web** | `/workbench` | 工作台 |
+| **医生 Web** | `/encounters` | 接诊列表 |
+| **医生 Web** | `/encounters/:id` | 接诊详情 |
+| **医生 Web** | `/emr/:encounterId` | 病历编辑 |
+| **医生 Web** | `/prescriptions/:encounterId` | 处方编辑 |
+| **管理员/审计端** | `/audit` | 审计查询 |
 
 ## 3. 快速开始
 
@@ -139,7 +173,7 @@ export default defineConfig({
 
 | 状态类型 | 工具 | 示例 |
 |---------|------|------|
-| 服务端状态 | React Query | 医院列表、排班、预约单 |
+| 服务端状态 | React Query | AI 会话、门诊场次、挂号单、接诊记录 |
 | 前端状态 | Zustand | token、用户信息、UI 状态 |
 
 ### 6.2 queryKey 规范
@@ -147,18 +181,19 @@ export default defineConfig({
 ```ts
 // 统一使用数组 + 结构化对象参数
 export const qk = {
-  hospitals: (params?: { keyword?: string }) => ['hospitals', params ?? {}] as const,
-  schedules: (params: { doctorId: number; date: string }) => ['schedules', params] as const,
-  appointmentsMy: (params: { status?: number }) => ['appointments', 'my', params] as const,
+  aiSession: (sessionId: string) => ['ai', 'session', sessionId] as const,
+  clinicSessions: (params: { departmentId?: number; date?: string }) => ['clinic-sessions', params] as const,
+  registrationsMy: (params: { status?: string }) => ['registrations', 'my', params] as const,
+  encountersMine: (params?: { status?: string }) => ['encounters', 'mine', params ?? {}] as const,
 } as const;
 ```
 
 ### 6.3 失效策略
 
 ```ts
-// 创建预约成功后
-queryClient.invalidateQueries({ queryKey: qk.appointmentsMy({}) });
-queryClient.invalidateQueries({ queryKey: qk.schedules({ doctorId }) });
+// 创建挂号成功后
+queryClient.invalidateQueries({ queryKey: qk.registrationsMy({}) });
+queryClient.invalidateQueries({ queryKey: qk.clinicSessions({ departmentId, date }) });
 ```
 
 ## 7. 部署要点
@@ -222,8 +257,8 @@ pnpm -C apps/web build
 - [x] Ant Design 可用（组件可渲染）
 - [x] React Router v7 可用
 
-### 8.3 新增患者端（H5）建议
+### 8.3 患者端（H5）建议
 
-- 新建：`apps/h5`
-- 技术栈与 Web 保持一致（React 19 + TS + Vite + React Router v7 + Tailwind + Antd）
-- 后续复用：把 API client / types / hooks 抽到 `packages/shared`
+- 技术栈与 Web 保持一致（React 19 + TS + Vite + React Router v7 + Tailwind + Antd）。
+- 患者端优先承接 AI 问诊、导诊结果、挂号提交、我的挂号四条主链路页面。
+- API client / types / hooks 优先抽到 `packages/shared`，避免 Web/H5 双份维护。

@@ -15,9 +15,13 @@ flowchart TB
   schedule --> schedule_update[schedule:update]
   schedule --> schedule_auto[schedule:auto]
 
-  system --> appointment[appointment]
-  appointment --> appointment_create[appointment:create]
-  appointment --> appointment_cancel[appointment:cancel]
+  system --> registration[registration]
+  registration --> registration_create[registration:create]
+  registration --> registration_cancel[registration:cancel]
+
+  system --> emr[emr]
+  emr --> emr_read[emr:read]
+  emr --> emr_update[emr:update]
 ```
 
 ## 2. ABAC 策略样例（JSON 示意）
@@ -48,7 +52,7 @@ flowchart TB
 ```json
 {
   "event": "audit_log",
-  "trace_id": "t-abc",
+  "request_id": "req_01hrx6m5q4x5v2f6k4w4x1c7pz",
   "user_id": 100,
   "action": "ROLE_ASSIGN",
   "resource_type": "USER",

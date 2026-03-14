@@ -715,7 +715,7 @@ flowchart TB
 
     subgraph ObservabilityP2[P2 可选 APM]
         SW[SkyWalking<br/>Tracing + APM]:::obs
-        ES[(Elasticsearch<br/>Trace Storage<br/>Audit Projection (P2))]:::obs
+        ES["(Elasticsearch<br/>Trace Storage<br/>Audit Projection (P2))"]:::obs
     end
 
     Web --> Nginx
