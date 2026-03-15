@@ -27,6 +27,7 @@
 | 设计 | [07D-AUDIT-TABLES-V3.md](./07D-AUDIT-TABLES-V3.md) | 审计、访问日志、事件表逐表说明 |
 | 前端 | [08-FRONTEND.md](./08-FRONTEND.md) | 前端开发指南 |
 | AI 规划 | [10-13 系列文档](./10-PYTHON_AI_SERVICE.md) | Python/RAG 相关基线与实现计划 |
+| AI 规划 | [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md) | 浏览器经 Java 访问的 AI 外部契约与业务承接 |
 | 评审 | [14-ARCHITECTURE_REVIEW.md](./14-ARCHITECTURE_REVIEW.md) | 重写前架构评审与收敛结论 |
 | 设计 | [15-PERMISSIONS/00-INDEX.md](./15-PERMISSIONS/00-INDEX.md) | 权限、审计与合规设计 |
 | 设计 | [16-LOGGING_DESIGN](./16-LOGGING_DESIGN/00-INDEX.md) | 工业级日志设计规范 |

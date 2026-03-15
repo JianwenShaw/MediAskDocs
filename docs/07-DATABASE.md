@@ -1,9 +1,21 @@
 # 数据库设计（V3 — 重构版）
 
-> 本文档为 V3/P0 数据库设计的权威说明；SQL 落地应与本文档保持同步。
+> 本文档为 V3 全量目标数据库设计说明；SQL 落地应与本文档保持同步。
 > 当前仓库仍处于本地开发阶段，V3 设计按"无历史数据、允许破坏式更新"原则整体重建。
 > 本文描述的是 V3 全量目标架构；毕业设计当前落地范围与实现优先级，以 `docs/07E-DATABASE-PRIORITY.md` 中的 `P0 / P1 / P2` 划分为准。
 > RAG 数据库设计（检索投影层、引用追溯层）的完整方案，详见 `docs/20-RAG_DATABASE_PGVECTOR_DESIGN.md`。
+
+## 0. 当前阶段怎么读本文
+
+为避免把 58 张表误读成“当前必须全部实现的开发清单”，先冻结以下口径：
+
+| 层级 | 当前要求 |
+|------|----------|
+| `P0` | AI/RAG、挂号接诊、病历处方、`audit_event`、`data_access_log`、最小权限相关表 |
+| `P1` | `ai_feedback_*`、`ai_run_artifact`、`audit_payload`、轻量排班输入与生成结果 |
+| `P2` | `domain_event_stream`、`outbox_event`、`integration_event_archive` 以及更重的排班治理 |
+
+如果本文任一局部描述与 `docs/00A-P0-BASELINE.md`、`docs/07E-DATABASE-PRIORITY.md` 冲突，以这两份执行基线为准。
 
 ## 1. 设计目标与原则
 
@@ -216,16 +228,18 @@ erDiagram
 
 ### 6.7 审计、访问日志、业务事件与 Outbox（07-domain-events.sql）
 
-| 表名 | 说明 | V3 变化 |
-|------|------|---------|
-| `audit_event` | 审计头索引 | 新增 |
-| `audit_payload` | 审计高敏载荷 | 新增 |
-| `data_access_log` | 敏感数据访问日志 | 新增 |
-| `domain_event_stream` | 领域事件流 | 新增 |
-| `outbox_event` | 可靠事件投递 | 新增 |
-| `integration_event_archive` | 投递归档 | 新增 |
+| 表名 | 说明 | 当前优先级 | V3 变化 |
+|------|------|------------|---------|
+| `audit_event` | 审计头索引 | `P0` | 新增 |
+| `audit_payload` | 审计高敏载荷 | `P1` | 新增 |
+| `data_access_log` | 敏感数据访问日志 | `P0` | 新增 |
+| `domain_event_stream` | 领域事件流 | `P2` | 新增 |
+| `outbox_event` | 可靠事件投递 | `P2` | 新增 |
+| `integration_event_archive` | 投递归档 | `P2` | 新增 |
 
 > 物理部署口径：`audit_event`、`audit_payload`、`data_access_log` 落在 `audit` schema；`domain_event_stream`、`outbox_event`、`integration_event_archive` 落在 `event` schema。为方便阅读，本文默认省略 schema 前缀。
+>
+> 当前毕设主线只要求先做 `audit_event + data_access_log`；其余几张表保留为后续增强设计。
 
 ### 6.8 P1 阶段建议补强表
 
@@ -267,11 +281,11 @@ erDiagram
 
 ### 7.4 审计与事件分离
 
-- `audit_event`：谁做了什么，便于检索，位于 `audit` schema
-- `audit_payload`：高敏请求/前后值，独立密文层，位于 `audit` schema
-- `data_access_log`：谁看了什么，面向合规监管，位于 `audit` schema
-- `domain_event_stream`：纯业务事件流，位于 `event` schema
-- `outbox_event`：对外集成可靠投递，位于 `event` schema
+- `audit_event`：谁做了什么，便于检索，位于 `audit` schema，`P0` 必做
+- `audit_payload`：高敏请求/前后值，独立密文层，位于 `audit` schema，`P1` 按需补充
+- `data_access_log`：谁看了什么，面向合规监管，位于 `audit` schema，`P0` 必做
+- `domain_event_stream`：纯业务事件流，位于 `event` schema，`P2` 保留设计
+- `outbox_event`：对外集成可靠投递，位于 `event` schema，`P2` 保留设计
 - 审计监管与事件投递在物理上做 schema 隔离，但仍共享同一 PostgreSQL 实例与事务边界
 
 ### 7.5 已确认修正项

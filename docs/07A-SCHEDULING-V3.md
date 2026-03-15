@@ -1,7 +1,20 @@
-# 排班设计（V3 设计说明）
+# 排班设计（V3 全量设计 + 当前阶段读法）
 
 > 本文聚焦 V3 中的排班规划域，以及它如何与门诊运营域、挂号交易域衔接。
+>
 > 核心目标不是“把医生排出来”这么简单，而是把“规划建议”和“可交易门诊”彻底解耦，确保后续挂号、锁号、支付、就诊全链路具备清晰边界和强一致性。
+>
+> 执行边界说明：本文保留排班全量设计，但毕设当前范围以 `docs/00A-P0-BASELINE.md`、`docs/18-SCHEDULING_CORE_UPGRADE.md`、`docs/07E-DATABASE-PRIORITY.md` 为准。
+
+## 0. 当前阶段怎么读本文
+
+| 层级 | 当前要求 | 相关对象 |
+|------|----------|----------|
+| `P0` | 先保证有可挂号门诊资源，不要求复杂自动排班 | `clinic_session`、`clinic_slot` |
+| `P1` | 增加轻量排班输入和自动生成演示 | `doctor_availability_rule`、`doctor_unavailability`、`calendar_day`、`schedule_demand_template`、`schedule_generation_job/result/assignment` |
+| `P2` | 复杂规则治理、覆盖规则、多版本比较、重型求解器 | `schedule_ruleset`、`schedule_ruleset_item`、`schedule_demand_override` 及更复杂求解能力 |
+
+如果时间紧，当前实现可以直接走：`医生/科室维护 -> clinic_session -> clinic_slot -> registration_order`。
 
 ## 1. 设计目标
 

@@ -134,12 +134,12 @@ mediask-be/
 │   ├── cache/               # Redis + Redisson 适配
 │   ├── event/               # 领域事件发布器实现
 │   ├── ai/                  # Python AI 服务 HTTP 客户端
-│   ├── scheduling/          # 排班算法引擎（OptaPlanner 等）
+│   ├── scheduling/          # 轻量排班算法 / 可选求解器适配
 │   └── observability/       # 追踪、指标上报适配器
 │
 ├── mediask-common           # 技术公共库（无业务逻辑）
 │   ├── exception/           # 异常体系（BizException, ErrorCode）
-│   ├── result/              # 统一响应包装 R<T>
+│   ├── result/              # 统一响应包装 Result<T>
 │   ├── util/                # 工具类（日期、加密、雪花 ID）
 │   └── constant/            # 全局常量
 │
@@ -236,7 +236,7 @@ flowchart TB
 | **门诊挂号上下文** | 核心域 | `RegistrationOrder`、`ClinicSession` | 门诊开放、号源管理、挂号/取消/支付/就诊状态机 |
 | **诊疗上下文** | 核心域 | `EmrRecord`、`PrescriptionOrder` | 病历创建/修订/加密存储、结构化诊断、处方开具 |
 | **AI 问诊上下文** | 核心域 | `AiSession`、`KnowledgeBase` | 会话管理、模型调用记录、护栏事件、知识库管理、反馈审核 |
-| **审计与合规上下文** | 通用子域 | `AuditEvent` | 操作审计、敏感数据访问日志、领域事件流 |
+| **审计与合规上下文** | 通用子域 | `AuditEvent` | 操作审计、敏感数据访问日志、按阶段启用的事件投影 |
 
 ### 4.3 跨上下文通信模式
 
@@ -307,7 +307,7 @@ flowchart TB
  6. 聚合根执行业务规则 → registrationOrder.confirm()
  7. 聚合根产生领域事件 → RegistrationConfirmedEvent
  8. UseCase 保存聚合根 → RegistrationOrderRepository.save() (Driven Port)
- 9. UseCase 同事务写入 `audit.audit_event` / 按需写入 `audit.audit_payload`
+9. UseCase 同事务写入 `audit.audit_event`；查看敏感正文时写 `audit.data_access_log`；`audit.audit_payload` 按 P1 需要补充
 10. UseCase 发布事件 → EventPublisher.publish(event) (Driven Port)
 11. UseCase 返回结果 → Controller → assembler 转为 Response DTO
 ```
@@ -664,8 +664,20 @@ flowchart LR
 
 - `code = 0` 表示成功，非 0 表示失败
 - 对外统一协议以 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) 为准
+- AI `SSE` 事件流不逐帧包 `Result<T>`，其事件口径以 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md) 为准
 
-### 12.3 API 文档
+### 12.3 AI 对外契约（P0）
+
+浏览器只依赖 Java 暴露的 AI 外部接口，不直接感知 Python 内部 DTO。`P0` 先冻结以下用户链路：
+
+- 患者问诊：`POST /api/v1/ai/chat`、`POST /api/v1/ai/chat/stream`
+- 导诊结果：`GET /api/v1/ai/sessions/{sessionId}/triage-result`
+- 挂号承接：`POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
+- 医生查看 AI 摘要：`GET /api/v1/encounters/{encounterId}/ai-summary`
+
+详细字段与 SSE 事件口径见 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md)。
+
+### 12.4 API 文档
 
 - OpenAPI 规范：`GET /v3/api-docs`
 - Swagger UI：`GET /swagger-ui/index.html`
@@ -773,6 +785,7 @@ flowchart TB
 | [07-DATABASE.md](./07-DATABASE.md) | 数据库设计（V3 全表） |
 | [07B-AI-AUDIT-V3.md](./07B-AI-AUDIT-V3.md) | AI 与审计设计 |
 | [10-PYTHON_AI_SERVICE.md](./10-PYTHON_AI_SERVICE.md) | Python AI 服务设计 |
+| [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md) | 浏览器经 Java 访问的 AI 外部契约与业务承接 |
 | [14-ARCHITECTURE_REVIEW.md](./14-ARCHITECTURE_REVIEW.md) | 架构评审与优化建议 |
 | [17-OBSERVABILITY.md](./17-OBSERVABILITY.md) | 可观测性架构 |
 | [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) | 错误/异常/响应设计 |

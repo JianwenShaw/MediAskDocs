@@ -5,6 +5,18 @@
 >
 > 数据库引擎：PostgreSQL 17+（V3 统一迁移，详见 [07-DATABASE.md](./07-DATABASE.md)）。
 
+## 0. 当前阶段怎么读本文
+
+本文保留审计与事件表的完整演进设计，但当前毕设实现优先级固定为：
+
+| 层级 | 当前要求 |
+|------|----------|
+| `P0` | `audit_event`、`data_access_log` |
+| `P1` | `audit_payload` |
+| `P2` | `domain_event_stream`、`outbox_event`、`integration_event_archive` |
+
+如果本文的完整设计描述与 `docs/00A-P0-BASELINE.md`、`docs/07E-DATABASE-PRIORITY.md` 冲突，以后两者为准。
+
 ## 1. 设计总原则
 
 - 操作审计、敏感数据访问监管、业务事件、可靠投递是四种不同事实
@@ -147,6 +159,8 @@
 
 ## 5. `domain_event_stream`
 
+> 当前定位：`P2` 保留设计，不作为毕设主链路前置能力。
+
 ### 5.1 这张表回答什么问题
 
 - 业务上发生了什么事实
@@ -175,6 +189,8 @@
 - `trace_id`：P2 启用 APM 时便于与 Span 链路对齐
 
 ## 6. `outbox_event`
+
+> 当前定位：`P2` 保留设计，不作为当前实现重点。
 
 ### 6.1 这张表回答什么问题
 
@@ -209,6 +225,8 @@
 这些字段都明显属于“投递系统”，不是领域本身。
 
 ## 7. `integration_event_archive`
+
+> 当前定位：`P2` 保留设计，仅在事件可靠投递体系成立后再引入。
 
 ### 7.1 这张表回答什么问题
 
@@ -247,6 +265,8 @@
 - `outbox_event`
 - `integration_event_archive`
 
+这些表在当前阶段属于后续增强设计，不应反向驱动 `P0` 的实现顺序。
+
 解决的是：
 
 - 业务事实如何表达
@@ -272,15 +292,15 @@
 
 比如医生完成 AI 复核：
 
-- Java 写 `audit_event`
+- `P0`：Java 写 `audit_event`
   - 表示“某医生执行了 AI 复核操作”，并与业务事务同提交
-- 如果有敏感前后值，写 `audit_payload`
-- 如果有人查看 AI 原文，再写 `data_access_log`
-- 同时业务上发生“AI 复核已完成”，写 `domain_event_stream`
-- 如果这个事件要通知别的系统，再写 `outbox_event`
-- 投递完成后写 `integration_event_archive`
+- `P0`：如果有人查看 AI 原文，再写 `data_access_log`
+- `P1`：如果确有敏感前后值留存需求，再写 `audit_payload`
+- `P2`：如果要把“AI 复核已完成”作为独立业务事件，再写 `domain_event_stream`
+- `P2`：如果这个事件要通知别的系统，再写 `outbox_event`
+- `P2`：投递完成后再写 `integration_event_archive`
 
-这才是完整闭环。
+这就是“先监管闭环，再工程化事件体系”的分阶段闭环。
 
 ## 10. 为什么这套设计比 V2 稳定
 

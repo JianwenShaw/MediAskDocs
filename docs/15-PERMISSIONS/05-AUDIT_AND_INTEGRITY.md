@@ -1,5 +1,7 @@
 # 权限与审计设计：审计追溯与防篡改
 
+> 执行边界说明：`P0` 先做 `audit_event + data_access_log`；`audit_payload` 作为 `P1` 增强，链式哈希、WORM 等更重防篡改能力后置到 `P2/P3`。
+
 ## 1. 审计的定位
 
 医疗系统的审计不是“可选日志”，而是合规刚需：
@@ -15,7 +17,8 @@
 - 敏感数据访问（病历/处方/AI 对话等，按实际启用）
 - 关键业务操作（创建/修改/取消预约等）
 - 数据导出
-- 紧急授权与越权访问尝试
+- 越权访问尝试
+- 紧急授权（若启用该能力）
 
 ## 3. 审计字段（建议口径）
 
@@ -32,7 +35,7 @@
 
 - `request_params` / `old_value` / `new_value` 应脱敏后存储，必要时用摘要/哈希替代原文。
 
-表结构草案见：`MediAskDocs/docs/15-PERMISSIONS/appendix/A2-SCHEMA.sql`
+当前表结构以 `docs/07-DATABASE.md`、`docs/07D-AUDIT-TABLES-V3.md` 为准；`appendix/A2-SCHEMA.sql` 仅保留为早期草案存档。
 
 ## 4. 审计日志访问权限
 

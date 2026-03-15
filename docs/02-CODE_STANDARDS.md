@@ -392,7 +392,7 @@ public class RegistrationOrderConverter {
 ```
 
 - `code = 0` 表示成功，非零表示失败
-- `requestId` **必须**出现在每个响应中
+- `requestId` **必须**出现在每个 JSON 响应中；SSE 通过 `X-Request-Id` Header 与 `meta/error` 事件串联
 - `timestamp` 为 Unix 毫秒时间戳
 
 ```java

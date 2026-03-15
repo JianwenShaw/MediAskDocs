@@ -25,7 +25,7 @@
 
 - **Embedding API 不可用**：返回明确错误并提示“知识库暂不可用”。
 - **RAG 降级**：允许退化为无检索的保守回答，并保留免责声明。
-- **审计必填**：记录 `trace_id`、`action`、`latency_ms`、`input_hash`、`output_hash`。
+- **审计必填**：记录 `request_id`、`action`、`latency_ms`、`input_hash`、`output_hash`；`trace_id` 仅在 P2 APM 时补充。
 
 ## 5. 配置建议（示例）
 

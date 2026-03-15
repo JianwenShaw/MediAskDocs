@@ -2,6 +2,8 @@
 
 > 本文聚焦 V3 中的 AI 域、审计域、数据访问监管域，以及它们在“Java 主业务系统 + Python AI 服务”架构下的职责划分。
 > 核心目标不是把所有 AI 细节都塞进业务库，而是在保证可追溯、可审计、可复核的前提下，让 Java 与 Python 各自承担最合适的持久化职责。
+>
+> 读法说明：本文主要描述 Java/Python/DB 的职责分层；浏览器最终拿到的 AI 对外协议与业务承接，统一以 `docs/10A-JAVA_AI_API_CONTRACT.md` 为准。
 
 ## 1. 设计目标
 
@@ -510,6 +512,8 @@ V3 的核心思想是把三种完全不同的事实拆开：
 
 ### 10.6 审计存储基线（本轮定案）
 
+> 当前阶段优先级：`P0 = audit_event + data_access_log`，`P1 = audit_payload`，`P2 = domain_event_stream/outbox/archive`
+
 - 审计监管仍与业务表共享同一个 PostgreSQL 17+ 实例，不额外引入独立审计库
 - `audit_event`、`audit_payload`、`data_access_log` 物理落在 `audit` schema
 - `domain_event_stream`、`outbox_event`、`integration_event_archive` 物理落在 `event` schema
@@ -688,7 +692,7 @@ sequenceDiagram
         Java->>AuditDB: 写 audit.audit_event(创建复核任务)
     end
 
-    Java-->>User: 返回 answer / citations / request_id
+    Java-->>User: 返回 Java 对外协议（JSON `Result<T>` 或 SSE `message/meta/end/error`）
 
     opt 医生查看 AI 原文或复核详情
         User->>Java: 查看 AI 原文 / 复核详情

@@ -1,12 +1,13 @@
 # AI 表设计逐表说明（V3）
 
 > 本文对 V3 AI 相关表做逐表、逐重点字段说明。
-> 目标不是重复 DDL，而是解释这些表为什么存在、关键字段为什么要这样设计、它们在“Java 主业务系统 + Python AI 服务”架构里分别承担什么职责。
+>
+> 读法说明：本文保留 V3 的完整目标设计；当前实现优先级以 `docs/00A-P0-BASELINE.md` 与 `docs/07E-DATABASE-PRIORITY.md` 为准。`P0` 必做的是 AI 会话、模型运行、知识库、检索投影和引用追溯，`ai_feedback_*` 与部分通用产物展示属于 `P1`。
 
 ## 1. 设计总原则
 
 - Java 维护业务主事实与监管主事实
-- Python 维护 AI 执行现场，并把关键结果结构化回传
+- Python 只维护检索投影与引用追溯，并把关键执行结果结构化回传
 - 高敏原文、模型运行、护栏命中、复核流程、知识索引必须拆层
 - 业务库只存需要追溯、监管、复核和展示的关键事实，不做调试垃圾场
 
@@ -123,7 +124,7 @@ AI 问诊原文里经常包含：
 - 这一轮到底发生了哪次模型调用
 - 是哪个 provider 执行的
 - 用了哪个模型
-- trace_id 是什么
+- request 级串联线索是什么
 - 是否启用了 RAG
 - latency 和 token 消耗是多少
 - 是否发生降级
@@ -146,7 +147,7 @@ AI 问诊原文里经常包含：
 - `provider_run_id`：Python 侧执行主键，便于跨系统追踪
 - `provider_name`：明确这次执行来自 `PYTHON_AI` 还是其他 provider
 - `id`：由 Java 在调用 Python 前预创建，作为稳定 `model_run_id`
-- `trace_id`：全链路最关键字段，必须稳定透传
+- `provider_run_id + model_run_id`：跨 Java/Python 对齐一次执行的主键组合；请求排障主线仍以 `request_id` 为准，`trace_id` 仅在 P2 APM 时补充
 - `rag_enabled`：区分纯 LLM 回答和 RAG 回答
 - `retrieval_provider`：便于未来把检索能力切换到别的系统时仍可追踪
 - `tokens_input` / `tokens_output` / `latency_ms`：成本、性能、告警和容量规划的基础数据
@@ -166,11 +167,13 @@ AI 问诊原文里经常包含：
 
 模型执行后，真正有业务价值的往往不是“完整原文”，而是结构化结果：
 
-- citations 给前端展示
-- summary 给挂号页或病历页展示
-- routing 给后续分诊/复核逻辑使用
+- `summary` 给挂号页或病历页展示
+- `routing` 给后续分诊/复核逻辑使用
+- `rag_context` / 调试摘要给排障或复盘使用
 
 这些结果不是消息原文，也不是运行元数据，所以需要独立的 artifact 层。
+
+注意：`citations` 已由专门的 `ai_run_citation` 表承接，不再作为 `ai_run_artifact` 的主存储形态。
 
 ### 6.3 关键字段
 

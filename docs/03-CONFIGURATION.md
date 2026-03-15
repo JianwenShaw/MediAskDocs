@@ -71,7 +71,7 @@ APP_ENV=prod uvicorn app.main:app --host 0.0.0.0 --port 8000
 | **Swagger UI** | 开启 | 开启 | 开启 | **关闭** |
 | **Actuator 端点** | 全量暴露 | 全量暴露 | 限制暴露 | 仅 `health,prometheus` |
 | **SQL 输出** | 开启 | 开启 | 关闭 | **关闭** |
-| **SkyWalking Agent** | 可选 | 关闭 | 开启 | **开启** |
+| **SkyWalking Agent（P2）** | 可选 | 关闭 | 可选 | 可选 |
 | **AI 护栏模式** | `normal` | `normal` | `strict` | **`strict`** |
 | **Debug 模式** | `true` | `true` | `false` | **`false`** |
 
@@ -222,7 +222,8 @@ deploy/
 | **PostgreSQL 连接** | `spring.datasource.*` | `PG_HOST/PORT/DB/USER/PASSWORD` | 指向同一数据库实例 |
 | **Redis 连接** | `spring.data.redis.*` | `REDIS_HOST/PORT/PASSWORD` | 指向同一 Redis 实例 |
 | **Request ID Header** | `X-Request-Id`（硬编码） | `X-Request-Id`（硬编码） | 协议约定，不可配置化；`X-Trace-Id` 仅兼容旧口径 |
-| **响应格式** | `Result<T>` | `{code, msg, data, requestId, timestamp}` | 协议约定，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) |
+| **Java 对外响应** | `Result<T>` | 前端只依赖 Java 对外协议：`{code, msg, data, requestId, timestamp}` | 协议约定，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) |
+| **Python 失败响应** | Java 按统一错误结构解析 | Python 失败体固定为 `{code, msg, requestId, timestamp}`；成功体保持端点 DTO | 协议约定，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) |
 
 ### 6.2 数据库写入边界
 
@@ -321,9 +322,9 @@ EMBEDDING_API_KEY=sk-xxx
 每次配置变更后，执行以下检查：
 
 1. **启动检查**：服务能否正常启动（DB/Redis 连通性）
-2. **健康检查**：`/actuator/health`（Java）、`/health`（Python）返回 200
+2. **健康检查**：`/actuator/health` 与 `/actuator/health/readiness`（Java）、`/health` 与 `/ready`（Python）返回 200
 3. **功能验证**：核心业务流程可用
-4. **跨服务验证**：Java ↔ Python 通信正常（Trace ID 透传、API Key 认证）
+4. **跨服务验证**：Java ↔ Python 通信正常（`X-Request-Id` 透传、API Key 认证）
 
 ---
 

@@ -3,6 +3,8 @@
 > 定位：`mediask-ai` 是 Java 主系统的内部 AI 执行服务。
 >
 > 当前口径：本文件为重写基线；Python 负责 RAG 检索、LLM 调用、护栏执行、流式输出，以及检索投影/引用追溯写库，不维护业务主事实。
+>
+> 浏览器经 Java 访问的外部 AI 契约，见 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md)。
 
 ## 1. 定位与边界
 

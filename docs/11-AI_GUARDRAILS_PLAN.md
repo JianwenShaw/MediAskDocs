@@ -60,6 +60,23 @@
 
 落库目标：`ai_guardrail_event`
 
+### 2.5 高风险结果如何承接
+
+护栏不只负责“拦住”，还要把用户引到正确下一步。
+
+| `risk_level` + `action` | Java 对外 `nextAction` | 前端承接方式 |
+|-------------------------|----------------------|--------------|
+| `low + allow` | `VIEW_TRIAGE_RESULT` | 正常展示答案、引用、推荐科室 |
+| `medium + caution` | `GO_REGISTRATION` | 强调免责声明，保守建议线下就医，并提供挂号入口 |
+| `high + refuse` | `EMERGENCY_OFFLINE` 或 `MANUAL_SUPPORT` | 不继续普通问答，展示紧急就医/人工求助提示 |
+
+规则：
+
+- Python 负责输出 `risk_level`、`guardrail_action`、`matched_rule_codes`
+- Java 负责把内部风险结果映射成用户可执行的 `nextAction`
+- `high` 场景不返回普通导诊文案，不给出会被误解为诊断建议的文本
+- 是否允许继续挂号，由 Java 结合场景判断；紧急风险优先线下处置而不是继续聊天
+
 ## 3. P0 推荐免责声明
 
 ```text
@@ -105,6 +122,7 @@
 
 - Python 负责执行输入/输出护栏规则，返回 `risk_level`、`guardrail_action`、`matched_rule_codes`
 - Java 负责持久化 `ai_guardrail_event`，并将结果纳入统一审计链路
+- Java 负责生成面向前端的 `nextAction`、导诊结果和挂号承接信息
 
 ## 7. P0 测试清单
 
