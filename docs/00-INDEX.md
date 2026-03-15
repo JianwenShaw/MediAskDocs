@@ -9,6 +9,7 @@
 | 类型 | 文档 | 说明 |
 |------|------|------|
 | 索引 | [00-INDEX.md](./00-INDEX.md) | 文档导航与快速开始 |
+| 索引 | [00A-P0-BASELINE.md](./00A-P0-BASELINE.md) | 毕设实现范围、P0/P1/P2 与冻结口径 |
 | 架构 | [01-OVERVIEW.md](./01-OVERVIEW.md) | 重写基线架构、模块与依赖 |
 | 规范 | [02-CODE_STANDARDS.md](./02-CODE_STANDARDS.md) | 分层依赖与编码约定 |
 | 配置 | [03-CONFIGURATION.md](./03-CONFIGURATION.md) | 配置管理总纲（原则、环境矩阵、密钥管理） |
@@ -58,6 +59,7 @@ python3 scripts/os_detect.py
 
 ## 重写基线约定
 
+- 当前实施边界、P0/P1/P2 范围以 [00A-P0-BASELINE.md](./00A-P0-BASELINE.md) 与 [07E-DATABASE-PRIORITY.md](./07E-DATABASE-PRIORITY.md) 为准。
 - 架构与模块边界以 [01-OVERVIEW.md](./01-OVERVIEW.md) 与 [14-ARCHITECTURE_REVIEW.md](./14-ARCHITECTURE_REVIEW.md) 为准。
 - 数据库与 RAG 三层模型以 [07-DATABASE.md](./07-DATABASE.md)、[07B-AI-AUDIT-V3.md](./07B-AI-AUDIT-V3.md)、[20-RAG_DATABASE_PGVECTOR_DESIGN.md](./20-RAG_DATABASE_PGVECTOR_DESIGN.md) 为准。
 - AI 服务契约与落地顺序以 [10-PYTHON_AI_SERVICE.md](./10-PYTHON_AI_SERVICE.md) 与 [12-AI_RAG_IMPLEMENTATION_PLAN.md](./12-AI_RAG_IMPLEMENTATION_PLAN.md) 为准。

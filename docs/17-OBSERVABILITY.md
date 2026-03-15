@@ -1,5 +1,7 @@
 # 可观测性架构设计
 
+> 执行边界说明：`P0` 的最小要求是 `request_id + 结构化日志 + 健康/就绪检查 + 基础 metrics`。端点口径统一为：Java 使用 `/actuator/health` 与 `/actuator/health/readiness`，Python 使用 `/health` 与 `/ready`。Prometheus/Grafana/Loki 属于推荐增强，不应阻塞主链路开发；SkyWalking/Elasticsearch 继续保持 `P2`。
+
 ## 1. 背景与需求
 
 ### 1.1 毕设背景

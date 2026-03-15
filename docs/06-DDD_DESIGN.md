@@ -1,287 +1,212 @@
-# DDD 设计指南（V3 统一语言版）
+# DDD 设计指南（毕设收敛版）
 
-> 领域驱动设计（DDD）核心概念与实践模式。
+> 适用阶段：重写启动前与 P0/P1 实现阶段
 >
-> **注意**：本文件用于指导重写阶段的领域建模与分层实现，规范优先于旧代码。
+> 本文目标：统一限界上下文、分层依赖和建模深度，避免把所有模块都建成“重型 DDD”。
+>
+> 相关文档：总体架构以 [01-OVERVIEW.md](./01-OVERVIEW.md) 为准，实施边界以 [00A-P0-BASELINE.md](./00A-P0-BASELINE.md) 为准。
 
----
+## 1. 设计立场
 
-## 1. 核心概念
+MediAsk 使用 DDD，但不是“所有地方都做满配 DDD”。
 
-领域驱动设计（DDD）是一种以**业务领域为核心**的软件开发方法：
+本项目采用 **务实 DDD**：
 
-- **统一语言**：开发人员与领域专家使用相同术语
-- **边界上下文**：明确模块边界，避免概念混淆
-- **分层架构**：职责清晰，依赖单向
+- 核心域做深：AI 问诊、门诊挂号、诊疗闭环
+- 支撑域做轻：用户、审计、排班允许简化 CRUD 或轻量状态机
+- 先守住边界与统一语言，再决定是否需要复杂聚合和领域事件
 
-### 为什么选择 DDD
+一句话原则：**DDD 用来收敛复杂业务，不用来制造额外复杂度。**
 
-| 医疗业务特点 | DDD 优势 |
-|-------------|---------|
-| 业务规则复杂 | 业务逻辑内聚在领域层 |
-| 领域知识密集 | 聚合根保证数据一致性 |
-| 强一致性要求 | 清晰分层支持技术替换 |
-| 长期演化需求 | 统一语言降低沟通成本 |
+## 2. 限界上下文
 
----
+### 2.1 上下文划分
 
-## 2. 边界上下文划分
+| 上下文 | 类型 | 主要对象 | 当前定位 |
+|------|------|----------|----------|
+| 用户上下文 | 通用子域 | `User`、`Role`、`Permission` | 做轻，服务认证与最小授权 |
+| 排班上下文 | 支撑子域 | `ClinicSession` 生成输入、发布结果 | 做轻，先服务挂号入口 |
+| 门诊挂号上下文 | 核心域 | `ClinicSession`、`ClinicSlot`、`RegistrationOrder` | 做深，承担 AI 到线下就诊的承接 |
+| 诊疗上下文 | 核心域 | `VisitEncounter`、`EmrRecord`、`PrescriptionOrder` | 做深，承担医生接诊闭环 |
+| AI 问诊上下文 | 核心域 | `AiSession`、`AiTurn`、`AiModelRun`、`KnowledgeBase` | 做深，体现大模型与 RAG 能力 |
+| 审计上下文 | 通用子域 | `AuditEvent`、`DataAccessLog` | 做准，承担留痕与追溯 |
+
+### 2.2 跨上下文通信
+
+| 模式 | 适用场景 | 说明 |
+|------|----------|------|
+| Shared Kernel | `UserId`、基础枚举 | 只共享稳定标识和值对象，不共享复杂领域对象 |
+| Published Language | 排班 -> 门诊挂号 | 排班发布 `ClinicSession` 这一业务结果，门诊上下文消费 |
+| Domain Event | 挂号完成、诊疗结束等 | 用于进程内解耦，不作为 P0 分布式集成总线 |
+| ACL | Java -> Python AI 服务 | Java 通过 Client/Port 调 Python，隔离协议细节 |
+
+## 3. 建模深度约定
+
+### 3.1 哪些地方做深
+
+以下场景建议采用完整聚合、值对象、状态机：
+
+- `RegistrationOrder`：挂号创建、取消、支付/履约状态
+- `ClinicSession` / `ClinicSlot`：号源分配与库存约束
+- `AiSession` / `AiModelRun`：问诊轮次、模型运行、引用追溯
+- `EmrRecord` / `PrescriptionOrder`：病历正文与处方生成
+
+### 3.2 哪些地方做轻
+
+以下场景允许使用简化实体 + Application 编排，不强求复杂聚合：
+
+- 用户、角色、权限、数据范围
+- 审计事件、访问日志
+- 轻量排班输入配置
+- 字典、通知、基础主数据
+
+判断标准只有一个：**如果没有明确事务内不变量，就不要为了 DDD 而硬造聚合。**
+
+## 4. 分层与依赖规则
+
+### 4.1 目标分层
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      边界上下文                              │
-├─────────────────────────────────────────────────────────────┤
-│  用户上下文      →  User, Role, Permission                   │
-│  门诊挂号上下文  →  ClinicSession, ClinicSlot, RegistrationOrder │
-│  诊疗上下文      →  VisitEncounter, EmrRecord, PrescriptionOrder │
-│  AI 问诊上下文   →  AiSession, AiTurn, RAG Engine            │
-└─────────────────────────────────────────────────────────────┘
-                        ↓
-              HTTP 调用（跨上下文）
+API / Worker -> Application -> Domain
+API / Worker -.装配.-> Infrastructure -> Domain
+Common 被各层复用，但不承载业务语义
 ```
 
-**跨上下文通信**：
-- 用户上下文 → 门诊挂号/诊疗上下文：组合关系
-- 门诊挂号/诊疗上下文 → AI 问诊：HTTP 调用（业务解耦）
-
----
-
-## 3. 分层架构
-
-```
-┌─────────────────────────────────────────┐
-│  API / Worker（组合根 + 驱动侧适配器）  │
-│  Controller / Job / Security / Boot     │
-└──────────────┬──────────────┬───────────┘
-               │ 调用          │ 装配
-               ▼              ▼
-┌─────────────────────────┐   ┌─────────────────────────┐
-│  应用层 (Application)   │   │ 基础设施层 (Infra)      │
-│  UseCase / Tx / ACL     │   │ RepoImpl / Client / MQ  │
-└──────────────┬──────────┘   └──────────────┬──────────┘
-               │ 依赖抽象                    │ 实现 Port
-               └──────────────┬──────────────┘
-                              ▼
-┌─────────────────────────────────────────┐
-│  领域层 (Domain) ← 核心！               │
-│  Aggregate / ValueObject / Port / Event │
-└─────────────────────────────────────────┘
-```
-
-### 依赖规则
+### 4.2 规则冻结
 
 | 规则 | 说明 |
 |------|------|
-| 业务调用链 | API/Worker → Application → Domain |
-| 运行时装配链 | API/Worker → Infrastructure → Domain |
-| Domain 独立 | 纯 Java，不依赖 Spring / Infra / DAL |
-| Application 不依赖 Infra | 应用层只依赖 Domain Port，不依赖具体适配器实现 |
-| Infra 实现接口 | Repository 接口定义在 Domain，Impl 在 Infra |
+| Domain 不依赖 Application / Infrastructure / API | 领域层必须纯净 |
+| Application 不依赖 Infrastructure | 应用层只依赖 Port 与领域对象 |
+| Infrastructure 实现 Domain 中定义的 Port | Repository、Client、Publisher 都属于适配器 |
+| Controller / Job 只调用 Application | 不直接调用 Repository 或外部 Client |
+| 跨上下文传 ID，不传聚合实例 | 避免模型泄漏与级联依赖 |
 
----
+## 5. 战术设计构造块
 
-## 4. 构造块
+### 5.1 聚合根
 
-### 4.1 实体（Entity）
+聚合根负责：
 
-**特性**：
-- 具有唯一标识（ID）
-- 生命周期中属性可变
-- 通过 ID 判断相等性，而非属性
+- 维护事务内不变量
+- 封装状态迁移
+- 对外暴露有限行为
+- 挂载领域事件
 
-**模式**：
-```java
-// 聚合根示例模式
-public class RegistrationOrder {
+示例：
 
-    private RegistrationOrderId id;      // 唯一标识
-    private RegistrationOrderNo orderNo; // 业务标识
-    private UserId patientId;            // 值对象
-    private ClinicSessionId sessionId;   // 门诊场次
-    private RegistrationStatus status;   // 值对象
+- `RegistrationOrder.confirm()`
+- `RegistrationOrder.cancel(reason)`
+- `ClinicSession.allocateSlot(patientId)`
+- `EmrRecord.revise(content, doctorId)`
 
-    // 工厂方法
-    public static RegistrationOrder create(UserId patientId, ClinicSessionId sessionId) {
-        // 创建逻辑 + 领域事件
-    }
+### 5.2 实体
 
-    // 业务行为（内聚规则）
-    public void confirm() { /* 状态流转 */ }
-    public void cancel(String reason) { /* 状态流转 */ }
-}
-```
+实体用于表达“有身份、会变化”的对象，例如：
 
-### 4.2 值对象（Value Object）
+- `RegistrationOrder`
+- `VisitEncounter`
+- `AiSession`
+- `PrescriptionOrder`
 
-**特性**：
-- 无唯一标识
-- 通过属性判断相等性
-- 不可变（Immutable）
+### 5.3 值对象
 
-**模式**：
-```java
-// 值对象模式
-public record RegistrationStatus(String code, String description) {
+值对象优先于裸类型，典型包括：
 
-    public static final RegistrationStatus CREATED = new RegistrationStatus("CREATED", "已创建");
-    public static final RegistrationStatus CONFIRMED = new RegistrationStatus("CONFIRMED", "已确认");
+- `UserId`
+- `RegistrationStatus`
+- `RiskLevel`
+- `ClinicType`
+- `DepartmentId`
 
-    public boolean canConfirm() {
-        return this.equals(CREATED);
-    }
-}
-```
+值对象必须不可变，比较基于值，而不是引用。
 
-### 4.3 聚合（Aggregate）
+### 5.4 Repository
 
-**特性**：
-- 一组相关对象的集合
-- 通过**聚合根**保证一致性边界
-- 外部只能通过聚合根访问内部对象
+Repository 只围绕聚合根建立，一个聚合根一个 Repository：
 
-**设计原则**：
-- 小聚合优于大聚合
-- 聚合间通过 ID 引用（`UserId` 而非完整 `User` 对象）
-- 跨聚合操作通过**领域事件**实现最终一致性
+- `RegistrationOrderRepository`
+- `ClinicSessionRepository`
+- `EmrRecordRepository`
+- `AiSessionRepository`
 
-### 4.4 仓储（Repository）
+查询列表、报表、只读投影允许不返回完整聚合，可在 Application/Query 侧走轻量查询模型。
 
-**特性**：
-- 提供聚合的持久化和查询接口
-- 仓储接口定义在**领域层**
-- 仓储实现放在**基础设施层**
+### 5.5 Domain Event
 
-**模式**：
-```java
-// 领域层：仓储接口
-public interface RegistrationOrderRepository {
-    void save(RegistrationOrder order);
-    Optional<RegistrationOrder> findById(RegistrationOrderId id);
-    Optional<RegistrationOrder> findByOrderNo(RegistrationOrderNo no);
-    boolean existsByPatientAndSession(UserId patientId, ClinicSessionId sessionId);
-}
+Domain Event 用于表达“已经发生的业务事实”，命名使用过去式。
 
-// 基础设施层：仓储实现
-@Repository
-public class RegistrationOrderRepositoryImpl implements RegistrationOrderRepository {
-    // 使用 Mapper / Converter 实现
-}
-```
+适合用事件的场景：
 
-### 4.5 领域事件
+- `RegistrationConfirmedEvent`
+- `EncounterStartedEvent`
+- `AiReviewSubmittedEvent`
 
-**特性**：
-- 解耦聚合间的依赖
-- 实现最终一致性
-- 事件携带足够信息
+不适合用事件的场景：
 
-**模式**：
-```java
-// 事件定义（领域层）
-public record RegistrationConfirmedEvent(
-    RegistrationOrderId orderId,
-    LocalDateTime occurredOn
-) { }
+- 同一用例内本来就应该直接调用的步骤
+- 只是为了“看起来像微服务”而拆的内部流程
 
-// 发布（应用层）
-registrationOrder.getDomainEvents().forEach(eventPublisher::publish);
+### 5.6 Domain Service
 
-// 监听（基础设施层）
-@Async
-@EventListener
-public void handle(RegistrationConfirmedEvent event) {
-    // 发送通知等
-}
-```
+当逻辑跨多个实体/值对象、又不属于单个聚合根时，使用 Domain Service。
 
----
+典型场景：
 
-## 5. 统一语言对照
+- 号源分配策略
+- 处方合法性校验
+- AI 结果与医疗流程之间的领域映射
 
-| 业务术语 | 领域对象 | 说明 |
-|---------|---------|------|
-| 挂号订单 | `RegistrationOrder` | 患者挂号后的交易实体 |
-| 挂号单号 | `RegistrationOrderNo` | 唯一业务标识（值对象） |
-| 门诊场次 | `ClinicSession` | 医生对外发布的可挂号场次 |
-| 号源 | `ClinicSlot` | 可交易的最小号源单元 |
-| 实际就诊 | `VisitEncounter` | 挂号履约后的就诊事实 |
-| 病历 | `EmrRecord` | 结构化诊疗记录索引头 |
-| 处方 | `PrescriptionOrder` | 处方主实体 |
-| AI 会话 | `AiSession` | 患者问诊主会话 |
+## 6. 推荐聚合清单
 
----
+| 上下文 | 推荐聚合根 | 备注 |
+|------|------------|------|
+| 用户 | `User` | 权限关系允许简化实现 |
+| 排班 | `ScheduleGenerationJob`（P1） | P0 可只落发布后的 `ClinicSession` |
+| 门诊挂号 | `ClinicSession`、`RegistrationOrder` | 核心状态机 |
+| 诊疗 | `VisitEncounter`、`EmrRecord`、`PrescriptionOrder` | 医生接诊闭环 |
+| AI 问诊 | `AiSession`、`KnowledgeBase` | P0 重点体现 RAG 与引用追溯 |
+| 审计 | `AuditEvent` | 允许贫血化 |
 
-## 6. 最佳实践清单
+## 7. P0 建模规则
 
-### DO
+为了让文档能直接指导开发，P0 阶段再额外冻结以下规则：
 
-- [x] 识别真正的不变量（事务内保证的约束）
-- [x] 聚合内部对象通过聚合根访问
-- [x] 聚合间通过 ID 引用，避免级联加载
-- [x] 使用领域事件解耦聚合
-- [x] 充血模型：实体包含业务行为
+1. 一个用例只维护必要聚合，不追求“所有规则都塞进同一个聚合”
+2. 列表查询、工作台查询、审计检索优先走 Query Model，不强制装配完整聚合
+3. Java 与 Python 的边界不做“共享领域模型”，只共享请求契约和稳定 ID
+4. Python 不成为业务主事实写入方，只维护检索投影和引用追溯
+5. 审计与权限只做最小合规能力，不把审批流、break-glass、WORM 拉进 P0
 
-### DON'T
+## 8. Application 层应该做什么
 
-- [ ] 聚合过大（包含太多实体）
-- [ ] 跨聚合的事务（应使用最终一致性）
-- [ ] 在聚合外部修改聚合内部状态
-- [ ] 聚合间直接依赖对象引用
-- [ ] 贫血模型：实体只有 getter/setter，业务逻辑在 Service
+Application 层负责：
 
----
+- 接收 Command / Query
+- 开启事务
+- 加载聚合根
+- 调用领域行为
+- 保存聚合根
+- 发布事件
+- 组装 DTO
 
-## 7. 常见问题
+Application 层不负责：
 
-### Q: MyBatis-Plus 如何适配 DDD？
+- 手写持久化细节
+- 直接拼接外部协议细节
+- 承担领域规则判断
 
-**核心原则**：DO 与领域对象分离
+## 9. 常见反模式
 
-```
-RegistrationOrderDO (数据库表映射) ← Converter → RegistrationOrder (领域对象)
-```
+以下做法在本项目中应直接避免：
 
-**仓储实现**：
-```java
-@Repository
-public class RegistrationOrderRepositoryImpl implements RegistrationOrderRepository {
+- Controller 直接查 Mapper / Repository
+- Application 直接依赖 Infrastructure Client
+- 把跨上下文对象整体传来传去
+- 为简单 CRUD 强行设计大聚合
+- 把领域事件当成分布式总线提前实现
+- 因为“医疗系统听起来很复杂”而把所有模块都建成重型状态机
 
-    private final RegistrationOrderMapper mapper;
-    private final RegistrationOrderConverter converter;
+## 10. 一句话结论
 
-    @Override
-    public void save(RegistrationOrder order) {
-        RegistrationOrderDO dataObject = converter.toDO(order);
-        mapper.insert(dataObject);  // 或 updateById
-    }
-}
-```
-
-### Q: 贫血模型 vs 充血模型？
-
-| 贫血模型（Anti-Pattern） | 充血模型（DDD 推荐） |
-|------------------------|---------------------|
-| 实体只有 getter/setter | 实体包含业务行为 |
-| 业务逻辑在 Service | 状态变更内聚在实体 |
-| `order.setStatus("X")` | `order.confirm()` |
-
----
-
-## 8. 参考实现
-
-| 构造块 | 参考代码 |
-|--------|----------|
-| 聚合根 | `RegistrationOrder` / `ClinicSession` / `EmrRecord` |
-| 值对象 | `RegistrationStatus` / `ClinicType` / `AiSessionId` |
-| 仓储接口 | `RegistrationOrderRepository` / `EmrRecordRepository` |
-| 仓储实现 | `RegistrationOrderRepositoryImpl` / `EmrRecordRepositoryImpl` |
-| 领域事件 | `RegistrationConfirmedEvent` / `AiReviewSubmittedEvent` |
-| 应用服务 | `RegistrationApplicationService` / `EncounterApplicationService` |
-
----
-
-## 9. 学习资源
-
-- 📖 《领域驱动设计》- Eric Evans
-- 📖 《实现领域驱动设计》- Vaughn Vernon
-- 🎥 [DDD 实战课](https://time.geekbang.org/column/intro/100037301)
+MediAsk 的 DDD 重点不是“把每个模块都做成教科书示例”，而是：**把 AI、挂号、诊疗这三条核心链路的边界和不变量建对，把其余支撑域做轻。**

@@ -280,7 +280,7 @@ POST /api/v1/knowledge/index
 ## 6. 认证与安全
 
 - Header：`X-API-Key: <API_KEY>`
-- 未通过返回 `401 {"error":"Invalid API Key"}`
+- 未通过返回 `401`，失败体统一为 `{code, msg, requestId, timestamp}`，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md)
 - 强制要求：输入/输出 PII 脱敏、风险分级、拒答策略、审计字段与 `request_id`
 
 ## 7. RAG 流程

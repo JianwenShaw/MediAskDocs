@@ -3,6 +3,8 @@
 > **设计立场**：本文档为 MediAsk 项目的目标代码规范，与 [01-OVERVIEW.md](./01-OVERVIEW.md) 的六边形架构、6 模块结构保持一致。
 >
 > **注意**：本文件用于指导重写阶段的实现，规范优先于旧代码。
+>
+> **执行边界说明**：`P0` 阶段优先落地分层依赖、命名、统一响应和核心对象转换约定；MapStruct、注解化幂等/限流、复杂数据权限拦截等工程增强可按时间预算后置到 `P1/P2`。
 
 ---
 
@@ -12,7 +14,7 @@
 
 | 模块 | 六边形角色 | 职责 | 关键类/接口 |
 |------|-----------|------|------------|
-| `mediask-api` | Interface Adapter + Composition Root | REST 控制器、JWT 认证、Security 过滤、DTO 序列化、Spring Boot 启动装配 | `*Controller`、`*Request`、`*Response`、`*Assembler`、`*Application` |
+| `mediask-api` | Interface Adapter + Composition Root | REST 控制器、JWT 认证、Security 过滤、DTO 序列化、Spring Boot 启动装配 | `*Controller`、`*Request`、`*Response`、`*Assembler`、`*Config` |
 | `mediask-application` | Application Layer | 用例编排、事务边界、Command/Query 对象 | `*UseCase`、`*Command`、`*Query` |
 | `mediask-domain` | Domain Core + Driven Port | 聚合根、实体、值对象、领域服务、领域事件、Port 接口 | `*`（Entity）、`*Id`（VO）、`*Repository`、`*Port`、`*Event` |
 | `mediask-infrastructure` | Driven Adapter（被驱动侧适配器） | Repository 实现、DO/Mapper、Redis/锁、AI 客户端 | `*RepositoryImpl`、`*DO`、`*Mapper`、`*Converter`、`*Client` |
@@ -442,9 +444,9 @@ throw new BizException(ErrorCode.SLOT_NOT_AVAILABLE);
 
 ### 5.2 实现方式
 
-- 使用 **MapStruct** 生成转换代码（编译期，无反射开销）
-- Converter 由 Spring 管理（`@Component` / `@Mapper(componentModel = "spring")`）
-- **禁止**在 Controller 或 UseCase 中手写字段逐一赋值
+- `P1/P2` 推荐使用 **MapStruct** 生成转换代码（编译期，无反射开销）
+- 若 `P0` 为了快速落地主链路，允许在 Assembler / Converter 中手写明确的映射逻辑
+- 无论是否使用 MapStruct，**都禁止**在 Controller 或 UseCase 中散落字段逐一赋值
 
 ### 5.3 转换原则
 

@@ -4,7 +4,7 @@
 >
 > **架构决策记录**（ADR）贯穿全文，关键决策以 `[ADR-xxx]` 标注。
 >
-> **当前口径**：本文档与 [14-ARCHITECTURE_REVIEW.md](./14-ARCHITECTURE_REVIEW.md) 共同构成重写基线。
+> **当前口径**：本文档与 [14-ARCHITECTURE_REVIEW.md](./14-ARCHITECTURE_REVIEW.md) 共同构成重写基线；实施优先级与取舍以 [00A-P0-BASELINE.md](./00A-P0-BASELINE.md) 和 [07E-DATABASE-PRIORITY.md](./07E-DATABASE-PRIORITY.md) 为准。
 
 ---
 
@@ -18,6 +18,16 @@
 | 模块风格 | 六边形架构（Hexagonal / Ports & Adapters） `[ADR-002]` |
 | 构建工具 | Maven 多模块（Java）、uv（Python） |
 | 数据库 | PostgreSQL 17+ 单实例（含 pgvector 扩展）`[ADR-003]` |
+
+### 1.1 毕设实现边界（执行优先级）
+
+| 层级 | 当前口径 |
+|------|----------|
+| `P0` | AI 辅助问诊、RAG 引用追溯、推荐科室/建议就医、挂号、接诊、病历、处方、最小 RBAC、数据范围、敏感访问留痕 |
+| `P1` | AI 复核任务流、轻量排班生成、通知/字典、观测面板增强 |
+| `P2` | 插件化排班求解器、复杂事件投递与归档、SkyWalking/ES、自研配置加密链路等生产级治理 |
+
+当前阶段不再按“完整医院系统”平均推进所有模块，而是优先打通题目主链路：AI 辅助问诊 -> 推荐就医/科室 -> 挂号 -> 接诊 -> 病历/处方 -> 权限与审计。
 
 ### [ADR-001] 为什么选择 Modular Monolith + 独立 AI 微服务
 
@@ -406,6 +416,8 @@ sequenceDiagram
 | 请求上下文串联 | `X-Request-Id` 请求头透传，Python 侧注入日志和 DB 操作；`X-Trace-Id` 仅兼容旧口径 |
 | 降级策略 | 检索或 Embedding 不可用时返回保守辅助问诊响应，`ai_model_run.is_degraded = true` |
 
+补充约束：Python AI 服务是 **内部服务**，浏览器与移动端不直接访问；所有 AI 问诊入口统一经由 `mediask-api` 暴露、鉴权、审计和 SSE 转发。
+
 ---
 
 ## 8. 数据架构
@@ -492,7 +504,7 @@ Client → Nginx → mediask-api
 
 | 阶段 | 措施 |
 |------|------|
-| **输入** | PII 检测与掩码、风险分类（低/中/高/极高）、极高风险直接拒绝 |
+| **输入** | PII 检测与掩码、风险分类（低/中/高）；高风险直接拒绝 |
 | **输出** | PII 回扫、医疗建议免责声明注入、幻觉检测（P2） |
 | **记录** | 所有护栏触发事件写入 `ai_guardrail_event`（Java 持久化） |
 
@@ -504,11 +516,13 @@ Client → Nginx → mediask-api
 
 ### 10.1 P0/P1 观测基线
 
+`P0` 的最小要求不是把整套观测平台先搭满，而是先定死统一串联与排障主线：`request_id`、结构化日志、健康检查、基础指标。
+
 | 支柱 | 工具 | 数据源 |
 |------|------|--------|
 | **Request Correlation** | `request_id` + 结构化日志 | 网关、Java、Python、审计表 |
-| **Metrics** | Prometheus + Micrometer | Spring Boot Actuator（JVM、HTTP、HikariCP、Redisson） |
-| **Logs** | Loki + Promtail | 结构化 JSON 日志（logback-spring.xml），P0/P1 至少包含 `request_id` |
+| **Metrics** | Spring Boot Actuator + Micrometer（P0）；Prometheus（P1 推荐） | JVM、HTTP、HikariCP、Redisson |
+| **Logs** | 本地结构化 JSON 日志（P0）；Loki + Promtail（P1 推荐） | Java、Python、Nginx |
 
 `P2` 如需 APM 拓扑和端到端 Span，再追加 `SkyWalking + Elasticsearch`，不改变现有日志与审计口径。
 
@@ -526,9 +540,10 @@ Client → Nginx → mediask-api
 ```
 业务操作 → Application UseCase (@Transactional)
                              │
-                             ├── 同事务写入 audit.audit_event / audit.audit_payload
-                             ├── 访问敏感正文时写入 audit.data_access_log
-                             └── 按需写入 event.domain_event_stream / event.outbox_event
+                             ├── P0：同事务写入 audit.audit_event
+                             ├── P0：访问敏感正文时写入 audit.data_access_log
+                             ├── P1：按需补 audit.audit_payload
+                             └── P2：按需补 event.domain_event_stream / event.outbox_event
 ```
 
 如后续确有复杂聚合检索、长周期报表或超长留存需求，可从 PostgreSQL 异步投影到 Elasticsearch；ES 不作为 P0/P1 审计写入依赖。
@@ -572,7 +587,6 @@ flowchart LR
     end
 
     Nginx --> API
-    Nginx --> AI
 
     API --> PG
     API --> Redis
@@ -597,21 +611,21 @@ flowchart LR
 
 ### 11.2 Docker Compose 服务编排
 
-| 服务 | 镜像 | 端口 |
-|------|------|------|
-| `mediask-api` | 自建 | 8989 |
-| `mediask-worker` | 自建 | -- |
-| `mediask-ai` | 自建 | 8000 |
-| `nginx` | nginx:alpine | 80 / 443 |
-| `postgres` | pgvector/pgvector:pg17 | 5432 |
-| `redis` | redis:7-alpine | 6379 |
-| `prometheus` | prom/prometheus:v2.48.0 | 9090 |
-| `grafana` | grafana/grafana:10.2.0 | 3000 |
-| `loki` | grafana/loki:2.9.0 | 3100 |
-| `promtail` | grafana/promtail:2.9.0 | -- |
-| `skywalking-oap` (`P2`) | apache/skywalking-oap-server:9.1.0 | 11800 / 12800 |
-| `skywalking-ui` (`P2`) | apache/skywalking-ui:9.1.0 | 8080 |
-| `elasticsearch` (`P2`) | elasticsearch:8.11.0 | 9200 |
+| 服务 | 镜像 | 端口 | 当前定位 |
+|------|------|------|----------|
+| `mediask-api` | 自建 | 8989 | `P0` 必需 |
+| `mediask-worker` | 自建 | -- | `P0/P1` 视异步任务而定 |
+| `mediask-ai` | 自建 | 8000 | `P0` 必需 |
+| `nginx` | nginx:alpine | 80 / 443 | `P0` 推荐 |
+| `postgres` | pgvector/pgvector:pg17 | 5432 | `P0` 必需 |
+| `redis` | redis:7-alpine | 6379 | `P0` 推荐 |
+| `prometheus` | prom/prometheus:v2.48.0 | 9090 | `P1` 推荐 |
+| `grafana` | grafana/grafana:10.2.0 | 3000 | `P1` 推荐 |
+| `loki` | grafana/loki:2.9.0 | 3100 | `P1` 推荐 |
+| `promtail` | grafana/promtail:2.9.0 | -- | `P1` 推荐 |
+| `skywalking-oap` | apache/skywalking-oap-server:9.1.0 | 11800 / 12800 | `P2` |
+| `skywalking-ui` | apache/skywalking-ui:9.1.0 | 8080 | `P2` |
+| `elasticsearch` | elasticsearch:8.11.0 | 9200 | `P2` |
 
 ---
 
@@ -640,13 +654,16 @@ flowchart LR
 
 ```json
 {
-  "code": 200,
-  "message": "success",
+  "code": 0,
+  "msg": "success",
   "data": { },
   "requestId": "req-abc-123",
-  "timestamp": "2026-03-11T10:30:00+08:00"
+  "timestamp": 1761234567890
 }
 ```
+
+- `code = 0` 表示成功，非 0 表示失败
+- 对外统一协议以 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) 为准
 
 ### 12.3 API 文档
 
@@ -658,7 +675,7 @@ flowchart LR
 
 ## 13. 全景架构图
 
-> 以下为系统完整架构。蓝色 = 运行时组件，黄色 = 规划中组件，绿色 = 数据存储，紫色 = 可观测性。
+> 以下为系统目标架构图；当前实现范围以 `P0/P1/P2` 边界为准。图中组件并不意味着必须在第一阶段全部落地。
 
 ```mermaid
 flowchart TB
@@ -687,10 +704,11 @@ flowchart TB
         Common[mediask-common<br/>Exception + Util]:::runtime
 
         API --> Application
-        Application --> Domain
-        Application --> Infra
-        Infra --> Domain
         Worker --> Application
+        Application --> Domain
+        API -.装配.-> Infra
+        Worker -.装配.-> Infra
+        Infra --> Domain
     end
 
     subgraph PythonApp[Python AI 微服务]
@@ -704,7 +722,7 @@ flowchart TB
     end
 
     subgraph DataStores[数据层]
-        PG[(PostgreSQL 17+<br/>pgvector<br/>58 Tables)]:::data
+        PG[(PostgreSQL 17+<br/>pgvector<br/>P0 核心表 + 扩展设计)]:::data
         Redis[(Redis 7<br/>Cache + Lock)]:::data
     end
 
@@ -722,7 +740,6 @@ flowchart TB
     H5 --> Nginx
     ThirdParty --> Nginx
     Nginx --> API
-    Nginx --> AiSvc
 
     API --> PG
     API --> Redis
@@ -748,6 +765,7 @@ flowchart TB
 
 | 文档 | 说明 |
 |------|------|
+| [00A-P0-BASELINE.md](./00A-P0-BASELINE.md) | 毕设实施基线、P0/P1/P2 与冻结口径 |
 | [02-CODE_STANDARDS.md](./02-CODE_STANDARDS.md) | 代码规范与工程最佳实践 |
 | [03-CONFIGURATION.md](./03-CONFIGURATION.md) | 配置管理总纲（含 03A/03B/03C 子文档） |
 | [04-DEVOPS.md](./04-DEVOPS.md) | 部署运维手册 |

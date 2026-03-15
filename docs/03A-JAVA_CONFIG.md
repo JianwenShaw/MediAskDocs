@@ -3,6 +3,8 @@
 > 本文档详述 MediAsk Java 后端（`mediask-api` / `mediask-worker`）的所有配置项。
 >
 > **总纲**请参阅 [03-CONFIGURATION.md](./03-CONFIGURATION.md)。
+>
+> **执行边界说明**：`P0` 阶段优先使用环境变量与 profile 配置启动开发；下文的“配置加密”属于可选增强能力，不应阻塞主链路开发。
 
 ---
 
@@ -27,6 +29,8 @@ mediask-api/src/main/resources/
 ---
 
 ## 2. 配置属性加密
+
+> 当前建议：把本节视为 `P2` 运维增强设计。`P0/P1` 只要做到“敏感配置不提交到仓库、通过环境变量注入”即可满足当前阶段需要。
 
 ### 2.1 设计目标
 
@@ -123,7 +127,7 @@ java -cp mediask-api.jar \
 
 | 环境 | 主密钥管理方式 | 说明 |
 |------|---------------|------|
-| dev | 不启用加密 | 密码直接明文写在 `application-dev.yml`，PostProcessor 检测到无主密钥且值非 Base64 时跳过 |
+| dev | 不启用加密 | 本地临时调试可在 `application-dev.yml` 使用明文；默认仍推荐优先走环境变量注入 |
 | test | CI/CD 环境变量注入 | GitHub Actions / Jenkins Secret |
 | staging | 环境变量 `MEDIASK_CONFIG_MASTER_KEY` | 由运维注入，不落盘 |
 | prod | JVM 参数 `-Dmediask.config.master-key` 或 K8s Secret 挂载 | 主密钥与配置文件物理隔离 |
@@ -230,6 +234,8 @@ management:
   endpoint:
     health:
       show-details: when-authorized              # 认证后才显示详情
+      probes:
+        enabled: true                            # 开启 readiness/liveness 端点
   metrics:
     export:
       prometheus:
@@ -385,6 +391,7 @@ POST   /api/v1/auth/login
 POST   /api/v1/auth/register
 POST   /api/v1/auth/refresh
 GET    /actuator/health
+GET    /actuator/health/readiness
 GET    /v3/api-docs/**              # 仅 dev/test/staging
 GET    /swagger-ui/**               # 仅 dev/test/staging
 ```

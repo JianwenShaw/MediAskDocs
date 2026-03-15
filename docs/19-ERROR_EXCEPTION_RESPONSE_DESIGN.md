@@ -1,339 +1,197 @@
-# 19-错误码、异常与统一响应设计说明
+# 错误码、异常与统一响应设计说明
 
-> 更新时间：2026-02-25  
-> 适用范围：`mediask-api`、`mediask-common`、`mediask-application`、`mediask-infrastructure`、Python AI 服务
+> 状态：Target Design
+>
+> 适用范围：`mediask-api`、`mediask-common`、`mediask-application`、`mediask-infrastructure`、`mediask-ai`
+>
+> 目的：冻结 Java 对外协议、Java/Python 服务间错误语义和 `request_id` 串联口径。
 
----
+## 1. 设计目标
 
-## 1. 背景与目标
+本项目当前阶段最重要的不是做复杂错误治理平台，而是先保证：
 
-MediAsk 后端采用统一响应体 + 业务异常机制，但随着模块增多，逐步出现以下典型问题：
+1. 前后端看到的是同一套错误语义
+2. Java 与 Python 能用同一条 `request_id` 串起来
+3. 成功/失败响应格式稳定，便于联调与答辩展示
+4. 异常分层清晰，不把所有问题都压成“系统异常”
 
-- 异常语义在部分场景存在错配（例如跨业务域复用错误码）
-- 参数异常覆盖不完整，部分错误会落入通用系统异常
-- `requestId` 需要成为统一响应体中的稳定请求标识，但当前注入不完整
-- 系统异常类存在但落地不充分，分层边界不够清晰
+## 2. 对外统一响应契约（Java）
 
-本次设计升级目标：
-
-1. 建立稳定、可观测、可演进的错误处理主链路
-2. 确保前后端对错误语义理解一致
-3. 提升线上排障效率（requestId + 错误码 + 日志统一）
-4. 在不破坏现有 API 契约的前提下平滑升级
-
----
-
-## 2. 设计原则
-
-### 2.1 语义一致性
-
-- 同一类业务问题使用同一错误码
-- 错误码与业务域强关联，禁止跨域误用
-- `code` 是机器可判定语义，`msg` 是用户/开发者可读语义
-
-### 2.2 分层职责清晰
-
-- `ErrorCode`：统一错误语义字典
-- `BizException`：业务规则错误（可预期）
-- `SysException`：系统故障错误（技术异常）
-- `GlobalExceptionHandler`：异常到响应的统一映射层
-- `Result<T>`：统一响应结构承载层
-
-### 2.3 可观测性优先
-
-- 每个请求具备稳定 `requestId`
-- `requestId` 同时出现在：请求头、响应头、响应体、日志上下文（MDC）
-- 业务日志必须带 code + 关键上下文
-
-### 2.4 向后兼容
-
-- 统一响应结构收敛为：`code/msg/data/requestId/timestamp`
-- 不修改既有接口路径与 DTO 契约
-
-### 2.5 跨语言一致性（Java + Python）
-
-- Java 主服务与 Python AI 服务必须共享同一套响应语义
-- Python 服务不另造“第二套错误码体系”，避免前端/网关双重适配
-- 统一 `requestId` 透传规则，保证跨进程排障可串联
-
----
-
-## 3. 当前实现总览（升级后）
-
-### 3.1 错误码模型
-
-- 核心文件：`mediask-common/src/main/java/me/jianwen/mediask/common/constant/ErrorCode.java`
-- 采用分段编码（0、1xxx、2xxx...9xxx）
-- 已验证无重复编码
-
-建议：新增错误码时必须遵循分段语义，并同步文档。
-
-### 3.2 统一响应体
-
-- 核心文件：`mediask-common/src/main/java/me/jianwen/mediask/common/result/Result.java`
-- 固定字段：
-  - `code`：业务码（0 成功，非 0 失败）
-  - `msg`：提示信息
-  - `data`：业务数据
-  - `requestId`：请求标识
-  - `timestamp`：响应时间戳
-
-### 3.3 异常体系
-
-- 业务异常：`BizException`
-- 系统异常：`SysException`
-- 全局映射：`GlobalExceptionHandler`
-
-本次增强后，`GlobalExceptionHandler` 已覆盖：
-
-- `BizException`
-- `SysException`
-- 参数校验与反序列化异常
-- 缺参异常
-- 参数类型不匹配异常
-- `ConstraintViolationException`
-- `IllegalArgumentException`
-- `IllegalStateException`
-- 兜底 `Exception`
-- 鉴权拒绝异常（403）
-
-### 3.4 Request Context 链路
-
-新增过滤器：
-
-- `mediask-api/src/main/java/me/jianwen/mediask/api/filter/RequestContextFilter.java`
-
-接入点：
-
-- `SecurityConfig` 中将 `RequestContextFilter` 挂入过滤链
-
-行为：
-
-1. 优先读取请求头 `X-Request-Id`
-2. 若无但存在兼容旧头 `X-Trace-Id`，则接受并规范化
-3. 若两者都无，则自动生成（UUID 去横线）
-4. 写入 MDC：`requestId`、`requestUri`
-5. 回写响应头 `X-Request-Id`
-6. 响应体 `Result.requestId` 自动读取 MDC 值
-
----
-
-## 4. 请求处理时序（异常与响应）
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant F as RequestContextFilter
-    participant S as Security Filters
-    participant A as API Controller
-    participant SV as Service/Domain
-    participant H as GlobalExceptionHandler
-
-    C->>F: HTTP Request (optional X-Request-Id)
-    F->>F: set/generate requestId + MDC
-    F->>S: continue
-    S->>A: authenticated/authorized request
-    A->>SV: invoke business logic
-
-    alt 正常
-        SV-->>A: data
-        A-->>C: Result.ok(data, requestId)
-    else 业务异常
-        SV-->>H: throw BizException
-        H-->>C: Result.fail(code,msg,requestId)
-    else 系统异常
-        SV-->>H: throw SysException/Exception
-        H-->>C: Result.fail(systemCode,msg,requestId)
-    end
-
-    F->>F: clear MDC
-```
-
----
-
-## 5. 本次关键改动记录
-
-### 5.1 可观测性增强
-
-- 新增 `RequestContextFilter`
-- `Result` 使用 `CommonConstants.MDC_REQUEST_ID` 读取 requestId，去除硬编码字符串
-- 安全链路与业务链路响应都能携带 requestId
-
-### 5.2 异常分类增强
-
-`GlobalExceptionHandler` 新增了参数与状态异常的精细映射，显著减少“所有错误都变 9999”的情况。
-
-### 5.3 语义修正
-
-- 预约取消权限不足错误码由 `EMR_ACCESS_DENIED` 修正为 `ACCESS_DENIED`
-- 角色编码参数错误从 `IllegalArgumentException` 统一为 `BizException + ErrorCode`
-
----
-
-## 6. 使用规范（团队约定）
-
-### 6.1 何时抛 `BizException`
-
-用于可预期、可提示的业务错误：
-
-- 参数业务校验失败
-- 状态机不允许迁移
-- 资源不存在/重复
-- 权限不足（业务层）
-
-### 6.2 何时抛 `SysException`
-
-用于不可预期、需运维介入的系统故障：
-
-- 外部依赖不可用（DB/Redis/RPC）
-- 基础设施异常
-- 技术框架异常封装上抛
-
-### 6.3 错误码选择规范
-
-- 先选“业务域专属码”，再选“通用码”
-- 禁止“为了省事”复用其他业务域错误码
-- 自定义 `message` 不得泄露敏感实现细节（账号密钥、SQL、堆栈等）
-
-### 6.4 Controller 层规范
-
-- 成功统一 `Result.ok(...)`
-- 失败通过异常机制交给 `GlobalExceptionHandler`
-- 避免在 Controller 手写失败 `Result.fail(...)`（诊断类/工具类接口除外）
-
----
-
-## 7. 测试与验证策略
-
-建议最少覆盖以下测试场景：
-
-1. 无 `X-Request-Id` 时自动生成并透传
-2. 有 `X-Request-Id` 时原值透传
-3. `@Valid` 校验失败 -> `PARAM_INVALID`
-4. 缺失必填参数 -> `PARAM_MISSING`
-5. 参数类型错误 -> `PARAM_INVALID`
-6. `BizException` -> 对应业务码
-7. `SysException` -> 对应系统码
-8. 401/403 场景返回体结构完整且带 requestId
-
-## 8. 跨服务统一协议（Java ↔ Python AI）
-
-### 8.1 为什么必须统一
-
-如果 Java 与 Python 返回结构/错误码不统一，会出现：
-
-- Java 侧需要为 Python 单独写一套适配转换
-- 前端收到同类错误但 `code/msg` 语义不一致
-- 请求串联断裂，出现“Java 有 requestId，Python 无法关联”的排障断点
-
-结论：**必须统一错误语义和请求标识口径**，但不强制 Python AI 服务在成功场景下复用 Java 对外的 `Result<T>` 包装。
-
-### 8.2 推荐统一失败响应契约（服务间）
-
-Python AI 服务作为内部服务：
-
-- **成功响应**：返回端点自己的业务载荷（如 chat 的 answer/citations）
-- **失败响应**：统一返回错误封装，便于 Java Client 稳定映射
-
-失败响应建议固定如下结构：
+Java 对浏览器/前端暴露的所有 HTTP 接口，统一使用 `Result<T>`：
 
 ```json
 {
-    "code": 6001,
-    "msg": "AI service unavailable",
-    "requestId": "req_01hrx6m5q4x5v2f6k4w4x1c7pz",
-    "timestamp": 1761234567890
+  "code": 0,
+  "msg": "success",
+  "data": {},
+  "requestId": "req_01hrx6m5q4x5v2f6k4w4x1c7pz",
+  "timestamp": 1761234567890
 }
 ```
 
-字段约束：
+字段定义：
 
-- `code`: 整型，非 0 失败
-- `msg`: 文本，面向可读性
-- `requestId`: 必填；优先透传 `X-Request-Id`
-- `timestamp`: 毫秒时间戳
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `code` | int | 业务码；`0` 成功，非 `0` 失败 |
+| `msg` | string | 人类可读提示 |
+| `data` | any | 业务数据；失败时可为 `null` |
+| `requestId` | string | 请求标识，必须稳定返回 |
+| `timestamp` | long | Unix 毫秒时间戳 |
 
-### 8.3 错误码分层建议
+冻结规则：
 
-为避免与 Java 核心业务码冲突，建议：
+- 不再使用 `message` 作为统一字段名
+- 不再使用 HTTP `200/500` 作为业务成功/失败码语义
+- 前端判断成功与否只看 `code`，不看 `msg`
 
-- 通用码沿用现有语义（`0/1xxx/9xxx`）
-- AI 子域码固定在 `6xxx`
-- Python 内部技术错误统一映射到：
-    - 超时：`6002`
-    - AI 响应异常：`6003`
-    - 服务不可用：`6001`
-    - 兜底系统故障：`9999`
+## 3. HTTP 状态码与业务码的关系
 
-### 8.4 requestId 透传规范
+| 场景 | HTTP 状态码 | `code` |
+|------|-------------|--------|
+| 正常成功 | `200` | `0` |
+| 参数错误 | `400` | `1xxx` |
+| 未认证 | `401` | `1001` 等认证码 |
+| 无权限 | `403` | `1003` 等授权码 |
+| 资源不存在 | `404` | 对应业务域错误码 |
+| 业务冲突 | `409` | 对应业务域错误码 |
+| 系统故障 | `500` | `9xxx` |
 
-- Java -> Python：请求头带 `X-Request-Id`
-- Python -> Java：响应头回写 `X-Request-Id`
-- Python 日志：每条业务日志必须包含 `request_id`
+结论：**HTTP 状态码表达协议层结果，`code` 表达业务语义。**
 
-建议 Python 中间件实现：
+## 4. 错误码分段
 
-1. 读取 `X-Request-Id`，无则生成
-2. 注入 logger context
-3. 响应体与响应头同时回写
+| 范围 | 领域 |
+|------|------|
+| `0` | 成功 |
+| `1xxx` | 通用/公共（参数、认证、授权、限流等） |
+| `2xxx` | 用户上下文 |
+| `3xxx` | 门诊挂号上下文 |
+| `4xxx` | 诊疗上下文 |
+| `5xxx` | 排班上下文 |
+| `6xxx` | AI 问诊上下文 |
+| `9xxx` | 系统级兜底 |
 
-### 8.5 Java 侧集成策略
+## 5. 异常分层
 
-当 Java 调用 Python AI 服务时，建议：
+### 5.1 Java
 
-- 优先信任 Python 返回的 `code/msg/requestId`
-- 对网络错误、反序列化错误做兜底映射（`6001/6003/9999`）
-- 保持 Java 对外响应结构不变，避免把 Python 特有错误泄露给前端
-- Java 对 Python 的成功响应使用端点专属 DTO 映射，不强制套 `Result<T>`
+| 异常类型 | 用途 | 典型场景 |
+|----------|------|----------|
+| `BizException` | 可预期的业务失败 | 状态机不允许、资源不存在、重复提交、数据范围不允许 |
+| `SysException` | 不可预期的系统故障 | 数据库不可用、Redis/RPC 超时、序列化故障 |
+| `GlobalExceptionHandler` | 统一映射异常到 `Result<T>` | 控制器外统一兜底 |
 
-### 8.6 迁移落地步骤
+使用原则：
 
-1. **定义契约**：冻结上述 JSON 协议字段与类型
-2. **Python 实现**：补统一响应封装和异常中间件
-3. **Java 适配**：新增 Python Client 的错误映射层
-4. **联调验证**：覆盖成功/超时/异常/熔断场景
-5. **可观测性验收**：随机抽样确认 requestId 可跨服务追踪
+- 业务规则失败抛 `BizException`
+- 技术故障抛 `SysException` 或让框架异常统一映射
+- Controller 不手写失败响应，统一交给异常处理器
 
----
+### 5.2 Python AI 服务
 
-## 9. 后续演进建议
+Python 是内部服务，不强制成功响应也套 `Result<T>`；但失败响应必须统一字段：
 
-### 9.1 P0（短期）
+```json
+{
+  "code": 6001,
+  "msg": "AI service unavailable",
+  "requestId": "req_01hrx6m5q4x5v2f6k4w4x1c7pz",
+  "timestamp": 1761234567890
+}
+```
 
-- 补齐 API 层异常与 requestId 的自动化测试（MockMvc）
-- 梳理所有 `IllegalArgumentException/IllegalStateException` 抛出点，逐步业务化
+冻结规则：
 
-### 9.2 P1（中期）
+- Java 调 Python 时，优先透传/信任 Python 返回的 `code`、`msg`、`requestId`
+- Python 成功响应使用端点专属 DTO，不强制再包一层 `Result<T>`
+- Python 失败码固定落在 `6xxx` 或 `9xxx`
 
-- 建立“错误码注册表”与 CI 校验（重复码、跨域误用、未引用检测）
-- 将高频错误码纳入监控看板（按 code 聚合）
+## 6. `request_id` 规范
 
-### 9.3 P2（长期）
+### 6.1 Header 约定
 
-- 引入错误码国际化消息模板（面向多语言前端）
-- 基于 OpenAPI 增强错误响应规范（按接口声明常见错误码）
+- Header 名固定为 `X-Request-Id`
+- 若客户端未传入，网关或应用入口生成
+- 兼容旧头 `X-Trace-Id`，但内部统一收敛为 `request_id`
 
----
+### 6.2 透传规则
 
-## 10. 关联代码位置
+| 路径 | 规则 |
+|------|------|
+| Client -> Java | 读取或生成 `X-Request-Id` |
+| Java -> Python | 原值透传 `X-Request-Id` |
+| Python -> Java | 响应头回写 `X-Request-Id` |
+| Java -> Client | 响应头与响应体都返回 `requestId` |
+| Logs / Audit | 统一落 `request_id` |
 
-- 错误码：`mediask-common/src/main/java/me/jianwen/mediask/common/constant/ErrorCode.java`
-- 统一响应：`mediask-common/src/main/java/me/jianwen/mediask/common/result/Result.java`
-- 业务异常：`mediask-common/src/main/java/me/jianwen/mediask/common/exception/BizException.java`
-- 系统异常：`mediask-common/src/main/java/me/jianwen/mediask/common/exception/SysException.java`
-- 全局异常处理：`mediask-api/src/main/java/me/jianwen/mediask/api/advice/GlobalExceptionHandler.java`
-- 请求上下文过滤器：`mediask-api/src/main/java/me/jianwen/mediask/api/filter/RequestContextFilter.java`
-- 安全配置：`mediask-api/src/main/java/me/jianwen/mediask/api/config/SecurityConfig.java`
+### 6.3 为什么必须统一
 
----
+如果入口、日志、响应、审计各自使用不同 ID，会直接导致：
 
-## 11. 结论
+- 流式对话难排障
+- Java/Python 故障无法串联
+- 审计与业务日志无法对齐
 
-本次升级在不破坏既有 API 的前提下，完成了错误处理体系从“可用”到“可治理”的提升：
+因此 `request_id` 是 P0 必须冻结的基础协议。
 
-- 语义更清晰
-- 响应更一致
-- 排障更高效
-- 可扩展性更强
+## 7. Java 与 Python 的边界约定
 
-后续建议以自动化测试与错误码治理工具为抓手，持续降低异常处理的维护成本与线上风险。
+### 7.1 Java 对外
+
+- 所有浏览器接口统一使用 `Result<T>`
+- AI SSE 也由 Java 对外暴露，再转发 Python 内部流
+- 不把 Python 的内部异常原样泄露给前端
+
+### 7.2 Java 调 Python
+
+- 成功：按端点 DTO 解析
+- 失败：按统一失败结构解析
+- 网络异常、超时、反序列化失败：Java 映射为 `6001/6002/6003/9999` 等统一码
+
+### 7.3 Python 对 Java
+
+- 成功：返回 `answer/citations/risk_level/...` 等端点专属结构
+- 失败：返回统一错误结构
+- 所有响应头回写 `X-Request-Id`
+
+## 8. 推荐错误码示例
+
+| 场景 | 推荐 code |
+|------|-----------|
+| 参数非法 | `1002` |
+| 未认证 | `1001` |
+| 无权限 | `1003` |
+| 挂号资源不存在 | `3004` |
+| 病历无查看权限 | `4003` |
+| AI 服务不可用 | `6001` |
+| AI 超时 | `6002` |
+| AI 响应异常 | `6003` |
+| 系统兜底 | `9999` |
+
+实际枚举值可以继续细化，但分段口径不能再变。
+
+## 9. P0 最少测试场景
+
+1. 无 `X-Request-Id` 时自动生成并回写
+2. 有 `X-Request-Id` 时保持原值透传
+3. 参数校验失败返回 `400 + 1xxx`
+4. 业务异常返回对应业务码，不落入 `9999`
+5. Python 超时/故障时，Java 能映射成稳定错误码
+6. 401/403 场景响应体仍包含 `requestId`
+7. SSE 异常结束时仍能通过 `request_id` 串到日志
+
+## 10. 当前阶段不做什么
+
+以下内容不作为当前优先事项：
+
+- 国际化错误消息平台
+- 自动生成错误码注册中心与 CI 校验
+- 多语言前端消息模板
+- 对每个接口写完整错误码矩阵
+
+这些都可以留到 P1/P2，再做不会影响主链路。
+
+## 11. 一句话结论
+
+当前阶段只需要先把三件事定死：**对外统一 `Result<T>`、成功码固定为 `0`、`request_id` 贯穿 Java/Python/审计。** 这比继续扩充错误治理设计更重要。
