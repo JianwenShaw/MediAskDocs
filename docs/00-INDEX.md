@@ -10,6 +10,9 @@
 |------|------|------|
 | 索引 | [00-INDEX.md](./00-INDEX.md) | 文档导航与快速开始 |
 | 索引 | [00A-P0-BASELINE.md](./00A-P0-BASELINE.md) | 毕设实现范围、P0/P1/P2 与冻结口径 |
+| 索引 | [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md) | P0 开发清单、页面/API/表/用例映射 |
+| 索引 | [00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md) | P0 后端任务拆分与联调顺序 |
+| 索引 | [00D-P0-FRONTEND-TASKS.md](./00D-P0-FRONTEND-TASKS.md) | P0 前端页面任务拆分与验收标准 |
 | 架构 | [01-OVERVIEW.md](./01-OVERVIEW.md) | 重写基线架构、模块与依赖 |
 | 规范 | [02-CODE_STANDARDS.md](./02-CODE_STANDARDS.md) | 分层依赖与编码约定 |
 | 配置 | [03-CONFIGURATION.md](./03-CONFIGURATION.md) | 配置管理总纲（原则、环境矩阵、密钥管理） |
