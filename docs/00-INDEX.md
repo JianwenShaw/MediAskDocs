@@ -10,9 +10,12 @@
 |------|------|------|
 | 索引 | [00-INDEX.md](./00-INDEX.md) | 文档导航与快速开始 |
 | 索引 | [00A-P0-BASELINE.md](./00A-P0-BASELINE.md) | 毕设实现范围、P0/P1/P2 与冻结口径 |
-| 索引 | [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md) | P0 开发清单、页面/API/表/用例映射 |
-| 索引 | [00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md) | P0 后端任务拆分与联调顺序 |
-| 索引 | [00D-P0-FRONTEND-TASKS.md](./00D-P0-FRONTEND-TASKS.md) | P0 前端页面任务拆分与验收标准 |
+| 执行 | [../playbooks/README.md](../playbooks/README.md) | 实施清单、任务拆分、页面流转与 AI 提示词索引 |
+| 执行 | [../playbooks/00B-P0-DEVELOPMENT-CHECKLIST.md](../playbooks/00B-P0-DEVELOPMENT-CHECKLIST.md) | P0 开发清单、页面/API/表/用例映射 |
+| 执行 | [../playbooks/00C-P0-BACKEND-TASKS.md](../playbooks/00C-P0-BACKEND-TASKS.md) | P0 后端任务拆分与联调顺序 |
+| 执行 | [../playbooks/00D-P0-FRONTEND-TASKS.md](../playbooks/00D-P0-FRONTEND-TASKS.md) | P0 前端页面任务拆分与验收标准 |
+| 执行 | [../playbooks/00E-P0-BACKEND-ORDER-AND-DTOS.md](../playbooks/00E-P0-BACKEND-ORDER-AND-DTOS.md) | P0 后端表迁移顺序、API 实现顺序与 DTO 清单 |
+| 执行 | [../playbooks/00F-P0-FRONTEND-PROTOTYPES-AND-FLOWS.md](../playbooks/00F-P0-FRONTEND-PROTOTYPES-AND-FLOWS.md) | P0 页面原型块清单与状态流转图 |
 | 架构 | [01-OVERVIEW.md](./01-OVERVIEW.md) | 重写基线架构、模块与依赖 |
 | 规范 | [02-CODE_STANDARDS.md](./02-CODE_STANDARDS.md) | 分层依赖与编码约定 |
 | 配置 | [03-CONFIGURATION.md](./03-CONFIGURATION.md) | 配置管理总纲（原则、环境矩阵、密钥管理） |

@@ -221,3 +221,7 @@
 ## 8. 一句话结论
 
 前端 `P0` 的重点不是先做完整平台壳，而是把患者链路和医生链路串起来，让老师能一眼看到“AI 问诊结果如何进入真实医疗流程”。
+
+## 9. 进一步细化
+
+- 页面原型块清单和状态流转图见 [00F-P0-FRONTEND-PROTOTYPES-AND-FLOWS.md](./00F-P0-FRONTEND-PROTOTYPES-AND-FLOWS.md)

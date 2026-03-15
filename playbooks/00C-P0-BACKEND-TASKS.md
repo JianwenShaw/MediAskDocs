@@ -201,3 +201,7 @@
 ## 5. 一句话结论
 
 后端 `P0` 的重点不是把所有基础设施先铺满，而是把 Java/Python/数据库三者之间的权责边界做稳，再把主链路逐段打通。
+
+## 6. 进一步细化
+
+- 表迁移顺序、API 实现顺序、DTO 字段清单见 [00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md)

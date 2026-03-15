@@ -101,7 +101,7 @@
 开发启动前，按以下顺序阅读即可：
 
 1. `docs/00A-P0-BASELINE.md`
-2. `docs/00B-P0-DEVELOPMENT-CHECKLIST.md`
+2. `playbooks/00B-P0-DEVELOPMENT-CHECKLIST.md`
 3. `docs/07E-DATABASE-PRIORITY.md`
 4. `docs/01-OVERVIEW.md`
 5. `docs/07B-AI-AUDIT-V3.md`
