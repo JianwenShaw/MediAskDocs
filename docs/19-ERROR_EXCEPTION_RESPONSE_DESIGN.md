@@ -2,7 +2,7 @@
 
 > 状态：Target Design
 >
-> 适用范围：`mediask-api`、`mediask-common`、`mediask-application`、`mediask-infrastructure`、`mediask-ai`
+> 适用范围：`mediask-api`、`mediask-common`、`mediask-application`、`mediask-infra`、`mediask-ai`
 >
 > 目的：冻结 Java 对外协议、Java/Python 服务间错误语义和 `request_id` 串联口径。
 

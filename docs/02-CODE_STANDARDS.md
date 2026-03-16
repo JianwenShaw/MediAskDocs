@@ -17,7 +17,7 @@
 | `mediask-api` | Interface Adapter + Composition Root | REST 控制器、JWT 认证、Security 过滤、DTO 序列化、Spring Boot 启动装配 | `*Controller`、`*Request`、`*Response`、`*Assembler`、`*Config` |
 | `mediask-application` | Application Layer | 用例编排、事务边界、Command/Query 对象 | `*UseCase`、`*Command`、`*Query` |
 | `mediask-domain` | Domain Core + Driven Port | 聚合根、实体、值对象、领域服务、领域事件、Port 接口 | `*`（Entity）、`*Id`（VO）、`*Repository`、`*Port`、`*Event` |
-| `mediask-infrastructure` | Driven Adapter（被驱动侧适配器） | Repository 实现、DO/Mapper、Redis/锁、AI 客户端 | `*RepositoryImpl`、`*DO`、`*Mapper`、`*Converter`、`*Client` |
+| `mediask-infra` | Driven Adapter（被驱动侧适配器） | Repository 实现、DO/Mapper、Redis/锁、AI 客户端 | `*RepositoryImpl`、`*DO`、`*Mapper`、`*Converter`、`*Client` |
 | `mediask-common` | 技术公共库 | 异常体系、统一响应、工具类、全局常量 | `Result<T>`、`BizException`、`SysException`、`ErrorCode` |
 | `mediask-worker` | Driving Adapter（驱动侧适配器） | 定时任务、事件消费者、批量作业 | `*Scheduler`、`*Consumer`、`*Job` |
 
@@ -25,9 +25,9 @@
 
 ```
 mediask-api → mediask-application → mediask-domain
-mediask-api → mediask-infrastructure → mediask-domain
+mediask-api → mediask-infra → mediask-domain
 mediask-worker → mediask-application
-mediask-worker → mediask-infrastructure
+mediask-worker → mediask-infra
 所有模块 → mediask-common
 ```
 
@@ -308,7 +308,7 @@ public interface EventPublisherPort {
 }
 ```
 
-### 3.4 Infrastructure 层（mediask-infrastructure）
+### 3.4 Infrastructure 层（mediask-infra）
 
 **职责**：技术实现 — 数据持久化、缓存、外部服务调用。实现 Domain 中定义的 Port 接口。
 

@@ -40,7 +40,7 @@
 | 设计 | [17A-REQUEST_CONTEXT_IMPLEMENTATION.md](./17A-REQUEST_CONTEXT_IMPLEMENTATION.md) | 请求上下文、MDC 与 Java/Python 透传实现 |
 | 设计 | [18-SCHEDULING_CORE_UPGRADE.md](./18-SCHEDULING_CORE_UPGRADE.md) | 排班核心升级（节假日、方案版本化） |
 | 设计 | [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) | 错误码、异常与统一响应设计说明 |
-| 设计 | [20-RAG_DATABASE_PGVECTOR_DESIGN.md](./20-RAG_DATABASE_PGVECTOR_DESIGN.md) | PostgreSQL + pgvector 的 RAG 数据库设计（已定案，Milvus 不再作为 P0/P1 依赖） |
+| 设计 | [20-RAG_DATABASE_PGVECTOR_DESIGN.md](./20-RAG_DATABASE_PGVECTOR_DESIGN.md) | PostgreSQL + pgvector 的 RAG 数据库设计基线 |
 | 路线图 | [ROADMAP.md](../ROADMAP.md) | 后端 Java 分阶段目标与产出路径 |
 
 ## 快速开始

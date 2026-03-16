@@ -42,7 +42,7 @@
 
 - `mediask-domain`：领域模型、Port、领域事件
 - `mediask-application`：UseCase、事务边界、ACL 编排
-- `mediask-infrastructure`：Repository/Client/Redis/DB 适配器
+- `mediask-infra`：Repository/Client/Redis/DB 适配器
 - `mediask-api`：Controller/Security/DTO + Spring Boot 组合根
 - `mediask-worker`：任务进程组合根
 - `mediask-common`：技术公共能力

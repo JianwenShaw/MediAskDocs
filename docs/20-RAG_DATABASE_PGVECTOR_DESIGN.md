@@ -16,7 +16,7 @@
 - AI 执行侧：Python 微服务
 - Embedding：阿里云百炼 `text-embedding-v4`
 
-`Milvus` 不再作为当前 `P0 / P1` 主线依赖。
+当前 `P0 / P1` RAG 数据底座统一采用 `PostgreSQL + pgvector`。
 
 这一定案的目标不是“减少一个中间件”这么简单，而是把以下能力统一到一套数据库事实模型中：
 
@@ -454,4 +454,4 @@ CREATE INDEX idx_kci_doc_active
 
 ## 12. 一句话总结
 
-这版设计的本质，不是“把 Milvus 换成 PostgreSQL”，而是把 RAG 从外挂能力改造成数据库层、检索层、引用层都可解释的核心能力。
+这版设计的本质，是把 RAG 从外挂能力改造成数据库层、检索层、引用层都可解释的核心能力。

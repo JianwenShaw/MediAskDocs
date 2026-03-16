@@ -86,7 +86,7 @@
 **变更**：移除 `mediask-dal`（数据访问层），将 `mediask-service` 重命名为 `mediask-application`（明确应用层定位）。
 
 **理由**：
-1. `mediask-dal` 的职责（DO 对象、MyBatis Mapper）**合并入 `mediask-infrastructure`** — DO 和 Mapper 本质上是持久化适配器的实现细节，不应独立为顶层模块
+1. `mediask-dal` 的职责（DO 对象、MyBatis Mapper）**合并入 `mediask-infra`** — DO 和 Mapper 本质上是持久化适配器的实现细节，不应独立为顶层模块
 2. `mediask-service` **重命名为 `mediask-application`** — 明确其 DDD 应用层定位（用例编排、事务边界、领域对象协调），与 Interface 层（API）解耦
 3. `mediask-api` **承担接口适配 + Spring Boot 组合根（Composition Root）** — Controller、DTO、Security 仍保持只调用 Application；但模块本身负责装配 Infrastructure Bean 和应用启动，避免为“纯接口层”再拆一个 bootstrap 模块
 
@@ -125,7 +125,7 @@ mediask-be/
 │   ├── scheduling/          # 排班规划上下文
 │   └── shared/              # 共享内核（跨上下文的值对象）
 │
-├── mediask-infrastructure   # 基础设施层（Driven Adapter）
+├── mediask-infra            # 基础设施层（Driven Adapter）
 │   ├── persistence/         # MyBatis-Plus 实现
 │   │   ├── dataobject/      # DO（数据对象）
 │   │   ├── mapper/          # MyBatis Mapper 接口
@@ -156,7 +156,7 @@ flowchart LR
     API[mediask-api<br/>接口适配层]
     App[mediask-application<br/>应用层]
     Domain[mediask-domain<br/>领域核心]
-    Infra[mediask-infrastructure<br/>基础设施层]
+    Infra[mediask-infra<br/>基础设施层]
     Common[mediask-common<br/>技术公共库]
     Worker[mediask-worker<br/>异步任务]
 
@@ -320,7 +320,7 @@ flowchart TB
 | Application Layer | `mediask-application` | `*UseCase`、`*Command`、`*Query`、`@Transactional` |
 | Domain Core | `mediask-domain` | `*`（Entity）、`*Id`（VO）、`*DomainService`、`*Event` |
 | Driven Port | `mediask-domain` | `*Repository`（接口）、`*ServicePort`（外部服务接口） |
-| Driven Adapter | `mediask-infrastructure` | `*RepositoryImpl`、`*Mapper`、`*DO`、`*Converter`、`*Client` |
+| Driven Adapter | `mediask-infra` | `*RepositoryImpl`、`*Mapper`、`*DO`、`*Converter`、`*Client` |
 
 ---
 
@@ -711,7 +711,7 @@ flowchart TB
         API[mediask-api<br/>Controller + Security + DTO]:::runtime
         Application[mediask-application<br/>UseCase + Command + @Transactional]:::runtime
         Domain[mediask-domain<br/>Aggregate + Port + Event]:::runtime
-        Infra[mediask-infrastructure<br/>Repository + Cache + Client]:::runtime
+        Infra[mediask-infra<br/>Repository + Cache + Client]:::runtime
         Worker[mediask-worker<br/>Scheduler + Consumer]:::runtime
         Common[mediask-common<br/>Exception + Util]:::runtime
 
