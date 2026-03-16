@@ -1,6 +1,6 @@
 # Execution Playbooks
 
-> 目录定位：`docs/` 保留权威设计与约束口径；`playbooks/` 只放实施清单、任务拆分、页面流转和 AI 协作提示词。
+> 目录定位：`docs/` 保留权威设计与约束口径；`playbooks/` 只放实施清单、任务拆分、页面流转和 AI 协作资料。
 
 ## 1. 为什么单独拆目录
 
@@ -8,7 +8,7 @@
 
 - `docs/` 更适合放稳定的设计基线、架构约束和协议文档
 - `playbooks/` 更适合放会跟着开发推进持续打勾、持续调整的执行材料
-- AI 提示词也属于“协作流程资产”，不属于产品设计文档本身
+- AI 协作模板、示例与自检清单也属于“协作流程资产”，不属于产品设计文档本身
 
 ## 2. 推荐阅读顺序
 
@@ -19,10 +19,10 @@
 5. `00E-P0-BACKEND-ORDER-AND-DTOS.md`
 6. `00F-P0-FRONTEND-PROTOTYPES-AND-FLOWS.md`
 
-## 3. AI 协作提示词
+## 3. AI 协作资料
 
-- `AI-BACKEND-CODING-PROMPT.md`
-- `AI-FRONTEND-CODING-PROMPT.md`
+- `CODE-REPO-CLAUDE-TEMPLATE.md`
+- `AI-TASKING-EXAMPLES.md`
 - `AI-CODE-REVIEW-CHECKLIST.md`
 
 ## 4. 一句话结论
