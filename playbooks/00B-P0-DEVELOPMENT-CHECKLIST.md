@@ -42,7 +42,7 @@
 
 - [ ] `Result<T>`、错误码、全局异常处理统一
 - [ ] `X-Request-Id` 入站生成/透传/回写
-- [ ] Java -> Python 调用透传 `X-Request-Id`
+- [x] Java -> Python 调用透传 `X-Request-Id`
 - [ ] Java 对外 SSE 转发骨架完成
 - [ ] 基础认证链路可用（登录、当前用户、角色识别）
 
@@ -55,7 +55,7 @@
 ### 验收
 
 - [ ] 任意一次请求都能在 Java 日志中看到 `request_id`
-- [ ] Java 调 Python 时 `request_id` 不丢失
+- [x] Java 调 Python 时 `request_id` 不丢失
 
 ## 3.2 Phase B：身份、组织、最小权限
 
