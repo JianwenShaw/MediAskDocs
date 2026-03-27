@@ -385,6 +385,102 @@ pg_dump --host=localhost --port=5432 --username=mediask \
 | `redis.pool.idle` | 空闲连接数 |
 | `redis.pool.pending` | 等待连接数 |
 
+### 3.4 MediAsk 缓存架构决策
+
+当前阶段采用 **Redis 单层** 作为唯一业务缓存层，同时承担共享状态与分布式协调的基础设施职责；**暂不落地 `Caffeine + Redis` 二级缓存**。
+
+#### 为什么当前不直接做二级缓存
+
+- 当前项目仍处于 `P0` 主链路优先阶段，多实例刚需首先是共享状态一致性和分布式协调，而不是本地热点缓存极致性能。
+- 二级缓存会额外引入本地陈旧读、双层失效、跨实例一致性、观测复杂度等问题，不适合作为当前默认方案。
+- 现有 DDD 分层要求缓存能力收敛在 `mediask-infra`，当前先以 Redis 单层落地，更符合“先守住边界，再做优化”的原则。
+
+#### Redis 职责拆分
+
+Redis 在本项目中有且仅有以下三类职责：
+
+| 类别 | 说明 | 当前策略 |
+|------|------|----------|
+| 共享状态存储 | JWT 黑名单、Refresh Token 等必须跨实例共享的状态 | `Redis-only` |
+| 分布式协调 | 分布式锁、限流计数、未来幂等键等协调机制 | `Redis/Redisson-only` |
+| 业务读缓存 | 节假日、科室、医生归属、只读查询投影等读多写少数据 | 当前 `Redis-only`，未来可演进为 `L1 + L2` |
+
+明确规则：
+
+- 共享状态存储和分布式协调 **不引入本地 L1**。
+- 只有业务读缓存才允许未来升级为 `Caffeine + Redis`。
+- `cache:slot:inventory:{sessionId}` 虽然使用 `cache` 前缀，但语义上按“共享热状态 + 并发控制”处理，不按普通二级读缓存设计。
+
+#### 模块职责
+
+缓存实现必须遵守以下边界：
+
+- `mediask-domain` 不定义 `CachePort`、不暴露 Redis/Caffeine/TTL。
+- `mediask-application` 不直接使用 `RedisTemplate`、`RedissonClient`，也不编排 L1/L2 读取顺序。
+- `mediask-infra` 在 `RepositoryImpl`、`Query Adapter` 或专用适配器内部决定缓存命中、回源、失效。
+- `mediask-api` 与 `mediask-worker` 只调用 Application，不直接接触缓存客户端。
+
+#### 当前建议的实现形态
+
+在 `mediask-infra` 内部划分三类适配能力，避免职责混淆：
+
+- `infra.security`：认证状态相关 Redis 适配
+- `infra.cache`：业务读缓存
+- `infra.lock` 或对应业务上下文适配器：分布式锁与并发协调
+
+对业务代码保持以下约束：
+
+- Domain / Application 面向原有业务 `Repository`、`Port`、`Query` 编程
+- 缓存键通过统一入口生成，不在业务类中手写
+- 写库成功后由 Infra 执行缓存失效，不采用“只更新缓存不更新数据库”的写法
+- 缓存异常应显式暴露，不吞异常、不静默降级
+
+#### 未来平滑引入 Caffeine 的预留方式
+
+当前阶段不建议为了“将来可能用 Caffeine”预先建立通用缓存框架。默认做法是：
+
+- 只保留 `CacheKeyGenerator` 与按业务域分类的 TTL / key 常量
+- 由具体 `RepositoryAdapter` / `QueryAdapter` 在内部实现 Redis 命中、回源、回填、失效
+- 只有在多个适配器出现稳定、重复的 Redis 访问样板代码时，才向上提炼最小公共 helper
+
+明确不建议当前就新增：
+
+- 通用 `CachePort`
+- 通用 `BusinessCache`
+- `CacheSpec`
+- `CacheValueCodec<T>`
+- `TwoLevelBusinessCache`
+
+未来如果人工引入 `Caffeine`，建议采用点状演进，而不是先搭全局框架：
+
+- 先选择一个明确热点的具体读模型试点
+- 只在该 `RepositoryAdapter` / `QueryAdapter` 内部把 Redis-only 升级为 `Caffeine + Redis`
+- 验证收益和一致性复杂度后，再决定是否复制到其他适配器
+
+该试点的预期行为仍然固定为：
+
+- 读：先 L1，未命中再查 Redis
+- 写：业务写库成功后主动失效本地与 Redis
+- 不做自动刷新、后台重建、复杂补偿一致性
+
+#### 当前推荐可缓存对象
+
+优先考虑以下读多写少、允许短暂最终一致的对象：
+
+- `cache:holiday:{year}`
+- 科室列表 / 科室详情
+- 医生与科室归属映射
+- 只读查询投影
+
+当前不建议进入本地二级缓存的对象：
+
+- `auth:jwt:blacklist:{jti}`
+- `auth:refresh:{userId}:{tokenId}`
+- `cache:slot:inventory:{sessionId}`
+- `lock:registration:{sessionId}`
+- 各类限流计数
+- 权限敏感正文、AI 原文及其访问控制相关状态
+
 ---
 
 ## 4. Nginx 配置

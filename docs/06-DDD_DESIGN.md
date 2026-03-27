@@ -82,6 +82,26 @@ Common 被各层复用，但不承载业务语义
 | Controller / Job 只调用 Application | 不直接调用 Repository 或外部 Client |
 | 跨上下文传 ID，不传聚合实例 | 避免模型泄漏与级联依赖 |
 
+### 4.3 缓存与分布式协调的职责边界
+
+缓存方案必须服从既有 DDD/Hexagonal 边界，不能因为性能优化而模糊模块职责。
+
+| 模块 | 对缓存/Redis 的职责 | 明确禁止 |
+|------|---------------------|----------|
+| `mediask-domain` | 只定义真正有业务语义的 Port、聚合和不变量；不感知缓存实现 | 定义通用 `CachePort` / `CacheService`，暴露 Redis/Caffeine/TTL，在聚合里处理缓存失效 |
+| `mediask-application` | 编排 UseCase、事务、权限、审计；通过业务 Port 获取数据 | 直接调用 `RedisTemplate`、`RedissonClient`，在 UseCase 中编排缓存命中路径或 L1/L2 读写 |
+| `mediask-infra` | 实现 Repository / Query Adapter，并在具体适配器内部决定是否使用 Redis、本地缓存、分布式锁 | 把纯性能优化包装成领域能力，或让 API/Worker 直接依赖基础设施缓存实现 |
+| `mediask-api` / `mediask-worker` | 仅调用 Application | 直接读写缓存、直接使用分布式锁客户端 |
+
+冻结规则：
+
+- 缓存属于 **Infrastructure 实现细节**，不是 Domain 能力。
+- 只有“共享状态存储”或“分布式协调”这类 **业务确实依赖的能力** 才适合抽象为 Port，例如 `RefreshTokenStore`、`AccessTokenBlocklistPort`。
+- 纯粹为了提升查询性能的读缓存不应上升为跨模块抽象，默认留在具体 `RepositoryAdapter` / `QueryAdapter` 内部实现。
+- 未来即使引入 `Caffeine + Redis`，也只能发生在 `mediask-infra` 内部，不修改领域 Port 语义。
+- 与业务语义强绑定的分布式协调能力（如挂号防超卖锁）可以由 Domain 定义业务 Port，再由 Infra 用 Redisson 实现；该能力属于“协调机制”，不属于“读缓存”。
+- 安全状态、锁、限流、库存热状态不得为了统一抽象而与普通业务读缓存混为同一种能力。
+
 ## 5. 战术设计构造块
 
 ### 5.1 聚合根
