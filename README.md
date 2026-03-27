@@ -24,27 +24,6 @@
 | 14 | [重写前架构评审与收敛结论](./docs/14-ARCHITECTURE_REVIEW.md) | 重写前必须冻结的关键决策 |
 | 路线图 | [后端 Java 开发路线图](./ROADMAP.md) | 阶段目标、学习重点、交付清单 |
 
-## 快速开始（后端）
-
-```bash
-# 1) 进入后端项目
-cd mediask-be
-
-# 2) 检测平台（按 AGENTS.md 规则选择命令）
-python3 scripts/os_detect.py
-
-# 3) 构建/测试
-# macOS:
-./scripts/m21.sh clean verify
-# 非 macOS:
-# mvn clean verify
-
-# 4) 启动 API 模块
-# macOS:
-./scripts/m21.sh spring-boot:run -pl mediask-api
-# 非 macOS:
-# mvn spring-boot:run -pl mediask-api
-```
 
 ## 当前技术栈（Java 后端）
 

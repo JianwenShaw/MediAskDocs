@@ -10,7 +10,6 @@
 |------|------|------|
 | 索引 | [00-INDEX.md](./00-INDEX.md) | 文档导航与快速开始 |
 | 索引 | [00A-P0-BASELINE.md](./00A-P0-BASELINE.md) | 毕设实现范围、P0/P1/P2 与冻结口径 |
-| 执行 | [../playbooks/README.md](../playbooks/README.md) | 实施清单、任务拆分、页面流转与 AI 提示词索引 |
 | 执行 | [../playbooks/00B-P0-DEVELOPMENT-CHECKLIST.md](../playbooks/00B-P0-DEVELOPMENT-CHECKLIST.md) | P0 开发清单、页面/API/表/用例映射 |
 | 执行 | [../playbooks/00C-P0-BACKEND-TASKS.md](../playbooks/00C-P0-BACKEND-TASKS.md) | P0 后端任务拆分与联调顺序 |
 | 执行 | [../playbooks/00D-P0-FRONTEND-TASKS.md](../playbooks/00D-P0-FRONTEND-TASKS.md) | P0 前端页面任务拆分与验收标准 |
@@ -47,15 +46,8 @@
 
 ```bash
 cd mediask-be
-python3 scripts/os_detect.py
-
-# macOS
-./scripts/m21.sh clean verify
-./scripts/m21.sh spring-boot:run -pl mediask-api
-
-# 非 macOS
-# mvn clean verify
-# mvn spring-boot:run -pl mediask-api
+mvn clean verify
+mvn spring-boot:run -pl mediask-api
 ```
 
 ## 本地访问

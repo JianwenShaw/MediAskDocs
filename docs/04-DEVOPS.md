@@ -35,19 +35,6 @@
 - 该基线默认只包含 PostgreSQL、Redis、Prometheus、Grafana、Loki、Promtail、Nginx、API、AI，不引入 SkyWalking 或 Elasticsearch。
 - 启动命令遵循 AGENTS 平台规则：
 
-```bash
-cd mediask-be
-python3 scripts/os_detect.py
-
-# macOS
-./scripts/m21.sh clean verify
-./scripts/m21.sh spring-boot:run -pl mediask-api
-
-# 非 macOS
-# mvn clean verify
-# mvn spring-boot:run -pl mediask-api
-```
-
 ## 5. 规划项（未在 Java 后端完全落地）
 
 以下内容可保留在专项文档继续推进，但不视为当前后端已实现：
