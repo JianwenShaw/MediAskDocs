@@ -94,8 +94,14 @@
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
 |------|------------------|----------------------|
-| `POST /api/v1/auth/login` | `username`、`password` | `accessToken`、`userId`、`roles` |
+| `POST /api/v1/auth/login` | `username`、`password` | `accessToken`、`refreshToken`、`userContext.userId`、`userContext.roles` |
 | `GET /api/v1/auth/me` | 无 | `userId`、`username`、`roles`、`displayName` |
+
+认证补充约定：
+
+- `POST /api/v1/auth/login` 与 `POST /api/v1/auth/refresh` 的 `data.userContext` 使用同一语义和同一字段集合
+- `userContext` 结构对齐 `GET /api/v1/auth/me` 的当前用户上下文
+- `null` 字段按现有 Jackson `non_null` 配置省略，不额外返回空字段
 
 ## 4.2 AI 问诊
 
