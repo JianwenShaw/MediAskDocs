@@ -133,6 +133,8 @@
 | `POST /api/v1/registrations` | `clinicSessionId`、`clinicSlotId`、`sourceAiSessionId?` | `registrationId`、`orderNo`、`status` |
 | `GET /api/v1/registrations` | `status?` | `items[]` |
 
+说明：登录态或 `CurrentUserResponse` 中的 `patientId` 表示 `patient_profile.id`；医疗业务表中的 `patient_id`（如 `registration_order.patient_id`）统一表示 `users.id`，两者不能混用。
+
 ## 4.4 接诊、病历、处方
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
