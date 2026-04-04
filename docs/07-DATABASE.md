@@ -188,7 +188,7 @@ erDiagram
 | `registration_order` | 挂号订单 | 新增，替代 `appointments` |
 | `registration_status_log` | 订单状态流水 | 新增 |
 | `slot_inventory_log` | 号源状态流水 | 新增 |
-| `visit_encounter` | 实际就诊履约实体 | 新增 |
+| `visit_encounter` | 实际就诊履约实体，挂号创建成功后预创建，初始状态为 `SCHEDULED` | 新增 |
 
 ### 6.5 AI 会话、模型运行与知识库（05-ai.sql）
 

@@ -102,7 +102,8 @@
 | 场景 | 断言 |
 |------|------|
 | 患者根据导诊建议挂号 | 可创建 `registration_order`，关联正确患者/科室/医生 |
-| 医生发起接诊 | 基于挂号记录创建 `visit_encounter` |
+| 挂号创建成功 | 预创建 `visit_encounter`，初始状态为 `SCHEDULED` |
+| 医生发起接诊 | 基于既有 `visit_encounter` 更新接诊状态 |
 | 医生写病历 | `emr_record` 与 `emr_record_content` 成功落库 |
 | 医生写诊断与处方 | `emr_diagnosis`、`prescription_order`、`prescription_item` 成功落库 |
 | 非法状态流转 | 不允许跳过关键状态或重复落库 |
