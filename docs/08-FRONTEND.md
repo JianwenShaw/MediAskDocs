@@ -64,6 +64,7 @@ mediask-fe/
 - `/emr/:encounterId`：结构化病历编辑。
 - `/prescriptions/:encounterId`：电子处方开立。
 - `/audit`：管理端系统操作审计与数据访问日志查询。
+- `/forbidden`：已登录但无医生/管理员后台访问权限时的稳定拦截页。
 
 ---
 
@@ -113,6 +114,8 @@ queryClient.invalidateQueries({ queryKey: queryKeys.registrations({}) });
    - **禁用 Axios**，统一采用浏览器原生的 `fetch` API 手动封装 HTTP Client（即 `api-client` 包）。
    - **请求拦截 (Request)**：封装层需自动从 Zustand 状态管理中读取 Token，并统一注入到请求头的 `Authorization: Bearer <token>` 中。
    - **响应拦截 (Response)**：集中处理 HTTP 状态码。若遇到 `401 Unauthorized`（Token 失效），需自动清理本地用户信息并联动 React Router 跳转至 `/login` 页；遇到 `403 Forbidden` 则统一弹出无权限提示，剥离业务组件的鉴权心智负担。
+   - **后台角色边界**：`backoffice-web` 只面向 `DOCTOR` 和 `ADMIN`。若用户已认证但角色不属于后台可用角色（如 `PATIENT`），前端必须进入稳定的 `/forbidden` 页面，不能重定向回 `/login`，更不能形成 `/` 与 `/login` 的循环跳转。
+   - **启动校验失败**：若浏览器存在缓存 Token，应用启动后调用 `/api/v1/auth/me`。当返回 `401` 时清理登录态并回到 `/login`；当返回 `5xx`、网络错误等非 `401` 异常时，必须退出加载态并展示初始化失败界面，禁止永久停留在 loading spinner。
 
 3. **流式断网与 Error Boundary（防白屏机制）**
    - **AI 对话异常兜底**：在 AI 流式问诊过程中如果发生网络中断或接口 5xx 报错，页面不得直接崩溃或跳出。UI 层面应保留已生成的对话历史，并在底部提供局部的「重新生成/网络重试」按钮。
@@ -127,7 +130,33 @@ queryClient.invalidateQueries({ queryKey: queryKeys.registrations({}) });
 - **Node.js**: 24 LTS
 - **包管理器**: pnpm (>= 10.33.0)
 
-### 5.2 常用命令
+### 5.2 Backoffice API 地址配置
+
+`apps/backoffice-web` 的认证与后续业务接口默认通过 `VITE_API_BASE_URL` 指向 Java 后端。
+
+本地联调时，必须确保该变量已配置到真实后端地址；否则浏览器会把 `/api/v1/auth/login`、`/api/v1/auth/me` 等请求发到前端开发服务器自身，常见现象是：
+
+- `POST /api/v1/auth/login` 返回 `404`
+- 响应体为空
+- 登录页提示接口不存在或空响应
+
+推荐做法：
+
+- 在 `apps/backoffice-web/.env.development` 中配置 `VITE_API_BASE_URL=http://localhost:8989`
+- `staging / production` 分别在 `.env.staging`、`.env.production` 中配置对应后端域名
+- 所有前端可见环境变量都必须使用 `VITE_` 前缀
+
+示例：
+
+```env
+VITE_API_BASE_URL=http://localhost:8989
+```
+
+说明：
+
+- 若未配置该变量，当前实现会退回同源请求，不适合本地前后端分离联调
+
+### 5.3 常用命令
 
 ```bash
 # 安装依赖 (根目录)
@@ -141,7 +170,7 @@ pnpm -C apps/backoffice-web dev
 pnpm -C apps/backoffice-web build
 ```
 
-### 5.3 Nginx 部署配置要求
+### 5.4 Nginx 部署配置要求
 
 单页应用 (SPA) 配合 `BrowserRouter`（History 模式）部署时，必须配置 **history fallback**，将所有未命中静态资源的路由重定向至 `index.html`。
 
