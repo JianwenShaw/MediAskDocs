@@ -698,7 +698,7 @@ flowchart TB
 
     subgraph Clients[客户端]
         Web[Admin/Doctor Web<br/>React SPA]:::planned
-        H5[Patient H5<br/>React]:::planned
+        H5[Patient H5<br/>React / WeChat Browser]:::planned
         ThirdParty[第三方集成]:::planned
     end
 

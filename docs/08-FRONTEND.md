@@ -1,283 +1,158 @@
-# 前端开发指南
+# 前端架构与开发规范
 
-> 执行边界说明：前端 `P0` 目标是支撑主链路演示，不是先完成完整前端平台化建设。若时间有限，可先用单应用打通患者主链路，再扩展医生端与共享包。
+## 1. 核心目标与执行边界
 
-## 1. 技术选型
+前端开发现阶段（P0）的唯一核心目标是**支撑核心医疗主链路的完整闭环演示**，而非建设大而全的前端平台。
 
-| 技术 | 版本 | 说明 |
-|------|------|------|
-| React | 19 | 并发模式优化用户体验 |
-| TypeScript | 5.x | 强类型约束 |
-| Vite | - | 极速冷启动，秒级热更新 |
-| Ant Design | 6.0 | 企业级中后台 UI 组件库 |
-| Tailwind CSS | 4.x | 原子化 CSS |
-| Zustand | - | 轻量级状态管理 |
-| React Query | - | 服务端状态缓存 |
-| React Router | v7 | 声明式路由 |
+- **核心主链路**：`患者登录 -> AI 问诊 -> 智能导诊 -> 挂号 -> 医生接诊 -> 病历/处方录入 -> 审计查询`
+- **端侧形态边界**：
+  - **患者端**：移动端 H5 形态（兼容微信内置浏览器等环境），承接 AI 交互与挂号流转。
+  - **医生端/管理端**：桌面端 Web SPA 形态，面向高信息密度的表单、表格及病历管理场景。
+- **范围控制**：当前阶段不单独建设小程序、不引入 React Native，暂不开发复杂排班或精细化权限配置树。
 
-## 2. Monorepo 结构
+---
 
-> 以下是推荐目标形态，不是 `P0` 前置条件。`P0` 完全可以先从单个应用启动，跑通主链路后再整理为 Monorepo。
+## 2. 技术栈选型
 
-```
+整体采用 React 体系，通过工具链收敛提升开发效率，保障工程质量。
+
+| 技术模块 | 核心选型 | 版本 | 选型考量与规范 |
+| :--- | :--- | :--- | :--- |
+| **核心框架** | **React** | 19 | 采用最新并发特性；所有新组件均采用 Functional Component + Hooks。 |
+| **语言** | **TypeScript** | 5.x | 强制开启严格模式，保障 DTO 与内部状态的强类型约束。 |
+| **构建工具** | **Vite** | - | 极速冷启动与 HMR，生产环境基于 Rollup 构建。 |
+| **路由管理** | **React Router**| 7.x | 采用声明式路由，支持嵌套路由与 Loader/Action 模式。 |
+| **UI 框架** | **Ant Design** | 6.0 | 仅用于**医生/管理端**，统一中后台视觉规范，提升表单/表格开发效率。 |
+| **样式方案** | **Tailwind CSS**| 4.x | 全局通用的原子化 CSS，用于**患者端**定制化 UI 与各端结构布局。 |
+| **服务端状态** | **React Query** | - | 负责所有 API 请求的缓存、轮询、失效重刷（如 AI 会话、挂号记录）。 |
+| **客户端状态** | **Zustand** | - | 轻量级全局状态管理，仅用于 UI 状态、登录 Token、当前用户信息等。 |
+
+---
+
+## 3. 工程架构设计
+
+推荐采用 Monorepo 组织代码，实现跨端类型与请求库复用。P0 阶段可先在一个目录下按模块划分，后续平滑演进。
+
+### 3.1 目录结构
+
+```text
 mediask-fe/
 ├── apps/
-│   ├── web/              # 管理端/医生端 (React SPA)
-│   └── h5/               # 患者端 H5 (P0 主链路入口)
+│   ├── backoffice-web/   # 医生端与管理员端 (React SPA + AntD)
+│   └── patient-h5/       # 患者端 H5 (React SPA + Tailwind)
 ├── packages/
-│   └── shared/           # 共享包 (API client, types, hooks)
+│   ├── api-client/       # 基于原生 fetch 的统一请求封装与拦截器
+│   └── shared-types/     # 前后端对齐的 TypeScript DTO 与枚举
 ├── pnpm-workspace.yaml
 └── package.json
 ```
 
-### 2.1 工作区配置
+### 3.2 路由与模块规划
 
-```yaml
-# pnpm-workspace.yaml
-packages:
-  - "apps/*"
-  - "packages/*"
-```
+前端路由必须严格匹配业务域，以下为推荐的路由结构设计：
 
-### 2.2 P0 页面与接口范围
+**患者端 (Patient H5)**
+- `/login`：鉴权与身份确认。
+- `/ai/session/:sessionId`：核心问诊交互（流式对话、引用展示）。
+- `/triage/result/:sessionId`：智能导诊结果（根据风险等级分流）。
+- `/triage/high-risk/:sessionId`：高风险拦截与紧急就医引导。
+- `/registrations/new` & `/registrations`：挂号办理与历史查询。
 
-前端开发以毕设主链路为准，不按“完整 HIS 后台”平铺展开。
+**医生/管理端 (Backoffice Web)**
+- `/workbench`：医生工作台门户。
+- `/encounters` & `/encounters/:id`：待接诊列表与接诊工作台（含 AI 摘要）。
+- `/emr/:encounterId`：结构化病历编辑。
+- `/prescriptions/:encounterId`：电子处方开立。
+- `/audit`：管理端系统操作审计与数据访问日志查询。
 
-| 端 | 页面/模块 | 目标 | 对应接口 |
-|----|-----------|------|---------|
-| **患者 H5** | 登录/身份确认 | 进入个人数据域 | `/api/v1/auth` |
-| **患者 H5** | AI 问诊会话页 | 输入症状、展示流式回答、引用与风险提示 | `/api/v1/ai/chat`、`/api/v1/ai/chat/stream` |
-| **患者 H5** | 科室/门诊推荐结果页 | 承接 AI 导诊结论与下一步动作 | `/api/v1/ai/sessions/{id}/triage-result`、`/api/v1/ai/sessions/{id}/registration-handoff`、`/api/v1/clinic-sessions` |
-| **患者 H5** | 挂号提交与我的挂号 | 创建并查看 `registration_order` | `/api/v1/registrations` |
-| **医生 Web** | 登录与工作台首页 | 进入接诊主流程 | `/api/v1/auth`、`/api/v1/encounters` |
-| **医生 Web** | 接诊列表/详情 | 查看挂号记录与 AI 摘要 | `/api/v1/registrations`、`/api/v1/encounters`、`/api/v1/encounters/{id}/ai-summary` |
-| **医生 Web** | 病历编辑页 | 创建/修改病历与诊断 | `/api/v1/emr` |
-| **医生 Web** | 处方编辑页 | 创建处方与处方项 | `/api/v1/prescriptions` |
-| **管理员/审计端** | 审计查询页（最小版） | 展示审计与访问日志 | `/api/v1/audit` |
+---
 
-P0 不要求前端先做完整排班工作台、复杂权限配置树、P2 级观测大盘。
+## 4. 核心业务与技术实现路径
 
-AI 外部接口字段口径以 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md) 为准；前端不要直接绑定 Python 内部响应结构。
+### 4.1 AI 问诊与状态流转机制
 
-### 2.3 建议路由收敛
+前端必须严谨处理 AI 的输出结果，将大模型能力与真实医疗流程（挂号、就医）闭环：
 
-| 端 | 路由 | 说明 |
-|----|------|------|
-| **患者 H5** | `/login` | 登录 |
-| **患者 H5** | `/ai/session/:sessionId` | AI 问诊 |
-| **患者 H5** | `/triage/result/:sessionId` | 导诊结果与引用 |
-| **患者 H5** | `/triage/high-risk/:sessionId` | 高风险拒答/紧急就医提示 |
-| **患者 H5** | `/registrations/new` | 挂号提交 |
-| **患者 H5** | `/registrations` | 我的挂号 |
-| **医生 Web** | `/workbench` | 工作台 |
-| **医生 Web** | `/encounters` | 接诊列表 |
-| **医生 Web** | `/encounters/:id` | 接诊详情 |
-| **医生 Web** | `/emr/:encounterId` | 病历编辑 |
-| **医生 Web** | `/prescriptions/:encounterId` | 处方编辑 |
-| **管理员/审计端** | `/audit` | 审计查询 |
+1. **流式通信**：调用 `/api/v1/ai/chat/stream`，前端需处理 SSE/WebSocket 流式渲染，支持中断重连，记录 `requestId` 以备全链路追踪。
+2. **结构化承接**：一切业务动作以接口返回的结构化 `triageResult.nextAction` 为准，前端禁止解析自然语言决策。
+3. **风险分流策略**：
+   - `low + allow`：展示常规诊疗建议与推荐科室，提供挂号入口。
+   - `medium + caution`：高亮免责声明与保守建议，引导至线下医院挂号。
+   - `high + refuse`：立即中断问答，强制跳转高风险页（提供紧急呼叫或急诊引导）。
 
-### 2.4 AI 页面状态与承接规则
+### 4.2 状态管理机制
 
-前端 `P0` 必须把 AI 输出结果和后续业务动作连接起来，而不是只展示一段文本。
+分离服务端状态与客户端状态，避免全局 Store 臃肿。
 
-| 风险结果 | 页面表现 | 下一步 |
-|----------|----------|--------|
-| `low + allow` | 展示答案、引用、推荐科室 | 允许继续问诊或去挂号 |
-| `medium + caution` | 突出免责声明与保守建议 | 默认引导到导诊结果页和挂号入口 |
-| `high + refuse` | 不继续普通问答 | 跳转高风险页，展示紧急就医/人工求助提示 |
-
-结构化字段以 `triageResult.nextAction` 为准，不要在前端自行猜测风险分支。
-
-## 3. 快速开始
-
-### 3.1 环境要求
-
-- Node.js: 20 LTS
-- pnpm: 10.27.0（项目根目录固定版本）
-
-```bash
-# 启用 corepack（可选）
-corepack enable
-corepack prepare pnpm@10.27.0 --activate
-```
-
-### 3.2 安装依赖
-
-```bash
-# 根目录安装所有依赖
-pnpm install
-
-# 为特定应用安装依赖
-pnpm -C apps/web add react-router axios antd
-pnpm -C apps/web add -D tailwindcss @tailwindcss/vite
-```
-
-### 3.3 启动开发服务
-
-```bash
-# 启动 Web 端
-pnpm -C apps/web dev
-
-# 构建生产产物
-pnpm -C apps/web build
-
-# 预览构建产物
-pnpm -C apps/web preview
-```
-
-## 4. React Router v7 接入
-
-### 4.1 入口文件
-
-```tsx
-// apps/web/src/main.tsx
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router";
-import App from "./App";
-
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </React.StrictMode>
-);
-```
-
-### 4.2 路由配置
-
-```tsx
-// apps/web/src/App.tsx
-import { Routes, Route } from "react-router";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-
-function App() {
-  return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/" element={<Dashboard />} />
-    </Routes>
-  );
-}
-export default App;
-```
-
-## 5. Tailwind CSS v4 接入
-
-### 5.1 Vite 配置
-
-```ts
-// apps/web/vite.config.ts
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-});
-```
-
-### 5.2 CSS 入口
-
-```css
-/* apps/web/src/index.css */
-@import "tailwindcss";
-```
-
-## 6. 状态管理
-
-### 6.1 状态归属原则
-
-| 状态类型 | 工具 | 示例 |
-|---------|------|------|
-| 服务端状态 | React Query | AI 会话、门诊场次、挂号单、接诊记录 |
-| 前端状态 | Zustand | token、用户信息、UI 状态 |
-
-### 6.2 queryKey 规范
-
-```ts
-// 统一使用数组 + 结构化对象参数
-export const qk = {
+**Query Key 规范 (React Query)**
+统一采用数组+结构化对象的参数格式，便于精准粒度的缓存失效控制。
+```typescript
+export const queryKeys = {
   aiSession: (sessionId: string) => ['ai', 'session', sessionId] as const,
-  clinicSessions: (params: { departmentId?: number; date?: string }) => ['clinic-sessions', params] as const,
-  registrationsMy: (params: { status?: string }) => ['registrations', 'my', params] as const,
-  encountersMine: (params?: { status?: string }) => ['encounters', 'mine', params ?? {}] as const,
+  registrations: (params: { status?: string }) => ['registrations', 'list', params] as const,
 } as const;
 ```
 
-### 6.3 失效策略
-
-```ts
-// 创建挂号成功后
-queryClient.invalidateQueries({ queryKey: qk.registrationsMy({}) });
-queryClient.invalidateQueries({ queryKey: qk.clinicSessions({ departmentId, date }) });
+**缓存失效策略示例**
+挂号动作完成后，自动触发相关列表数据的更新：
+```typescript
+queryClient.invalidateQueries({ queryKey: queryKeys.registrations({}) });
 ```
 
-## 7. 部署要点
+### 4.3 安全性与异常体验处理 (Security & Error Handling)
 
-### 7.1 SPA 静态托管
+为了保障核心主链路的稳定性与患者数据安全，前端必须严格遵守以下规范：
 
-- 构建产物：`apps/web/dist`
-- 使用 `BrowserRouter` 时，Nginx 必须配置 **history fallback**：
+1. **AI 流式输出的 XSS 防护（最高优先级）**
+   - AI 生成的 Markdown 内容包含极高的 XSS 注入风险。
+   - **绝对禁止**在 React 中直接使用原生 `dangerouslySetInnerHTML` 渲染 AI 输出内容。
+   - **规范**：必须采用安全的 Markdown 渲染方案，默认仅渲染受限 Markdown 子集，禁止将 AI 输出中的原始 HTML 直接注入 DOM。
+   - **推荐实现**：优先使用 `react-markdown` 一类默认不执行原始 HTML 的渲染方案；只有在业务明确要求支持原始 HTML 时，才允许额外引入严格的白名单消毒（如 `DOMPurify`）。
 
-```nginx
-location / {
-  try_files $uri $uri/ /index.html;
-}
-```
+2. **基于原生 Fetch 的全局鉴权与拦截器**
+   - **禁用 Axios**，统一采用浏览器原生的 `fetch` API 手动封装 HTTP Client（即 `api-client` 包）。
+   - **请求拦截 (Request)**：封装层需自动从 Zustand 状态管理中读取 Token，并统一注入到请求头的 `Authorization: Bearer <token>` 中。
+   - **响应拦截 (Response)**：集中处理 HTTP 状态码。若遇到 `401 Unauthorized`（Token 失效），需自动清理本地用户信息并联动 React Router 跳转至 `/login` 页；遇到 `403 Forbidden` 则统一弹出无权限提示，剥离业务组件的鉴权心智负担。
 
-### 7.2 部署命令
+3. **流式断网与 Error Boundary（防白屏机制）**
+   - **AI 对话异常兜底**：在 AI 流式问诊过程中如果发生网络中断或接口 5xx 报错，页面不得直接崩溃或跳出。UI 层面应保留已生成的对话历史，并在底部提供局部的「重新生成/网络重试」按钮。
+   - **全局 Error Boundary**：在路由根节点和各个核心模块（如医生工作台、接诊详情）顶层包裹 React `Error Boundary`。一旦发生不可预期的组件级渲染崩溃，立刻捕获错误并展示优雅的 Fallback UI（例如“页面开小差了，点击刷新”），坚决杜绝用户看到纯白屏现象。
+
+---
+
+## 5. 开发与部署指南
+
+### 5.1 环境基线
+
+- **Node.js**: 24 LTS
+- **包管理器**: pnpm (>= 10.33.0)
+
+### 5.2 常用命令
 
 ```bash
-# 生产构建
-pnpm -C apps/web build
+# 安装依赖 (根目录)
+pnpm install
 
-# 部署 dist 目录到 Nginx 或对象存储
+# 启动各端开发服务
+pnpm -C apps/patient-h5 dev
+pnpm -C apps/backoffice-web dev
+
+# 生产环境构建
+pnpm -C apps/backoffice-web build
 ```
 
-## 8. 工程搭建历史
+### 5.3 Nginx 部署配置要求
 
-> 已完成的操作清单，便于复现或新增患者端时参考
+单页应用 (SPA) 配合 `BrowserRouter`（History 模式）部署时，必须配置 **history fallback**，将所有未命中静态资源的路由重定向至 `index.html`。
 
-### 8.1 已完成步骤
+```nginx
+server {
+    listen 80;
+    server_name example.com;
+    root /var/www/mediask-fe/dist;
 
-1. **创建 Vite + React + TS 工程**
-   ```bash
-   mkdir -p apps
-   pnpm create vite apps/web --template react-ts
-   ```
-
-2. **安装核心依赖**
-   ```bash
-   pnpm -C apps/web add react-router axios antd
-   ```
-
-3. **安装 Tailwind v4**
-   ```bash
-   pnpm -C apps/web add -D tailwindcss @tailwindcss/vite
-   ```
-
-4. **配置 React Router v7**
-   - `BrowserRouter` 从 `react-router` 导入
-
-5. **验证构建**
-   ```bash
-   pnpm -C apps/web build
-   ```
-
-### 8.2 当前状态检查
-
-- [x] `pnpm install` 根目录完成依赖安装
-- [x] `pnpm -C apps/web dev` 可启动开发服务
-- [x] `pnpm -C apps/web build` 可产出 dist 静态产物
-- [x] Tailwind v4 可用（className 生效）
-- [x] Ant Design 可用（组件可渲染）
-- [x] React Router v7 可用
-
-### 8.3 患者端（H5）建议
-
-- 技术栈与 Web 保持一致（React 19 + TS + Vite + React Router v7 + Tailwind + Antd）。
-- 患者端优先承接 AI 问诊、导诊结果、挂号提交、我的挂号四条主链路页面。
-- API client / types / hooks 优先抽到 `packages/shared`，避免 Web/H5 双份维护。
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
