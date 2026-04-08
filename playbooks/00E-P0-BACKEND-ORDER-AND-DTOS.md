@@ -10,7 +10,13 @@
 
 - 范围基线以 [../docs/00A-P0-BASELINE.md](../docs/00A-P0-BASELINE.md) 为准
 - 后端任务包以 [00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md) 为准
+- 当前仓库已经实现的 Java 对外接口契约，以 [00G-P0-CURRENT-API-CONTRACT.md](./00G-P0-CURRENT-API-CONTRACT.md) 为准
 - AI 外部契约以 [../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md) 为准
+
+补充说明：
+
+- 本文档仍然承担“实现顺序”和“目标 DTO 清单”的职责，因此会包含尚未落地的接口。
+- 如果问题是“当前代码里已经实现了什么、字段到底怎么传、真实业务语义是什么”，不要直接拿目标设计文档代替当前实现，应优先看 `00G`。
 
 ## 2. 数据库迁移顺序
 

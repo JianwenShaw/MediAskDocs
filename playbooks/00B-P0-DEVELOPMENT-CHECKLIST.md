@@ -1,10 +1,16 @@
 # P0 开发清单（页面/API/表/用例映射）
 
-> 状态：Execution Checklist
+> 状态：Execution Checklist / Current Repo Snapshot
 >
-> 适用阶段：毕设 `P0` 开发启动、任务拆分、联调验收
+> 适用阶段：毕设 `P0` 开发推进、任务补漏、联调验收
 >
-> 目的：把当前设计文档收敛为可执行开发清单，避免实现阶段再次回到“功能很多但主链路不深”的状态。
+> 目的：把当前设计文档收敛为“基于当前仓库真实完成度”的执行清单，明确除了 `RAG` 之外还差哪些 `P0` 能力。
+
+判定口径：
+
+- 本清单基于当前 `mediask-backend` 仓库中的 Java 代码、SQL 脚本、测试与 `qingniao` 验证脚本判断。
+- “表已完成”只表示 schema 已存在；只有接口、用例和链路打通时，才算“能力完成”。
+- 当前仓库不包含前端工程，因此页面项默认按“未完成”统计。
 
 ## 1. P0 最终验收目标
 
@@ -21,7 +27,20 @@
 
 只要这条链路跑通且口径一致，毕设 `P0` 就成立。
 
-## 2. 开发前先冻结的口径
+## 2. 当前仓库完成度速览
+
+| 能力域 | 当前状态 | 结论 |
+|------|----------|------|
+| 公共协议与认证 | 部分完成 | `Result<T>`、错误处理、`requestId`、JWT 登录/刷新/登出/当前用户已完成；`SSE` 与结构化日志未完成 |
+| 身份、组织、后台患者管理 | 大体完成 | 用户/角色/权限/组织表齐全；管理员患者管理、患者/医生本人资料接口已落地 |
+| 门诊挂号 | 大体完成 | 门诊场次查询、挂号创建、我的挂号、挂号后预创建 `visit_encounter` 已完成 |
+| 医生接诊 | 部分完成 | 医生接诊列表已完成；接诊详情、AI 摘要、病历、处方未完成 |
+| AI 问诊与 RAG | 未完成 | 只有表结构与 Java 调 Python 的 client/DTO 骨架，没有 AI 主链接口和持久化 |
+| 审计与敏感访问 | 未完成 | `audit_event`、`data_access_log` 只有 schema，没有写入与查询链路 |
+| 对象级授权 | 部分完成 | `ScenarioAuthorization`、`data_scope_rules` 装载已具备；资源解析和 `EMR/AI` 对象级校验未落地 |
+| 前端页面 | 未完成 | 当前仓库未包含前端实现 |
+
+## 3. 开发前先冻结的口径
 
 | 主题 | 固定规则 |
 |------|----------|
@@ -34,21 +53,23 @@
 | AI 输出边界 | 只做症状整理、风险提示、建议就医、推荐科室、引用展示 |
 | 非目标 | 不输出诊断结论、处方建议、药物剂量指导 |
 
-## 3. 分阶段实施清单
+## 4. 分阶段实施清单
 
-## 3.1 Phase A：公共基线
+## 4.1 Phase A：公共基线
 
 ### 后端
 
 - [x] `Result<T>`、错误码、全局异常处理统一
 - [x] `X-Request-Id` 入站生成/透传/回写
 - [x] Java -> Python 调用透传 `X-Request-Id`
-- [ ] Java 对外 SSE 转发骨架完成
-- [x] 基础认证链路可用（登录、当前用户、角色识别）
+- [x] 基础认证链路可用（登录、刷新、登出、当前用户、角色识别）
+- [x] Java `health/readiness/liveness` 端点已开放
+- [ ] Java 对外 `SSE` 转发骨架完成
+- [ ] Java 结构化日志配置落地，日志中稳定输出 `request_id`
 
 ### Python
 
-- [ ] `/health`、`/ready`、`/api/v1/chat`、`/api/v1/chat/stream` 骨架可用
+- [ ] `/health`、`/ready`、`/api/v1/chat`、`/api/v1/chat/stream` 服务骨架可用
 - [ ] `X-API-Key` 校验可用
 - [ ] `request_id` 注入日志与 DB 操作
 
@@ -56,61 +77,66 @@
 
 - [ ] 任意一次请求都能在 Java 日志中看到 `request_id`
 - [x] Java 调 Python 时 `request_id` 不丢失
+- [x] Java `requestId` 在成功/失败响应中稳定回写
 
-## 3.2 Phase B：身份、组织、最小权限
-
-### 关键表
-
-- [ ] `users`
-- [ ] `user_pii_profile`
-- [ ] `patient_profile`
-- [ ] `roles`
-- [ ] `permissions`
-- [ ] `user_roles`
-- [ ] `role_permissions`
-- [ ] `data_scope_rules`
-- [ ] `hospitals`
-- [ ] `departments`
-- [ ] `doctors`
-- [ ] `doctor_department_rel`
-
-### 必做能力
-
-- [ ] 患者 / 医生 / 管理员三类角色可区分
-- [ ] 患者只能访问自己的数据
-- [ ] 医生只能访问自己职责范围内的数据
-- [ ] 管理员可查看最小审计结果
-
-## 3.3 Phase C：知识库与 RAG 底座
+## 4.2 Phase B：身份、组织、最小权限
 
 ### 关键表
 
-- [ ] `knowledge_base`
-- [ ] `knowledge_document`
-- [ ] `knowledge_chunk`
-- [ ] `knowledge_chunk_index`
+- [x] `users`
+- [x] `user_pii_profile`
+- [x] `patient_profile`
+- [x] `roles`
+- [x] `permissions`
+- [x] `user_roles`
+- [x] `role_permissions`
+- [x] `data_scope_rules`
+- [x] `hospitals`
+- [x] `departments`
+- [x] `doctors`
+- [x] `doctor_department_rel`
 
 ### 必做能力
 
+- [x] 患者 / 医生 / 管理员三类角色可区分
+- [x] 管理员患者管理接口可用（列表、详情、新增、修改、删除）
+- [x] 患者可查看/更新本人资料，只能查询自己的挂号列表
+- [x] 医生可查看/更新本人资料，只能查询自己的接诊列表
+- [x] `data_scope_rules` 已装载到当前登录用户上下文
+- [ ] `EMR_RECORD` / `AI_SESSION` 的对象级资源解析与数据范围校验闭环
+- [ ] 管理员最小审计查询能力
+
+## 4.3 Phase C：知识库与 RAG 底座
+
+### 关键表
+
+- [x] `knowledge_base`
+- [x] `knowledge_document`
+- [x] `knowledge_chunk`
+- [x] `knowledge_chunk_index`
+
+### 必做能力
+
+- [x] Java 侧 AI Client、`AiChatPort`、Python DTO/错误映射基础设施已具备
 - [ ] Java 持久化 `knowledge_document`、`knowledge_chunk`
 - [ ] Java 调 Python 建索引
 - [ ] Python 写 `knowledge_chunk_index`
-- [ ] 至少有一套可演示知识库数据
+- [ ] 至少有一套可演示知识文档与 chunk 数据
 
 ### 范围控制
 
-- [ ] 文档导入可先用脚本或最小后台接口，不强制先做完整知识库管理后台
+- [ ] 文档导入脚本或最小后台接口落地
 
-## 3.4 Phase D：患者 AI 问诊主链路
+## 4.4 Phase D：患者 AI 问诊主链路
 
 ### 关键表
 
-- [ ] `ai_session`
-- [ ] `ai_turn`
-- [ ] `ai_turn_content`
-- [ ] `ai_model_run`
-- [ ] `ai_guardrail_event`
-- [ ] `ai_run_citation`
+- [x] `ai_session`
+- [x] `ai_turn`
+- [x] `ai_turn_content`
+- [x] `ai_model_run`
+- [x] `ai_guardrail_event`
+- [x] `ai_run_citation`
 
 ### Java 对外接口
 
@@ -134,25 +160,27 @@
 
 ### 必做能力
 
+- [x] Java 侧 `AiChatInvocation` / `AiChatReply` 与 Python `/api/v1/chat` 契约已定义
 - [ ] Java 预创建 `ai_model_run`
+- [ ] Java 持久化 `ai_session`、`ai_turn`、`ai_turn_content`
 - [ ] Python 基于 `model_run_id` 写 `ai_run_citation`
 - [ ] 回答展示引用、风险等级、下一步动作
 - [ ] `high` 风险不继续普通问答，跳转紧急线下处置或人工求助
 
-## 3.5 Phase E：AI 到挂号承接
+## 4.5 Phase E：AI 到挂号承接
 
 ### 关键表
 
-- [ ] `clinic_session`
-- [ ] `clinic_slot`
-- [ ] `registration_order`
+- [x] `clinic_session`
+- [x] `clinic_slot`
+- [x] `registration_order`
 
 ### Java 对外接口
 
 - [ ] `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
-- [ ] `GET /api/v1/clinic-sessions`
-- [ ] `POST /api/v1/registrations`
-- [ ] `GET /api/v1/registrations`
+- [x] `GET /api/v1/clinic-sessions`
+- [x] `POST /api/v1/registrations`
+- [x] `GET /api/v1/registrations`
 
 ### 前端页面
 
@@ -162,24 +190,26 @@
 
 ### 必做能力
 
+- [x] 患者能基于现有门诊场次完成挂号
+- [x] 挂号成功后预创建 `visit_encounter`
+- [x] `registration_order.source_ai_session_id` 字段已预留
 - [ ] AI 结果能带出推荐科室和挂号查询参数
-- [ ] 患者能根据推荐科室完成挂号
-- [ ] `registration_order.source_ai_session_id` 能追溯到 AI 会话
+- [ ] `registration_order.source_ai_session_id` 通过 AI 承接链路真实写入
 
-## 3.6 Phase F：医生接诊、病历、处方
+## 4.6 Phase F：医生接诊、病历、处方
 
 ### 关键表
 
-- [ ] `visit_encounter`
-- [ ] `emr_record`
-- [ ] `emr_record_content`
-- [ ] `emr_diagnosis`
-- [ ] `prescription_order`
-- [ ] `prescription_item`
+- [x] `visit_encounter`
+- [x] `emr_record`
+- [x] `emr_record_content`
+- [x] `emr_diagnosis`
+- [x] `prescription_order`
+- [x] `prescription_item`
 
 ### Java 对外接口
 
-- [ ] `GET /api/v1/encounters`
+- [x] `GET /api/v1/encounters`
 - [ ] `GET /api/v1/encounters/{encounterId}`
 - [ ] `GET /api/v1/encounters/{encounterId}/ai-summary`
 - [ ] `POST /api/v1/emr`
@@ -196,16 +226,18 @@
 
 ### 必做能力
 
+- [x] 医生可查看本人接诊列表
+- [ ] 医生可查看接诊详情
 - [ ] 医生可看到 AI 摘要，不默认展示 AI 原文
 - [ ] 医生完成病历、诊断、处方闭环
-- [ ] 病历正文与索引分层，列表不直接暴露正文
+- [ ] 病历正文与索引分层查询落地，列表不直接暴露正文
 
-## 3.7 Phase G：权限、对象级授权、审计留痕
+## 4.7 Phase G：权限、对象级授权、审计留痕
 
 ### 关键表
 
-- [ ] `audit_event`
-- [ ] `data_access_log`
+- [x] `audit_event`
+- [x] `data_access_log`
 
 ### Java 对外接口
 
@@ -214,48 +246,48 @@
 
 ### 必做能力
 
+- [x] `ScenarioAuthorization`、`ScenarioCode`、`data_scope_rules` 基础骨架已存在
+- [x] 现有 401/403 接口返回统一错误体与稳定 `requestId`
 - [ ] 所有按 ID 查看病历、AI 原文、处方详情的接口做对象级授权
-- [ ] 非授权访问返回稳定错误码
+- [ ] 非授权访问触发敏感访问留痕
 - [ ] 查看病历正文、AI 原文时写 `data_access_log`
 - [ ] 登录、挂号、病历保存、处方保存、权限变更等关键动作写 `audit_event`
 
-## 4. 页面 / API / 表 / 用例映射
+## 5. 页面 / API / 表 / 用例 / 当前状态映射
 
-| 页面/模块 | 核心 API | 核心表 | 主要用例 |
-|-----------|----------|--------|----------|
-| 患者登录 | `/api/v1/auth/*` | `users`、`user_roles` | 登录、识别身份 |
-| AI 问诊页 | `/api/v1/ai/chat`、`/api/v1/ai/chat/stream` | `ai_session`、`ai_turn`、`ai_model_run` | 发起问诊、流式问答 |
-| 导诊结果页 | `/api/v1/ai/sessions/{id}/triage-result` | `ai_run_citation`、`knowledge_chunk` | 展示引用、风险和推荐科室 |
-| 挂号承接 | `/api/v1/ai/sessions/{id}/registration-handoff` | `ai_session`、`clinic_session` | 把 AI 结果转为挂号入口 |
-| 挂号页 | `/api/v1/clinic-sessions`、`/api/v1/registrations` | `clinic_session`、`clinic_slot`、`registration_order` | 查门诊、创建挂号 |
-| 医生接诊页 | `/api/v1/encounters/*`、`/api/v1/encounters/{id}/ai-summary` | `visit_encounter`、`registration_order` | 查看接诊信息与 AI 摘要 |
-| 病历页 | `/api/v1/emr/*` | `emr_record`、`emr_record_content`、`emr_diagnosis` | 保存病历与诊断 |
-| 处方页 | `/api/v1/prescriptions/*` | `prescription_order`、`prescription_item` | 保存处方 |
-| 审计页 | `/api/v1/audit/*` | `audit_event`、`data_access_log` | 查询操作审计与访问日志 |
+| 页面/模块 | 核心 API | 核心表 | 主要用例 | 当前状态 |
+|-----------|----------|--------|----------|----------|
+| 认证 | `/api/v1/auth/login`、`/api/v1/auth/refresh`、`/api/v1/auth/logout`、`/api/v1/auth/me` | `users`、`user_roles` | 登录、刷新、登出、识别身份 | 已实现 |
+| 患者/医生本人资料 | `/api/v1/patients/me/profile`、`/api/v1/doctors/me/profile` | `patient_profile`、`doctors`、`doctor_department_rel` | 查看/更新本人资料 | 已实现 |
+| 管理员患者管理 | `/api/v1/admin/patients/*` | `users`、`patient_profile`、`user_roles` | 后台管理患者 | 已实现 |
+| AI 问诊页 | `/api/v1/ai/chat`、`/api/v1/ai/chat/stream` | `ai_session`、`ai_turn`、`ai_model_run` | 发起问诊、流式问答 | 未开始 |
+| 导诊结果页 | `/api/v1/ai/sessions/{id}/triage-result` | `ai_run_citation`、`knowledge_chunk` | 展示引用、风险和推荐科室 | 未开始 |
+| 挂号页 | `/api/v1/clinic-sessions`、`/api/v1/registrations` | `clinic_session`、`clinic_slot`、`registration_order` | 查门诊、创建挂号、查看我的挂号 | 已实现 |
+| AI 到挂号承接 | `/api/v1/ai/sessions/{id}/registration-handoff` | `ai_session`、`registration_order` | 把 AI 结果转为挂号入口 | 未开始 |
+| 医生接诊列表 | `/api/v1/encounters` | `visit_encounter`、`registration_order` | 医生查看本人待接诊记录 | 已实现 |
+| 接诊详情 / 病历 / 处方 | `/api/v1/encounters/{id}`、`/api/v1/emr/*`、`/api/v1/prescriptions/*` | `visit_encounter`、`emr_*`、`prescription_*` | 接诊详情、病历录入、处方录入 | 未开始 |
+| 审计页 | `/api/v1/audit/*` | `audit_event`、`data_access_log` | 审计查询与敏感访问追溯 | 未开始 |
 
-## 5. 联调验收清单
+## 6. 联调验收清单
 
-### 主链路验收
+### 当前已可验证
 
-- [ ] 患者 AI 问诊成功，返回引用和风险提示
-- [ ] 中风险可进入挂号承接
-- [ ] 高风险走紧急线下处置或人工求助，不继续普通问答
-- [ ] 患者完成挂号
-- [ ] 医生查看 AI 摘要并完成病历、处方
+- [x] 患者登录 -> 查询门诊场次 -> 创建挂号 -> 查看我的挂号
+- [x] 挂号成功后，医生可在 `/api/v1/encounters` 看到待接诊记录
+- [x] 现有受保护接口的 `401/403/400` 响应统一返回 `Result` + `requestId`
+- [x] `qingniao` 已覆盖管理员患者分页、门诊场次查询、挂号最小链路、医生接诊列表最小链路
 
-### 权限验收
+### 除 RAG 之外仍未完成
 
-- [ ] 患者不能查看他人病历/挂号/AI 会话
-- [ ] 医生不能查看不在自己范围内的病历和 AI 原文
-- [ ] 管理员能看最小审计结果，但不是默认全量看所有敏感正文
+- [ ] Java 对外 AI 主链接口、SSE 转发与导诊结果页接口
+- [ ] AI -> 挂号承接接口
+- [ ] 接诊详情、AI 摘要、病历、处方接口与写库链路
+- [ ] 对象级授权真正落到 `EMR_RECORD` / `AI_SESSION`
+- [ ] `audit_event`、`data_access_log` 写入与查询
+- [ ] Java 结构化日志与 `request_id` 输出闭环
+- [ ] Java、Python、审计三端通过同一 `request_id` 串联
 
-### 审计验收
-
-- [ ] 关键业务动作存在 `audit_event`
-- [ ] 查看病历正文、AI 原文存在 `data_access_log`
-- [ ] 一次请求能用 `request_id` 串到 Java、Python、审计
-
-## 6. 当前阶段明确不做
+## 7. 当前阶段明确不做
 
 - [ ] 不先做复杂排班求解平台
 - [ ] 不先做 `domain_event_stream`、`outbox_event`、`integration_event_archive`
@@ -263,19 +295,15 @@
 - [ ] 不先做完整知识库后台平台化治理
 - [ ] 不先做 SkyWalking / Elasticsearch 级重型观测栈
 
-## 7. 推荐开发顺序
+## 8. 推荐剩余开发顺序
 
-1. 公共基线：响应、错误、`request_id`、认证
-2. 基础主数据：用户、角色、科室、医生
-3. 知识库与 RAG 底座
-4. 患者 AI 问诊 + 导诊结果
-5. AI 到挂号承接
-6. 医生接诊 + 病历 + 处方
-7. 对象级授权 + 审计留痕
-
-## 8. 一句话结论
-
-`P0` 不是“把所有模块都做一点”，而是把 `AI 问诊 -> 导诊 -> 挂号 -> 接诊 -> 病历/处方 -> 权限/审计` 这一条链路做深、做通、做一致。
+1. AI 主链：`ai_session/ai_turn/ai_model_run` + `/api/v1/ai/chat`
+2. Python AI 服务：`/health`、`/ready`、`/api/v1/chat`、`/api/v1/knowledge/*`
+3. RAG 检索闭环：知识导入、索引、检索、引用回填
+4. AI -> 挂号承接：`triage-result` + `registration-handoff`
+5. 诊疗闭环：接诊详情、AI 摘要、病历、处方
+6. 权限与审计：对象级授权、`audit_event`、`data_access_log`
+7. 可观测性收口：`SSE`、结构化日志、`request_id` 全链路串联
 
 ## 9. 拆分阅读
 
