@@ -19,7 +19,7 @@
 
 | 任务包 | 当前状态 | 说明 |
 |------|----------|------|
-| Task A：公共协议与请求上下文 | 部分完成 | `Result<T>`、错误处理、`requestId`、JWT、健康检查已完成；`SSE`、结构化日志未完成 |
+| Task A：公共协议与请求上下文 | 完成 | `Result<T>`、错误处理、`requestId`、JWT、健康检查、对外 `SSE` 协议与结构化日志基线已完成；当前 `6001` 属于 Java -> Python AI 联调问题，不再归入 Task A |
 | Task B：认证、角色、数据范围基线 | 部分完成 | 登录/刷新/登出/当前用户、本人资料、管理员患者管理已完成；对象级授权仍缺资源解析实现 |
 | Task C：知识库与 RAG 底座 | 未完成 | 表结构与 Java AI client 骨架已在仓库中，知识导入与索引链路未开始 |
 | Task D：AI 问诊主链路 | 未完成 | 没有 AI Controller/UseCase/会话持久化/对外接口 |
@@ -38,8 +38,8 @@
 - [x] `X-Request-Id` 生成、透传、回写
 - [x] Java `health/readiness/liveness` 端点开放
 - [x] Java -> Python 的 `X-Request-Id` 与 `X-API-Key` client 基础设施
-- [ ] Java `JSON` 接口与 `SSE` 接口口径分离
-- [ ] Logback 结构化日志 / `request_id` 日志输出
+- [x] Java `JSON` 接口与 `SSE` 接口口径分离
+- [x] Logback 结构化日志 / `request_id` 日志输出
 
 ### 关键文件/模块
 
@@ -53,8 +53,8 @@
 
 - [x] 所有 `JSON` 接口返回 `Result<T>`
 - [x] 任意报错都带稳定 `requestId`
-- [ ] `SSE` 返回 `message / meta / end / error`
-- [ ] Java 日志中稳定输出 `request_id`
+- [x] `SSE` 返回 `message / meta / end / error`
+- [x] Java 日志中稳定输出 `request_id`
 
 ## 3.2 Task B：认证、角色、数据范围基线
 
