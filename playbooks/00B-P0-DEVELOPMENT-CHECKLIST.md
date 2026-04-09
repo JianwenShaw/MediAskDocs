@@ -118,6 +118,7 @@
 ### 必做能力
 
 - [x] Java 侧 AI Client、`AiChatPort`、Python DTO/错误映射基础设施已具备
+- [ ] Java 调 Python 解析文档并接收 chunk payload
 - [ ] Java 持久化 `knowledge_document`、`knowledge_chunk`
 - [ ] Java 调 Python 建索引
 - [ ] Python 写 `knowledge_chunk_index`
@@ -147,8 +148,10 @@
 
 ### Python 内部接口
 
+- [ ] `POST /api/v1/knowledge/prepare`
 - [ ] `POST /api/v1/chat`
 - [ ] `POST /api/v1/chat/stream`
+- [ ] `POST /api/v1/knowledge/index`
 - [ ] `POST /api/v1/knowledge/search`
 
 ### 前端页面

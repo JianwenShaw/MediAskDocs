@@ -11,7 +11,7 @@
 
 ## 2. 本轮 P0 聚焦三类能力
 
-- **索引能力**：Java 已持久化 chunk -> Python 生成 embedding -> 写 `knowledge_chunk_index`
+- **入库索引能力**：Python 解析原始文档并生成 chunk payload -> Java 持久化 chunk -> Python 生成 embedding -> 写 `knowledge_chunk_index`
 - **检索生成能力**：`model_run_id` 预分配 -> 检索 -> 写 `ai_run_citation` -> LLM 生成
 - **协议与收口能力**：统一 `request_id`、错误响应、Java 回填与知识入库状态流转
 
@@ -19,6 +19,7 @@
 
 ### 3.1 功能验收
 
+- `/api/v1/knowledge/prepare`：支持原始文档解析、清洗和分块，返回可持久化的 chunk payload
 - `/api/v1/knowledge/index`：支持对 Java 已持久化的 chunk 批量建立索引
 - `/api/v1/knowledge/search`：能返回 top_k chunks（含 `chunk_id/score/metadata`）
 - `/api/v1/chat`：`use_rag=true` 时返回 `answer + citations + risk_level`，并由 Java 回填 `ai_model_run/ai_turn_content/ai_guardrail_event`
@@ -50,15 +51,20 @@
 - 确认 `ai_run_citation` 字段：`model_run_id/chunk_id/retrieval_rank/*score`
 - 冻结 Python 失败响应：`code/msg/requestId/timestamp`
 - 明确知识入库 ownership：Java 维护 `knowledge_document/chunk`，Python 只维护 `knowledge_chunk_index/ai_run_citation`
+- 明确解析边界：Python 负责解析与切块算法，Java 负责 chunk 业务落库
 - 明确输出边界：不诊断、不处方
 
-### 阶段 1：索引 MVP（1-2 天）
+### 阶段 1：预处理与索引 MVP（1-2 天）
 
+- 实现 `KnowledgePrepareService`
+- 输入：`document_id + knowledge_base_id + source_uri/source_type`
+- 输出：稳定 chunk payload
+- Java 基于 payload 持久化 `knowledge_chunk`
 - 实现 `KnowledgeIndexer`
 - 输入：`document_id + knowledge_base_id + chunks[]`
 - 输出：`knowledge_chunk_index` upsert
 - 幂等键：`chunk_id`
-- Java 在索引成功后更新 `knowledge_document` 可用状态；索引失败禁止误标为可用
+- Java 在索引成功后更新 `knowledge_document` 可用状态；解析或索引失败均禁止误标为可用
 - 预留失败重试与重建索引入口
 
 ### 阶段 2：检索 MVP（1-2 天）
@@ -109,7 +115,7 @@ RAG_SCORE_THRESHOLD=0.20
 
 ## 6. 交付顺序
 
-1. `knowledge/index` + 文档可用状态流转
+1. `knowledge/prepare` + `knowledge/index` + 文档状态流转
 2. `knowledge/search` + `ai_run_citation`
 3. `chat` + Java 回填
 4. `chat/stream` + 错误契约 + `request_id`

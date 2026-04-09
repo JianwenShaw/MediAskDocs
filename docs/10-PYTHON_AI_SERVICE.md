@@ -17,7 +17,7 @@
 边界冻结如下：
 
 - Java 负责：`ai_session`、`ai_turn`、`ai_turn_content`、`ai_model_run`、`knowledge_base`、`knowledge_document`、`knowledge_chunk`
-- Python 负责：`knowledge_chunk_index`、`ai_run_citation`
+- Python 负责：原始文档解析、文本清洗、chunk 切分算法、`knowledge_chunk_index`、`ai_run_citation`
 - Python 不直接维护业务会话主事实
 - AI 输出定位为“辅助问诊、风险提示、建议就医/推荐科室”，不输出诊断结论与处方建议
 
@@ -28,7 +28,7 @@ app/
     api/
         v1/
             chat.py              # /api/v1/chat, /api/v1/chat/stream
-            knowledge.py         # /api/v1/knowledge/index, /api/v1/knowledge/search
+            knowledge.py         # /api/v1/knowledge/prepare, /api/v1/knowledge/index, /api/v1/knowledge/search
     core/
         settings.py              # Pydantic Settings
         logging.py               # 结构化日志
@@ -251,7 +251,49 @@ POST /api/v1/knowledge/search
 }
 ```
 
-### 5.6 知识索引
+### 5.6 文档预处理与切块准备
+
+```http
+POST /api/v1/knowledge/prepare
+```
+
+请求：
+
+```json
+{
+  "document_id": 6001001,
+  "knowledge_base_id": 5001001,
+  "source_type": "PDF",
+  "source_uri": "oss://mediask/kb/htn-guide-v1.pdf"
+}
+```
+
+响应：
+
+```json
+{
+  "document_id": 6001001,
+  "chunks": [
+    {
+      "content": "高血压患者应减少钠盐摄入。",
+      "content_preview": "高血压患者应减少钠盐摄入。",
+      "page_no": 3,
+      "section_title": "生活方式管理",
+      "char_start": 1200,
+      "char_end": 1238,
+      "token_count": 18,
+      "citation_label": "高血压指南 / 生活方式管理 / P3"
+    }
+  ]
+}
+```
+
+说明：
+
+- Python 负责原始文档解析、清洗、术语归一和 chunk 切分，但不直接写 `knowledge_chunk`
+- Java 根据返回的 chunk payload 持久化 `knowledge_chunk`，再进入索引阶段
+
+### 5.7 知识索引
 
 ```http
 POST /api/v1/knowledge/index
@@ -289,11 +331,13 @@ POST /api/v1/knowledge/index
 
 ### 7.1 索引流程
 
-1. Java 或离线任务完成原始文档解析与分块
-2. Java 写入 `knowledge_document` / `knowledge_chunk`
-3. Java 调用 Python `/api/v1/knowledge/index`
-4. Python 调用百炼 Embedding
-5. Python 写入 `knowledge_chunk_index`
+1. Java 创建 `knowledge_document(status=UPLOADED/INGESTING)`
+2. Java 调用 Python `/api/v1/knowledge/prepare`
+3. Python 完成原始文档解析、清洗与分块，返回 chunk payload
+4. Java 写入 `knowledge_chunk`
+5. Java 调用 Python `/api/v1/knowledge/index`
+6. Python 调用百炼 Embedding
+7. Python 写入 `knowledge_chunk_index`
 
 ### 7.2 查询流程
 
@@ -372,6 +416,7 @@ clean:
 ## 11. 待办清单
 
 - [ ] `model_run_id` 预创建与回传协议
+- [ ] `knowledge/prepare` 返回稳定 chunk payload
 - [ ] `knowledge/index` 批量 upsert
 - [ ] `ai_run_citation` 写库与幂等
 - [ ] `chat/stream` 的 `meta` 事件

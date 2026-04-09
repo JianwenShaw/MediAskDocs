@@ -41,7 +41,7 @@
 ### 2.2 约束原则
 
 - 业务主事实与检索投影分层
-- 入库与索引更新尽量同事务或同作业闭环
+- 入库与索引更新以同作业闭环和幂等重试为目标，不假设跨 Java/Python 的分布式事务
 - 不把调试垃圾和全量中间态塞进主业务表
 - 中文语料检索质量优先，不迷信数据库默认分词
 - 先保证召回质量与可追溯，再逐步优化检索性能
@@ -157,9 +157,20 @@ flowchart LR
 - `content_hash VARCHAR(128)`：去重和重入库判断
 - `language_code VARCHAR(16)`：默认 `zh-CN`
 - `version_no INT`
-- `document_status VARCHAR(16)`：`DRAFT / INGESTING / ACTIVE / FAILED / ARCHIVED`
+- `document_status VARCHAR(16)`：`DRAFT / UPLOADED / PARSING / CHUNKED / INDEXING / ACTIVE / FAILED / ARCHIVED`
 - `published_at TIMESTAMPTZ`
+- `last_error_code VARCHAR(64)`
+- `last_error_message TEXT`
 - `doc_metadata JSONB`
+
+状态建议：
+
+- `UPLOADED`：Java 已接收文档，尚未开始解析
+- `PARSING`：Python 正在解析和切块
+- `CHUNKED`：Java 已持久化 `knowledge_chunk`
+- `INDEXING`：Python 正在构建 `knowledge_chunk_index`
+- `ACTIVE`：索引完成，可参与检索
+- `FAILED`：解析或索引失败；具体失败阶段由错误字段和 `doc_metadata` 记录
 
 ### 5.3 `knowledge_chunk`
 
@@ -354,13 +365,20 @@ CREATE INDEX idx_kci_doc_active
 
 ### 8.1 入库链路
 
-1. Java 或离线任务解析原始文档
-2. Java 清洗文本并保留标题、页码、章节等元数据
-3. Java 分块并持久化 `knowledge_chunk`
-4. Java 调用 Python 索引接口
-5. Python 调用 Embedding API
-6. Python 写入 `knowledge_chunk_index`
-7. Java 更新 `knowledge_document.document_status=ACTIVE`
+1. Java 创建 `knowledge_document(status=UPLOADED)` 并保存原始文件位置
+2. Java 将 `knowledge_document` 推进到 `PARSING`，调用 Python `knowledge/prepare`
+3. Python 解析原始文档，完成文本清洗、术语归一和 chunk 切分，返回 chunk payload
+4. Java 持久化 `knowledge_chunk`，并把 `knowledge_document` 推进到 `CHUNKED`
+5. Java 调用 Python 索引接口，并把 `knowledge_document` 推进到 `INDEXING`
+6. Python 调用 Embedding API，生成 `search_lexemes/search_tsv`
+7. Python 以 `chunk_id` 为幂等键 upsert `knowledge_chunk_index`
+8. Java 更新 `knowledge_document.document_status=ACTIVE`
+
+失败原则：
+
+- 解析失败时，Java 将 `knowledge_document` 标记为 `FAILED`，不得生成半套 `knowledge_chunk`
+- 索引失败时，`knowledge_chunk` 可保留，但 `knowledge_document` 不得标为 `ACTIVE`
+- 重建索引默认复用既有 `knowledge_chunk`，不重新生成业务主事实，除非文档版本号变化
 
 ### 8.2 查询链路
 

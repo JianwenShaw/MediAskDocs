@@ -96,17 +96,19 @@
 
 ### 5.2 P0 推荐链路
 
-1. Java 或离线任务完成原始文档解析与分块
-2. Java 持久化 `knowledge_document` 与 `knowledge_chunk`
-3. Java 调用 Python `/knowledge/index`
-4. Python 生成 embedding、构建 `search_lexemes/search_tsv`
-5. Python 写入 `knowledge_chunk_index`
-6. Java 将 `knowledge_document` 更新为 `ACTIVE`
+1. Java 创建 `knowledge_document(status=UPLOADED/INGESTING)` 并保存源文件位置
+2. Java 调用 Python `/knowledge/prepare`
+3. Python 完成原始文档解析、清洗、术语归一与 chunk 切分，返回 chunk payload
+4. Java 持久化 `knowledge_chunk`
+5. Java 调用 Python `/knowledge/index`
+6. Python 生成 embedding、构建 `search_lexemes/search_tsv`
+7. Python 写入 `knowledge_chunk_index`
+8. Java 将 `knowledge_document` 更新为 `ACTIVE`
 
 这样做的原因是：
 
 - 业务事实层只在 Java 保持单一主事实
-- Python 只负责自己最擅长的检索投影和查询执行
+- Python 负责自己最擅长的解析、切块、检索投影和查询执行
 - 数据库权限边界更清晰，和现有 `knowledge_chunk_index/ai_run_citation` 单独写权限设计一致
 
 ## 6. AI 输出边界

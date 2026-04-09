@@ -60,7 +60,7 @@
 ### 3.3 P0 必须明确的实现规则
 
 - Java 先创建 `ai_model_run`，Python 使用该 `model_run_id` 写 `ai_run_citation`
-- 文档必须先由 Java 持久化 `knowledge_document` / `knowledge_chunk`，再调用 Python 建索引
+- Java 先持久化 `knowledge_document`；Python 负责原始文档解析与分块算法，返回 chunk payload 后由 Java 持久化 `knowledge_chunk`，再调用 Python 建索引
 - AI 流式输出由客户端请求 Java，Java 再调用 Python 并转发 SSE
 - 所有对外错误响应遵循统一错误码与 `requestId` 口径
 - 医疗敏感正文采用“索引/密文分离”或最小等价实现，禁止在列表查询中直接暴露原文

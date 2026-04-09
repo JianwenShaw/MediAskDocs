@@ -404,9 +404,14 @@ sequenceDiagram
 | `ai_model_run` | **Java 预创建并最终更新** | Java 生成稳定 `model_run_id`，Python 基于该 `model_run_id` 写引用记录，执行完成后由 Java 回填元数据 |
 | `ai_run_artifact`、`ai_guardrail_event` | **Java** | 从 Python 响应中提取，Java 负责持久化 |
 | `ai_feedback_task`、`ai_feedback_review` | **Java** | 人工审核流程完全在 Java 侧 |
-| `knowledge_base`、`knowledge_document`、`knowledge_chunk` | **Java** | 知识库元数据属于业务事实层 |
+| `knowledge_base`、`knowledge_document`、`knowledge_chunk` | **Java** | 知识库元数据与 chunk 引用锚点属于业务事实层；chunk 持久化由 Java 收口 |
 | `knowledge_chunk_index` | **Python** | 向量化与分词在 Python 完成，直接写入检索投影层 |
 | `ai_run_citation` | **Python** | 检索命中记录在 Python 检索管道中产生，但必须引用 Java 预先分配的 `model_run_id` |
+
+补充说明：
+
+- 原始文档解析、文本清洗、术语归一和 chunk 切分算法优先放在 Python AI 服务
+- Java 不负责底层解析算法，但负责接收 Python 返回的 chunk payload 并持久化为 `knowledge_chunk`
 
 ### 7.3 认证与追踪
 

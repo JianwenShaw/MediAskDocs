@@ -89,10 +89,11 @@
 | 顺序 | 接口 | 说明 |
 |------|------|------|
 | `P1` | `/health`、`/ready` | 基础健康检查 |
-| `P2` | `/api/v1/knowledge/index` | 知识向量化入库 |
-| `P3` | `/api/v1/knowledge/search` | 检索能力验证 |
-| `P4` | `/api/v1/chat` | 非流式生成 |
-| `P5` | `/api/v1/chat/stream` | 流式生成 |
+| `P2` | `/api/v1/knowledge/prepare` | 原始文档解析、清洗与分块 |
+| `P3` | `/api/v1/knowledge/index` | 对稳定 `chunk_id` 建立检索投影 |
+| `P4` | `/api/v1/knowledge/search` | 检索能力验证 |
+| `P5` | `/api/v1/chat` | 非流式生成 |
+| `P6` | `/api/v1/chat/stream` | 流式生成 |
 
 ## 4. 外部 API DTO 清单
 

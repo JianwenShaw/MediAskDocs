@@ -34,7 +34,7 @@
 
 | 模块 | 必测内容 |
 |------|---------|
-| **AI/RAG** | `knowledge/index`、`knowledge/search`、`chat`、`chat/stream`、引用留痕、降级路径 |
+| **AI/RAG** | `knowledge/prepare`、`knowledge/index`、`knowledge/search`、`chat`、`chat/stream`、引用留痕、降级路径 |
 | **医疗闭环** | `clinic_session -> clinic_slot -> registration_order -> visit_encounter -> emr_record -> prescription_order` |
 | **权限与审计** | RBAC、数据范围、对象级授权、`data_access_log`、关键业务审计 |
 | **请求串联** | `X-Request-Id` 透传、`request_id` 日志字段、跨服务抽样追踪 |
@@ -89,6 +89,8 @@
 
 | 场景 | 断言 |
 |------|------|
+| 文档解析与切块成功 | Python 返回稳定 chunk payload，Java 才能落 `knowledge_chunk` 并进入索引阶段 |
+| 文档解析与切块失败 | 文档不得进入索引阶段，必须保留失败状态与重试入口 |
 | 知识索引成功 | `knowledge_chunk_index` 写入成功，Java 才能把 `knowledge_document` 置为 `ACTIVE` |
 | 知识索引失败 | 文档不得误标为可用，保留重试入口 |
 | 检索成功 | 返回 `chunk_id/score/metadata`，并写 `ai_run_citation` |
