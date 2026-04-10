@@ -266,8 +266,7 @@ POST /api/v1/knowledge/prepare
   "knowledge_base_id": 5001001,
   "title": "高血压指南",
   "source_type": "PDF",
-  "source_uri": "oss://mediask/kb/htn-guide-v1.pdf",
-  "inline_content": null
+  "source_uri": "oss://mediask/knowledge-documents/4001/20260410/pdf-550e8400-e29b-41d4-a716-446655440000.pdf"
 }
 ```
 
@@ -293,10 +292,11 @@ POST /api/v1/knowledge/prepare
 
 说明：
 
-- Java 负责知识来源编排，向 Python 传递 `source_type / source_uri / inline_content`，但不负责原始文档解析
+- 前端先将原始文件上传给 Java；Java 写入对象存储/文件存储并生成 `source_uri` 后，再向 Python 传递 `source_type / source_uri`
 - Python 负责原始文档解析、清洗、术语归一和 chunk 切分，但不直接写 `knowledge_chunk`
 - Java 根据返回的 chunk payload 持久化 `knowledge_chunk`，再进入索引阶段
-- `inline_content` 主要用于内联文本导入；`PDF / WEB` 等来源通常只需要 `source_type + source_uri`
+- 当前上传文件类型由 Java 从文件名/Content-Type 推断，支持 `MARKDOWN / DOCX / PDF`
+- `dev` 环境可使用本地共享目录并生成 `file://...`，默认目录可放在项目根目录下的 `var/knowledge-storage`；`prod` 环境目标为 OSS URI
 
 ### 5.7 知识索引
 
@@ -309,22 +309,15 @@ POST /api/v1/knowledge/index
 ```json
 {
   "document_id": 6001001,
-  "knowledge_base_id": 5001001,
-  "chunks": [
-    {
-      "chunk_id": 7003001,
-      "content": "高血压患者应减少钠盐摄入。",
-      "page_no": 3,
-      "section_title": "生活方式管理"
-    }
-  ]
+  "knowledge_base_id": 5001001
 }
 ```
 
 说明：
 
 - `knowledge_document` 与 `knowledge_chunk` 必须先由 Java 持久化
-- Python 只负责为这些稳定 `chunk_id` 生成索引投影
+- `knowledge/index` 不再由 Java 回传整批 chunk 文本
+- Python 根据 `document_id` 自行读取 `knowledge_chunk`，并为这些稳定 `chunk_id` 生成索引投影
 
 ## 6. 认证与安全
 
@@ -353,13 +346,15 @@ sequenceDiagram
     participant E as Embedding API
     participant PG as PostgreSQL
 
+    J->>J: 接收后台上传文件<br/>推断 title/source_type
+    J->>J: 写入对象存储/文件存储<br/>生成 source_uri
     J->>PG: 创建 knowledge_document<br/>status=UPLOADED/INGESTING
     J->>P: POST /api/v1/knowledge/prepare<br/>document_id, knowledge_base_id, source_type, source_uri
     P->>P: 解析原始文档<br/>文本清洗、术语归一、chunk 切分
     P-->>J: 返回 chunk payload<br/>不直接写 knowledge_chunk
     J->>PG: 持久化 knowledge_chunk
     J->>PG: 更新 knowledge_document<br/>status=CHUNKED/INDEXING
-    J->>P: POST /api/v1/knowledge/index<br/>document_id, knowledge_base_id, chunk_id + content
+    J->>P: POST /api/v1/knowledge/index<br/>document_id, knowledge_base_id
     P->>E: 批量生成 embedding
     E-->>P: 返回向量结果
     P->>PG: upsert knowledge_chunk_index
@@ -370,6 +365,7 @@ sequenceDiagram
 
 - `knowledge_document` 和 `knowledge_chunk` 属于业务主事实，必须由 Java 持久化
 - Python 负责生成 chunk payload，但不直接写 `knowledge_chunk`
+- Python 在 `knowledge/index` 阶段根据 `document_id` 自行读取已持久化的 `knowledge_chunk`
 - Python 直接写库的范围仅限检索投影 `knowledge_chunk_index`，与 AI 运行期的 `ai_run_citation`
 
 ### 7.2 查询流程

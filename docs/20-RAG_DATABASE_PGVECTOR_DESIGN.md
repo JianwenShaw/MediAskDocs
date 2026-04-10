@@ -152,7 +152,7 @@ flowchart LR
 - `knowledge_base_id BIGINT`
 - `document_uuid UUID` 或应用层生成稳定 UUID
 - `title VARCHAR(255)`
-- `source_type VARCHAR(32)`：`MARKDOWN / PDF / MANUAL / WEB`
+- `source_type VARCHAR(32)`：`MARKDOWN / DOCX / PDF / MANUAL / WEB`
 - `source_uri TEXT`
 - `content_hash VARCHAR(128)`：去重和重入库判断
 - `language_code VARCHAR(16)`：默认 `zh-CN`
@@ -372,6 +372,8 @@ sequenceDiagram
     participant E as Embedding API
     participant PG as PostgreSQL
 
+    J->>J: 接收后台上传文件
+    J->>J: 写入对象存储/文件存储并生成 sourceUri
     J->>PG: 创建 knowledge_document(status=UPLOADED/INGESTING)
     J->>P: POST /api/v1/knowledge/prepare(documentId, sourceUri, metadata)
     P->>P: 解析原始文档
@@ -386,21 +388,24 @@ sequenceDiagram
     J->>PG: 更新 knowledge_document(status=ACTIVE)
 ```
 
-1. Java 创建 `knowledge_document(status=UPLOADED)` 并保存原始文件位置
-2. Java 将 `knowledge_document` 推进到 `PARSING`，调用 Python `knowledge/prepare`
-3. Python 解析原始文档，完成文本清洗、术语归一和 chunk 切分，返回 chunk payload
-4. Python 只返回 chunk payload，不直接写入 `knowledge_chunk`
-5. Java 持久化 `knowledge_chunk`，并把 `knowledge_document` 推进到 `CHUNKED`
-6. Java 将 `knowledge_document` 推进到 `INDEXING`，调用 Python 索引接口
-7. Python 调用 Embedding API，生成 `search_lexemes/search_tsv`
-8. Python 以 `chunk_id` 为幂等键 upsert `knowledge_chunk_index`
-9. Java 更新 `knowledge_document.document_status=ACTIVE`
+1. 前端上传原始文件到 Java，Java 保存原始文件并生成内部 `source_uri`
+2. Java 创建 `knowledge_document(status=UPLOADED)` 并保存原始文件位置
+3. Java 将 `knowledge_document` 推进到 `PARSING`，调用 Python `knowledge/prepare`
+4. Python 解析原始文档，完成文本清洗、术语归一和 chunk 切分，返回 chunk payload
+5. Python 只返回 chunk payload，不直接写入 `knowledge_chunk`
+6. Java 持久化 `knowledge_chunk`，并把 `knowledge_document` 推进到 `CHUNKED`
+7. Java 将 `knowledge_document` 推进到 `INDEXING`，调用 Python 索引接口，仅传 `documentId/knowledgeBaseId`
+8. Python 调用 Embedding API，生成 `search_lexemes/search_tsv`
+9. Python 以 `chunk_id` 为幂等键 upsert `knowledge_chunk_index`
+10. Java 更新 `knowledge_document.document_status=ACTIVE`
 
 边界约束：
 
 - `knowledge_document` 和 `knowledge_chunk` 属于业务主事实，只能由 Java 持久化
 - Python 负责解析、清洗、归一化、切块和索引构建，但不直接写入 `knowledge_chunk`
+- `knowledge/index` 不回传整批 chunk 文本；Python 根据 `documentId` 自行读取 `knowledge_chunk` 做 embedding
 - Python 允许直接写入的 RAG 投影事实仅包括 `knowledge_chunk_index`，运行态引用事实为 `ai_run_citation`
+- `dev` 环境下 `source_uri` 可为同机共享目录的 `file://...`，默认目录可放在项目根目录下的 `var/knowledge-storage`；`prod` 环境目标为 OSS URI
 
 失败原则：
 

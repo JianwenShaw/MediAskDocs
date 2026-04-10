@@ -114,13 +114,14 @@
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
 |------|------------------|----------------------|
-| `POST /api/v1/admin/knowledge-documents/import` | `knowledgeBaseId`、`title`、`sourceType`、`sourceUri?`、`inlineContent?` | `documentId`、`documentUuid`、`chunkCount`、`documentStatus` |
+| `POST /api/v1/admin/knowledge-documents/import` | `multipart/form-data`：`knowledgeBaseId`、`file` | `documentId`、`documentUuid`、`chunkCount`、`documentStatus` |
 
 补充约定：
 
 - 该接口是 Java 对外的最小后台知识导入入口，浏览器不直连 Python
-- `sourceType` 对齐 `knowledge_document.source_type`：`MARKDOWN / PDF / MANUAL / WEB`
-- `sourceUri` 与 `inlineContent` 至少传一个；当前后台若为内联文本导入，可由 Java 生成内部 `sourceUri`
+- Java 根据上传文件推断 `title` 与 `sourceType`；当前支持 `MARKDOWN / DOCX / PDF`
+- 前端不传 `sourceUri`；Java 接收文件后先写入对象存储/文件存储，再内部生成 `sourceUri`
+- `dev` 环境下 `sourceUri` 为本地共享目录可读的 `file://...`，默认目录可放在项目根目录下的 `var/knowledge-storage`；`prod` 环境下目标口径为 OSS URI
 - Java 不负责解析原始文档格式，只负责创建 `knowledge_document`、调用 Python `prepare`、持久化 `knowledge_chunk`、再调用 Python `index`
 
 ## 4.2 AI 问诊
@@ -193,14 +194,13 @@
 
 | 方向 | 最小字段 |
 |------|----------|
-| Java -> Python | `documentId`、`documentUuid`、`knowledgeBaseId`、`title`、`sourceType`、`sourceUri`、`inlineContent?` |
+| Java -> Python | `documentId`、`documentUuid`、`knowledgeBaseId`、`title`、`sourceType`、`sourceUri` |
 | Python -> Java | `chunks[].chunkIndex`、`chunks[].content`、`chunks[].sectionTitle?`、`chunks[].pageNo?`、`chunks[].charStart?`、`chunks[].charEnd?`、`chunks[].tokenCount?`、`chunks[].contentPreview?`、`chunks[].citationLabel?` |
 
 说明：
 
-- Java 对 `sourceType/sourceUri/inlineContent` 做来源编排，不负责格式解析
-- Python 负责根据 `sourceType/sourceUri/inlineContent` 解析原始文档、清洗与切块
-- `inlineContent` 主要用于内联文本导入；`PDF/WEB` 等来源通常只需要 `sourceType + sourceUri`
+- Java 对上传文件做来源编排，内部生成 `sourceType/sourceUri`，不负责格式解析
+- Python 负责根据 `sourceType/sourceUri` 解析原始文档、清洗与切块
 
 ## 5.2 Python 失败响应
 

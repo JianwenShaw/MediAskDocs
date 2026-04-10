@@ -91,7 +91,7 @@
 ### 交付物
 
 - [x] Java 侧 AI client / DTO / 错误映射骨架
-- [x] 知识文档入库最小后台接口：`POST /api/v1/admin/knowledge-documents/import`
+- [x] 知识文档入库最小后台接口：`POST /api/v1/admin/knowledge-documents/import`（`multipart/form-data` 文件上传）
 - [x] Java 调 Python 解析原始文档并接收 chunk payload
 - [x] `knowledge_document` / `knowledge_chunk` 持久化
 - [x] Java 调 Python 建立索引

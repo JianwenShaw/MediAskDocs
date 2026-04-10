@@ -61,9 +61,10 @@
 - 输出：稳定 chunk payload
 - Java 基于 payload 持久化 `knowledge_chunk`
 - 实现 `KnowledgeIndexer`
-- 输入：`document_id + knowledge_base_id + chunks[]`
+- 输入：`document_id + knowledge_base_id`
 - 输出：`knowledge_chunk_index` upsert
 - 幂等键：`chunk_id`
+- Python 根据 `document_id` 自行读取已持久化的 `knowledge_chunk`
 - Java 在索引成功后更新 `knowledge_document` 可用状态；解析或索引失败均禁止误标为可用
 - 预留失败重试与重建索引入口
 
