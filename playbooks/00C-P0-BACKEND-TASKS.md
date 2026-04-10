@@ -91,15 +91,15 @@
 ### 交付物
 
 - [x] Java 侧 AI client / DTO / 错误映射骨架
-- [ ] 知识文档入库接口或脚本
-- [ ] Java 调 Python 解析原始文档并接收 chunk payload
-- [ ] `knowledge_document` / `knowledge_chunk` 持久化
-- [ ] Java 调 Python 建立索引
+- [x] 知识文档入库最小后台接口：`POST /api/v1/admin/knowledge-documents/import`
+- [x] Java 调 Python 解析原始文档并接收 chunk payload
+- [x] `knowledge_document` / `knowledge_chunk` 持久化
+- [x] Java 调 Python 建立索引
 - [ ] Python 写 `knowledge_chunk_index`
 
 ### 关键接口
 
-- [ ] Java：知识导入最小接口或初始化脚本入口
+- [x] Java：`POST /api/v1/admin/knowledge-documents/import`
 - [ ] Python：`/api/v1/knowledge/prepare`
 - [ ] Python：`/api/v1/knowledge/index`
 - [ ] Python：`/api/v1/knowledge/search`

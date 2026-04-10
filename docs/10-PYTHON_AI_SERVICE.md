@@ -262,9 +262,12 @@ POST /api/v1/knowledge/prepare
 ```json
 {
   "document_id": 6001001,
+  "document_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "knowledge_base_id": 5001001,
+  "title": "高血压指南",
   "source_type": "PDF",
-  "source_uri": "oss://mediask/kb/htn-guide-v1.pdf"
+  "source_uri": "oss://mediask/kb/htn-guide-v1.pdf",
+  "inline_content": null
 }
 ```
 
@@ -290,8 +293,10 @@ POST /api/v1/knowledge/prepare
 
 说明：
 
+- Java 负责知识来源编排，向 Python 传递 `source_type / source_uri / inline_content`，但不负责原始文档解析
 - Python 负责原始文档解析、清洗、术语归一和 chunk 切分，但不直接写 `knowledge_chunk`
 - Java 根据返回的 chunk payload 持久化 `knowledge_chunk`，再进入索引阶段
+- `inline_content` 主要用于内联文本导入；`PDF / WEB` 等来源通常只需要 `source_type + source_uri`
 
 ### 5.7 知识索引
 
@@ -338,6 +343,34 @@ POST /api/v1/knowledge/index
 5. Java 调用 Python `/api/v1/knowledge/index`
 6. Python 调用百炼 Embedding
 7. Python 写入 `knowledge_chunk_index`
+
+对应时序如下：
+
+```mermaid
+sequenceDiagram
+    participant J as Java
+    participant P as Python AI Service
+    participant E as Embedding API
+    participant PG as PostgreSQL
+
+    J->>PG: 创建 knowledge_document<br/>status=UPLOADED/INGESTING
+    J->>P: POST /api/v1/knowledge/prepare<br/>document_id, knowledge_base_id, source_type, source_uri
+    P->>P: 解析原始文档<br/>文本清洗、术语归一、chunk 切分
+    P-->>J: 返回 chunk payload<br/>不直接写 knowledge_chunk
+    J->>PG: 持久化 knowledge_chunk
+    J->>PG: 更新 knowledge_document<br/>status=CHUNKED/INDEXING
+    J->>P: POST /api/v1/knowledge/index<br/>document_id, knowledge_base_id, chunk_id + content
+    P->>E: 批量生成 embedding
+    E-->>P: 返回向量结果
+    P->>PG: upsert knowledge_chunk_index
+    J->>PG: 索引成功后更新 knowledge_document<br/>status=ACTIVE
+```
+
+补充约束：
+
+- `knowledge_document` 和 `knowledge_chunk` 属于业务主事实，必须由 Java 持久化
+- Python 负责生成 chunk payload，但不直接写 `knowledge_chunk`
+- Python 直接写库的范围仅限检索投影 `knowledge_chunk_index`，与 AI 运行期的 `ai_run_citation`
 
 ### 7.2 查询流程
 

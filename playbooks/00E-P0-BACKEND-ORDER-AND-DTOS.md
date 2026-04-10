@@ -110,6 +110,19 @@
 - `userContext` 结构对齐 `GET /api/v1/auth/me` 的当前用户上下文
 - `null` 字段按现有 Jackson `non_null` 配置省略，不额外返回空字段
 
+## 4.1A 知识导入
+
+| 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
+|------|------------------|----------------------|
+| `POST /api/v1/admin/knowledge-documents/import` | `knowledgeBaseId`、`title`、`sourceType`、`sourceUri?`、`inlineContent?` | `documentId`、`documentUuid`、`chunkCount`、`documentStatus` |
+
+补充约定：
+
+- 该接口是 Java 对外的最小后台知识导入入口，浏览器不直连 Python
+- `sourceType` 对齐 `knowledge_document.source_type`：`MARKDOWN / PDF / MANUAL / WEB`
+- `sourceUri` 与 `inlineContent` 至少传一个；当前后台若为内联文本导入，可由 Java 生成内部 `sourceUri`
+- Java 不负责解析原始文档格式，只负责创建 `knowledge_document`、调用 Python `prepare`、持久化 `knowledge_chunk`、再调用 Python `index`
+
 ## 4.2 AI 问诊
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` / 事件最小字段 |
@@ -175,6 +188,19 @@
 |------|----------|
 | Java -> Python | `modelRunId`、`sessionId`、`turnId`、`message`、`sceneType`、`departmentId?`、`requestId` |
 | Python -> Java | `answer`、`risk_level`、`guardrail_action`、`chief_complaint_summary`、`recommended_departments`、`care_advice`、`citations` |
+
+## 5.1A Java 调 Python Knowledge Prepare
+
+| 方向 | 最小字段 |
+|------|----------|
+| Java -> Python | `documentId`、`documentUuid`、`knowledgeBaseId`、`title`、`sourceType`、`sourceUri`、`inlineContent?` |
+| Python -> Java | `chunks[].chunkIndex`、`chunks[].content`、`chunks[].sectionTitle?`、`chunks[].pageNo?`、`chunks[].charStart?`、`chunks[].charEnd?`、`chunks[].tokenCount?`、`chunks[].contentPreview?`、`chunks[].citationLabel?` |
+
+说明：
+
+- Java 对 `sourceType/sourceUri/inlineContent` 做来源编排，不负责格式解析
+- Python 负责根据 `sourceType/sourceUri/inlineContent` 解析原始文档、清洗与切块
+- `inlineContent` 主要用于内联文本导入；`PDF/WEB` 等来源通常只需要 `sourceType + sourceUri`
 
 ## 5.2 Python 失败响应
 

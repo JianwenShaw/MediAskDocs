@@ -365,14 +365,42 @@ CREATE INDEX idx_kci_doc_active
 
 ### 8.1 入库链路
 
+```mermaid
+sequenceDiagram
+    participant J as Java 业务系统
+    participant P as Python AI 服务
+    participant E as Embedding API
+    participant PG as PostgreSQL
+
+    J->>PG: 创建 knowledge_document(status=UPLOADED/INGESTING)
+    J->>P: POST /api/v1/knowledge/prepare(documentId, sourceUri, metadata)
+    P->>P: 解析原始文档
+    P->>P: 文本清洗 / 术语归一 / chunk 切分
+    P-->>J: 返回 chunk payload
+    Note over P,PG: Python 不直接写 knowledge_chunk
+    J->>PG: 持久化 knowledge_chunk
+    J->>PG: 更新 knowledge_document(status=CHUNKED/INDEXING)
+    J->>P: POST /api/v1/knowledge/index(documentId / chunkIds)
+    P->>E: 生成 embedding
+    P->>PG: upsert knowledge_chunk_index
+    J->>PG: 更新 knowledge_document(status=ACTIVE)
+```
+
 1. Java 创建 `knowledge_document(status=UPLOADED)` 并保存原始文件位置
 2. Java 将 `knowledge_document` 推进到 `PARSING`，调用 Python `knowledge/prepare`
 3. Python 解析原始文档，完成文本清洗、术语归一和 chunk 切分，返回 chunk payload
-4. Java 持久化 `knowledge_chunk`，并把 `knowledge_document` 推进到 `CHUNKED`
-5. Java 调用 Python 索引接口，并把 `knowledge_document` 推进到 `INDEXING`
-6. Python 调用 Embedding API，生成 `search_lexemes/search_tsv`
-7. Python 以 `chunk_id` 为幂等键 upsert `knowledge_chunk_index`
-8. Java 更新 `knowledge_document.document_status=ACTIVE`
+4. Python 只返回 chunk payload，不直接写入 `knowledge_chunk`
+5. Java 持久化 `knowledge_chunk`，并把 `knowledge_document` 推进到 `CHUNKED`
+6. Java 将 `knowledge_document` 推进到 `INDEXING`，调用 Python 索引接口
+7. Python 调用 Embedding API，生成 `search_lexemes/search_tsv`
+8. Python 以 `chunk_id` 为幂等键 upsert `knowledge_chunk_index`
+9. Java 更新 `knowledge_document.document_status=ACTIVE`
+
+边界约束：
+
+- `knowledge_document` 和 `knowledge_chunk` 属于业务主事实，只能由 Java 持久化
+- Python 负责解析、清洗、归一化、切块和索引构建，但不直接写入 `knowledge_chunk`
+- Python 允许直接写入的 RAG 投影事实仅包括 `knowledge_chunk_index`，运行态引用事实为 `ai_run_citation`
 
 失败原则：
 
