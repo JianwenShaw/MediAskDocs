@@ -13,7 +13,7 @@
 - 现有文档还没有把“当前已实现接口”的参数约束、身份要求和真实业务语义讲到足够完整。
 - [../docs/01-OVERVIEW.md](../docs/01-OVERVIEW.md)、[../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md)、[../docs/03A-JAVA_CONFIG.md](../docs/03A-JAVA_CONFIG.md) 里包含大量目标设计或后续规划接口，不能直接当作当前仓库的对外契约。
 - [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md)、[00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md)、[00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md) 适合看完成度和实现顺序，但对当前已实现接口的细节覆盖仍不够。
-- 当前代码真实已实现的外部接口只有：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、门诊场次查询、挂号、接诊列表。AI 问诊、EMR、处方、审计接口都还没有对外落地。
+- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、门诊场次查询、挂号、接诊列表。AI 问诊、EMR、处方、审计接口都还没有对外落地。
 
 ## 2. 通用协议
 
@@ -51,6 +51,13 @@
 | 管理员患者管理 | `POST /api/v1/admin/patients` | 已登录 + 管理员患者创建权限 | 后台创建患者账户和患者档案 |
 | 管理员患者管理 | `PUT /api/v1/admin/patients/{patientId}` | 已登录 + 管理员患者更新权限 | 后台更新指定患者档案 |
 | 管理员患者管理 | `DELETE /api/v1/admin/patients/{patientId}` | 已登录 + 管理员患者删除权限 | 后台软删除指定患者 |
+| 知识库后台管理 | `GET /api/v1/admin/knowledge-bases` | 已登录 + 知识库列表权限 | 后台分页查询知识库，并返回每个知识库的 `docCount` |
+| 知识库后台管理 | `POST /api/v1/admin/knowledge-bases` | 已登录 + 知识库创建权限 | 后台创建知识库 |
+| 知识库后台管理 | `PATCH /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库更新权限 | 后台更新知识库治理字段或启停状态 |
+| 知识库后台管理 | `DELETE /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库删除权限 | 后台物理删除知识库及其下游文档/chunk |
+| 知识文档后台管理 | `POST /api/v1/admin/knowledge-documents/import` | 已登录 + 知识文档导入权限 + 依赖 AI service 配置 | 后台上传文档并触发 prepare/index 链路 |
+| 知识文档后台管理 | `GET /api/v1/admin/knowledge-documents` | 已登录 + 知识文档列表权限 | 后台按知识库分页查询文档及处理状态 |
+| 知识文档后台管理 | `DELETE /api/v1/admin/knowledge-documents/{documentId}` | 已登录 + 知识文档删除权限 | 后台物理删除文档及其下游 chunk |
 | 门诊挂号 | `GET /api/v1/clinic-sessions` | 已登录 | 查询当前可挂号的开放门诊场次 |
 | 门诊挂号 | `POST /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 当前患者创建挂号，同时预创建接诊记录 |
 | 门诊挂号 | `GET /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 查询当前患者自己的挂号列表 |
@@ -295,9 +302,107 @@
 - 这里的患者主体使用的是当前登录用户的 `userId`。
 - `CurrentUserResponse.patientId` 是 `patient_profile.id`，不要和挂号业务里的患者用户 ID 混用。
 
-## 8. 医生接诊列表
+## 8. 知识库与知识文档后台管理
 
-### 8.1 `GET /api/v1/encounters`
+### 8.1 `GET /api/v1/admin/knowledge-bases`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和知识库列表权限 |
+| 查询参数 | `keyword?`、`pageNum?`、`pageSize?` |
+| `keyword` 规则 | 透传到仓储层，按 `name` 或 `kbCode` 模糊搜索 |
+| `pageNum` 规则 | 默认 `1`；必须大于 `0`；最大 `10000` |
+| `pageSize` 规则 | 默认 `20`；必须大于 `0`；最大 `100` |
+| 响应结构 | `PageData`，包含 `items`、`pageNum`、`pageSize`、`total`、`totalPages`、`hasNext` |
+| 列表项字段 | `id`、`kbCode`、`name`、`ownerType`、`ownerDeptId`、`visibility`、`status`、`docCount` |
+| 真实语义 | 面向后台治理使用；`docCount` 为该知识库下文档总数 |
+
+### 8.2 `POST /api/v1/admin/knowledge-bases`
+
+| 字段 | 要求 |
+|------|------|
+| `name` | 必填；非空 |
+| `kbCode` | 必填；非空；创建后作为稳定编码，不支持后续修改 |
+| `ownerType` | 必填；当前按枚举名解析 |
+| `ownerDeptId` | 可空；当 `ownerType=DEPARTMENT` 时必填 |
+| `visibility` | 必填；当前按枚举名解析 |
+
+业务语义：
+
+- 创建成功后状态固定为 `ENABLED`。
+- `ownerType`、`visibility` 在当前实现里使用 `Enum.valueOf(...)` 解析，非法值返回 `400 + 1002`。
+- `kbCode` 唯一冲突时返回业务异常。
+
+### 8.3 `PATCH /api/v1/admin/knowledge-bases/{knowledgeBaseId}`
+
+| 字段 | 要求 |
+|------|------|
+| Path `knowledgeBaseId` | 必填；必须大于 `0` |
+| `name` | 必填；非空 |
+| `ownerType` | 必填；当前按枚举名解析 |
+| `ownerDeptId` | 可空；当 `ownerType=DEPARTMENT` 时必填 |
+| `visibility` | 必填；当前按枚举名解析 |
+| `status` | 必填；当前按枚举名解析 |
+
+业务语义：
+
+- 当前实现允许更新 `name`、`ownerType`、`ownerDeptId`、`visibility`、`status`。
+- `kbCode` 不在更新 DTO 中，因此当前接口不支持改编码。
+- 不存在的知识库返回 `404 + 6005`。
+
+### 8.4 `DELETE /api/v1/admin/knowledge-bases/{knowledgeBaseId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和知识库删除权限 |
+| 路径参数 | `knowledgeBaseId`，必须大于 `0` |
+| 成功响应 | `Result<Void>` |
+| 真实语义 | 后台物理删除知识库；当前实现会显式清理下游 `knowledge_document` 与 `knowledge_chunk` |
+
+### 8.5 `POST /api/v1/admin/knowledge-documents/import`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和知识文档导入权限 |
+| 请求格式 | `multipart/form-data` |
+| 表单字段 | `knowledgeBaseId`、`file` |
+| 响应字段 | `documentId`、`documentUuid`、`chunkCount`、`documentStatus` |
+| 真实语义 | Java 接收上传文件，先创建 `knowledge_document` 并落存储，再调用 Python prepare/index，最后返回当前导入结果 |
+
+补充说明：
+
+- 该 controller 本身带 `mediask.ai.service.base-url` 和 `mediask.ai.service.api-key` 条件开关；未配置时，该接口不会暴露。
+- 当前支持的 `sourceType` 由 Java 根据文件名推断。
+
+### 8.6 `GET /api/v1/admin/knowledge-documents`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和知识文档列表权限 |
+| 查询参数 | `knowledgeBaseId`、`pageNum?`、`pageSize?` |
+| `knowledgeBaseId` 规则 | 必填；作为知识库过滤条件 |
+| `pageNum` 规则 | 默认 `1`；必须大于 `0`；最大 `10000` |
+| `pageSize` 规则 | 默认 `20`；必须大于 `0`；最大 `100` |
+| 响应结构 | `PageData`，包含 `items`、`pageNum`、`pageSize`、`total`、`totalPages`、`hasNext` |
+| 列表项字段 | `id`、`documentUuid`、`title`、`sourceType`、`documentStatus`、`chunkCount` |
+| 真实语义 | 只按知识库分页查文档；`chunkCount` 为该文档下 chunk 总数 |
+
+补充说明：
+
+- 当前接口不返回失败原因文本；真实表结构里没有 `last_error_message` 字段。
+
+### 8.7 `DELETE /api/v1/admin/knowledge-documents/{documentId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和知识文档删除权限 |
+| 路径参数 | `documentId`，必须大于 `0` |
+| 成功响应 | `Result<Void>` |
+| 真实语义 | 后台物理删除文档；当前实现会显式清理下游 `knowledge_chunk` |
+
+## 9. 医生接诊列表
+
+### 9.1 `GET /api/v1/encounters`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -314,7 +419,7 @@
 - 当前实现只做接诊列表，不包含接诊详情、AI 摘要、病历、处方。
 - 没有接诊权限的医生会先在场景鉴权阶段收到 `403 + 1003`。
 
-## 9. 容易被文档误导的未实现接口
+## 10. 容易被文档误导的未实现接口
 
 下面这些接口在设计文档里已经出现，但当前代码里还没有对应 controller，不应当被当成当前可调用契约：
 
@@ -332,6 +437,6 @@
 - `GET /api/v1/audit/events`
 - `GET /api/v1/audit/data-access`
 
-## 10. 一句话结论
+## 11. 一句话结论
 
 如果目的是“按当前代码联调或写前后端接口文档”，应以本文档为准；如果目的是“看目标架构或后续计划”，再看 `01-OVERVIEW`、`10A`、`00E` 等设计/排期文档。

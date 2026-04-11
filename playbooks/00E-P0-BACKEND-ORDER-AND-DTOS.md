@@ -124,6 +124,26 @@
 - `dev` 环境下 `sourceUri` 为本地共享目录可读的 `file://...`，默认目录可放在项目根目录下的 `var/knowledge-storage`；`prod` 环境下目标口径为 OSS URI
 - Java 不负责解析原始文档格式，只负责创建 `knowledge_document`、调用 Python `prepare`、持久化 `knowledge_chunk`、再调用 Python `index`
 
+## 4.1B 知识库与文档治理
+
+| 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
+|------|------------------|----------------------|
+| `GET /api/v1/admin/knowledge-bases` | `pageNum?`、`pageSize?`、`keyword?` | `items[].id`、`kbCode`、`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status`、`docCount` |
+| `POST /api/v1/admin/knowledge-bases` | `name`、`kbCode`、`ownerType`、`ownerDeptId?`、`visibility` | `id`、`kbCode`、`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status`、`docCount` |
+| `PATCH /api/v1/admin/knowledge-bases/{id}` | Path `id`；Body：`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status` | `id`、`kbCode`、`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status`、`docCount` |
+| `DELETE /api/v1/admin/knowledge-bases/{id}` | Path `id` | 无 |
+| `GET /api/v1/admin/knowledge-documents` | `knowledgeBaseId`、`pageNum?`、`pageSize?` | `items[].id`、`documentUuid`、`title`、`sourceType`、`documentStatus`、`chunkCount` |
+| `DELETE /api/v1/admin/knowledge-documents/{id}` | Path `id` | 无 |
+
+补充约定：
+
+- `GET /api/v1/admin/knowledge-bases` 的 `keyword` 同时搜索 `name` 与 `kbCode`
+- 知识库列表与详情响应中的 `docCount` 为该知识库下文档总数
+- `POST /api/v1/admin/knowledge-bases` 创建后状态固定为 `ENABLED`
+- `PATCH /api/v1/admin/knowledge-bases/{id}` 不支持修改 `kbCode`
+- `ownerType=DEPARTMENT` 时必须传 `ownerDeptId`
+- `GET /api/v1/admin/knowledge-documents` 当前只返回真实已落库字段，不包含失败原因文本
+
 ## 4.2 AI 问诊
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` / 事件最小字段 |

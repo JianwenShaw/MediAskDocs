@@ -90,8 +90,14 @@
 
 ### 交付物
 
+- [x] 知识库后台管理接口：`GET /api/v1/admin/knowledge-bases`
+- [x] 知识库后台管理接口：`POST /api/v1/admin/knowledge-bases`
+- [x] 知识库后台管理接口：`PATCH /api/v1/admin/knowledge-bases/{id}`
+- [x] 知识库后台管理接口：`DELETE /api/v1/admin/knowledge-bases/{id}`
 - [x] Java 侧 AI client / DTO / 错误映射骨架
 - [x] 知识文档入库最小后台接口：`POST /api/v1/admin/knowledge-documents/import`（`multipart/form-data` 文件上传）
+- [x] 知识文档后台管理接口：`GET /api/v1/admin/knowledge-documents`
+- [x] 知识文档后台管理接口：`DELETE /api/v1/admin/knowledge-documents/{id}`
 - [x] Java 调 Python 解析原始文档并接收 chunk payload
 - [x] `knowledge_document` / `knowledge_chunk` 持久化
 - [x] Java 调 Python 建立索引
@@ -99,7 +105,13 @@
 
 ### 关键接口
 
+- [x] Java：`GET /api/v1/admin/knowledge-bases`
+- [x] Java：`POST /api/v1/admin/knowledge-bases`
+- [x] Java：`PATCH /api/v1/admin/knowledge-bases/{id}`
+- [x] Java：`DELETE /api/v1/admin/knowledge-bases/{id}`
 - [x] Java：`POST /api/v1/admin/knowledge-documents/import`
+- [x] Java：`GET /api/v1/admin/knowledge-documents`
+- [x] Java：`DELETE /api/v1/admin/knowledge-documents/{id}`
 - [ ] Python：`/api/v1/knowledge/prepare`
 - [ ] Python：`/api/v1/knowledge/index`
 - [ ] Python：`/api/v1/knowledge/search`
