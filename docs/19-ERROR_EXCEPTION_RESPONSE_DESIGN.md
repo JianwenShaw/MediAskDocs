@@ -44,6 +44,7 @@ Java 对浏览器/前端暴露的所有 **JSON HTTP 接口**，统一使用 `Res
 - 不再使用 `message` 作为统一字段名
 - 不再使用 HTTP `200/500` 作为业务成功/失败码语义
 - 前端判断成功与否只看 `code`，不看 `msg`
+- Java 对外 `JSON` 中所有 `Long/long` 业务字段统一按字符串序列化，避免浏览器/前端 `Number` 精度丢失；前端应按字符串处理各类业务 ID，如 `userId`、`patientId`、`doctorId`、`sessionId`、`documentId`
 - `SSE` 流式接口不逐帧包 `Result<T>`；其结构化结果通过 `meta/error` 事件返回，`requestId` 仍通过 Header 串联
 
 ## 3. HTTP 状态码与业务码的关系

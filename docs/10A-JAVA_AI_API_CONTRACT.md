@@ -10,6 +10,7 @@
 
 - 浏览器只访问 `mediask-api`，不直连 `mediask-ai`
 - Java 对外 `JSON` 接口统一使用 `Result<T>`：`{code, msg, data, requestId, timestamp}`；SSE 走事件流协议
+- Java 对外 `JSON` 中涉及业务主键的 `Long/long` 字段统一按字符串返回，前端按字符串处理 `sessionId`、`turnId`、`encounterId`、`chunkId` 等 ID
 - Python 内部返回 `risk_level`、`guardrail_action`、`citations` 等执行结果；Java 负责整理成前端可直接消费的业务结果
 - AI 结果必须能承接到挂号和医生接诊，而不是停留在一段聊天文本
 
@@ -52,8 +53,8 @@
 
 ```json
 {
-  "sessionId": 90001,
-  "turnId": 90011,
+  "sessionId": "90001",
+  "turnId": "90011",
   "answer": "建议尽快线下就医，优先考虑神经内科或发热门诊分诊。",
   "triageResult": {
     "riskLevel": "medium",
@@ -61,7 +62,7 @@
     "nextAction": "GO_REGISTRATION",
     "recommendedDepartments": [
       {
-        "departmentId": 101,
+        "departmentId": "101",
         "departmentName": "神经内科",
         "priority": 1,
         "reason": "头痛伴发热，建议优先神经内科评估"
@@ -71,7 +72,7 @@
     "careAdvice": "建议尽快线下就医，避免继续自行判断。",
     "citations": [
       {
-        "chunkId": 7003001,
+        "chunkId": "7003001",
         "retrievalRank": 1,
         "fusionScore": 0.82,
         "snippet": "持续头痛伴发热应结合感染风险进行线下评估。"
@@ -98,8 +99,8 @@ SSE 事件固定为：
 
 ```json
 {
-  "sessionId": 90001,
-  "turnId": 90011,
+  "sessionId": "90001",
+  "turnId": "90011",
   "triageResult": {
     "riskLevel": "low",
     "guardrailAction": "allow",
@@ -138,13 +139,13 @@ SSE 事件固定为：
 
 ```json
 {
-  "sessionId": 90001,
-  "recommendedDepartmentId": 101,
+  "sessionId": "90001",
+  "recommendedDepartmentId": "101",
   "recommendedDepartmentName": "神经内科",
   "chiefComplaintSummary": "头痛三天伴低烧",
   "suggestedVisitType": "OUTPATIENT",
   "registrationQuery": {
-    "departmentId": 101,
+    "departmentId": "101",
     "dateFrom": "2026-03-15"
   }
 }

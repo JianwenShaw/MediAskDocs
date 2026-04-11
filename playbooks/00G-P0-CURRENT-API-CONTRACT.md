@@ -26,6 +26,7 @@
 | 公开接口 | 只有 `POST /api/v1/auth/login`、`POST /api/v1/auth/refresh` 是公开接口 |
 | 认证要求 | 除公开接口外，其余 `/api/**` 都要求登录态 |
 | 空字段输出 | 当前 Jackson 配置为 `non_null`，`null` 字段不会出现在 JSON 中 |
+| 长整型字段 | 当前 Jackson 配置会把所有对外 `Long/long` 业务字段序列化为字符串，避免前端精度丢失 |
 | 参数错误 | 参数解析失败、类型不匹配、构造器抛 `IllegalArgumentException` 时统一返回 `400 + 1002` |
 | 401/403 | 未认证返回 `401`；权限不足或角色不匹配返回 `403` |
 
@@ -33,6 +34,7 @@
 
 - 带 `@AuthorizeScenario` 的接口，会先做场景权限判断；如果权限不满足，会直接返回 `403 + 1003`，不一定进入后续的角色校验逻辑。
 - 当前仓库没有对外 `SSE` 接口；这里的契约只覆盖已经实现的 `JSON HTTP` 接口。
+- 因为浏览器 `Number` 无法安全表示雪花 ID，诸如 `userId`、`patientId`、`doctorId`、`knowledgeBaseId`、`documentId`、`sessionId` 这类字段在响应 JSON 中都应按字符串解析。
 
 ## 3. 当前已实现接口总览
 
