@@ -130,7 +130,7 @@
 |------|------------------|----------------------|
 | `GET /api/v1/admin/knowledge-bases` | `pageNum?`、`pageSize?`、`keyword?` | `items[].id`、`kbCode`、`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status`、`docCount` |
 | `POST /api/v1/admin/knowledge-bases` | `name`、`kbCode`、`ownerType`、`ownerDeptId?`、`visibility` | `id`、`kbCode`、`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status`、`docCount` |
-| `PATCH /api/v1/admin/knowledge-bases/{id}` | Path `id`；Body：`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status` | `id`、`kbCode`、`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status`、`docCount` |
+| `PATCH /api/v1/admin/knowledge-bases/{id}` | Path `id`；Body：`name?`、`ownerType?`、`ownerDeptId?`、`visibility?`、`status?` | `id`、`kbCode`、`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status`、`docCount` |
 | `DELETE /api/v1/admin/knowledge-bases/{id}` | Path `id` | 无 |
 | `GET /api/v1/admin/knowledge-documents` | `knowledgeBaseId`、`pageNum?`、`pageSize?` | `items[].id`、`documentUuid`、`title`、`sourceType`、`documentStatus`、`chunkCount` |
 | `DELETE /api/v1/admin/knowledge-documents/{id}` | Path `id` | 无 |
@@ -140,9 +140,10 @@
 - `GET /api/v1/admin/knowledge-bases` 的 `keyword` 同时搜索 `name` 与 `kbCode`
 - 知识库列表与详情响应中的 `docCount` 为该知识库下文档总数
 - `POST /api/v1/admin/knowledge-bases` 创建后状态固定为 `ENABLED`
-- `PATCH /api/v1/admin/knowledge-bases/{id}` 不支持修改 `kbCode`
+- `PATCH /api/v1/admin/knowledge-bases/{id}` 支持部分更新，不支持修改 `kbCode`
 - `ownerType=DEPARTMENT` 时必须传 `ownerDeptId`
 - `GET /api/v1/admin/knowledge-documents` 当前只返回真实已落库字段，不包含失败原因文本
+- 知识库删除与知识文档删除当前按软删除实现，并级联标记下游 `knowledge_document` / `knowledge_chunk`
 
 ## 4.2 AI 问诊
 

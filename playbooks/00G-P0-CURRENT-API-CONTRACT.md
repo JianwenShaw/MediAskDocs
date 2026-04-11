@@ -338,15 +338,15 @@
 | 字段 | 要求 |
 |------|------|
 | Path `knowledgeBaseId` | 必填；必须大于 `0` |
-| `name` | 必填；非空 |
-| `ownerType` | 必填；当前按枚举名解析 |
-| `ownerDeptId` | 可空；当 `ownerType=DEPARTMENT` 时必填 |
-| `visibility` | 必填；当前按枚举名解析 |
-| `status` | 必填；当前按枚举名解析 |
+| `name` | 可空；非空时按新名称更新 |
+| `ownerType` | 可空；非空时按枚举名解析 |
+| `ownerDeptId` | 可空；仅在请求里传 `ownerType=DEPARTMENT` 时必填 |
+| `visibility` | 可空；非空时按枚举名解析 |
+| `status` | 可空；非空时按枚举名解析 |
 
 业务语义：
 
-- 当前实现允许更新 `name`、`ownerType`、`ownerDeptId`、`visibility`、`status`。
+- 当前实现为真正的部分更新；请求体里未传的字段保持原值。
 - `kbCode` 不在更新 DTO 中，因此当前接口不支持改编码。
 - 不存在的知识库返回 `404 + 6005`。
 
@@ -357,7 +357,7 @@
 | 认证 | 需要登录态和知识库删除权限 |
 | 路径参数 | `knowledgeBaseId`，必须大于 `0` |
 | 成功响应 | `Result<Void>` |
-| 真实语义 | 后台物理删除知识库；当前实现会显式清理下游 `knowledge_document` 与 `knowledge_chunk` |
+| 真实语义 | 后台软删除知识库；当前实现会级联软删除下游 `knowledge_document` 与 `knowledge_chunk` |
 
 ### 8.5 `POST /api/v1/admin/knowledge-documents/import`
 
@@ -398,7 +398,7 @@
 | 认证 | 需要登录态和知识文档删除权限 |
 | 路径参数 | `documentId`，必须大于 `0` |
 | 成功响应 | `Result<Void>` |
-| 真实语义 | 后台物理删除文档；当前实现会显式清理下游 `knowledge_chunk` |
+| 真实语义 | 后台软删除文档；当前实现会级联软删除下游 `knowledge_chunk` |
 
 ## 9. 医生接诊列表
 
