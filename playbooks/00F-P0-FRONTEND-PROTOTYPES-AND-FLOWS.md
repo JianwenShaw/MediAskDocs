@@ -39,6 +39,13 @@
 | 引用卡 | 引用片段和依据 |
 | CTA 区 | 继续问诊、去挂号、返回首页 |
 
+导诊结果页数据来源约束：
+
+- 页面进入后以 `GET /api/v1/ai/sessions/{sessionId}/triage-result` 作为结构化结果真相
+- 如果页面需要展示完整问答轮次，再补充调用 `GET /api/v1/ai/sessions/{sessionId}`
+- 不从聊天文本中自行解析推荐科室、风险等级或引用
+- 历史老会话允许 `chiefComplaintSummary`、`recommendedDepartments`、`careAdvice` 为空并展示空态
+
 ## 2.4 高风险提示页
 
 | 区块 | 最少内容 |

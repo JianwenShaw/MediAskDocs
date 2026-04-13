@@ -141,10 +141,10 @@
 
 ### Java 对外接口
 
-- [ ] `POST /api/v1/ai/chat`
-- [ ] `POST /api/v1/ai/chat/stream`
-- [ ] `GET /api/v1/ai/sessions/{sessionId}`
-- [ ] `GET /api/v1/ai/sessions/{sessionId}/triage-result`
+- [x] `POST /api/v1/ai/chat`
+- [x] `POST /api/v1/ai/chat/stream`
+- [x] `GET /api/v1/ai/sessions/{sessionId}`
+- [x] `GET /api/v1/ai/sessions/{sessionId}/triage-result`
 
 ### Python 内部接口
 
@@ -264,7 +264,7 @@
 | 患者/医生本人资料 | `/api/v1/patients/me/profile`、`/api/v1/doctors/me/profile` | `patient_profile`、`doctors`、`doctor_department_rel` | 查看/更新本人资料 | 已实现 |
 | 管理员患者管理 | `/api/v1/admin/patients/*` | `users`、`patient_profile`、`user_roles` | 后台管理患者 | 已实现 |
 | AI 问诊页 | `/api/v1/ai/chat`、`/api/v1/ai/chat/stream` | `ai_session`、`ai_turn`、`ai_model_run` | 发起问诊、流式问答 | 未开始 |
-| 导诊结果页 | `/api/v1/ai/sessions/{id}/triage-result` | `ai_run_citation`、`knowledge_chunk` | 展示引用、风险和推荐科室 | 未开始 |
+| 导诊结果页 | `/api/v1/ai/sessions/{id}/triage-result` | `ai_run_citation`、`knowledge_chunk` | 展示引用、风险和推荐科室 | 后端已实现，前端未开始 |
 | 挂号页 | `/api/v1/clinic-sessions`、`/api/v1/registrations` | `clinic_session`、`clinic_slot`、`registration_order` | 查门诊、创建挂号、查看我的挂号 | 已实现 |
 | AI 到挂号承接 | `/api/v1/ai/sessions/{id}/registration-handoff` | `ai_session`、`registration_order` | 把 AI 结果转为挂号入口 | 未开始 |
 | 医生接诊列表 | `/api/v1/encounters` | `visit_encounter`、`registration_order` | 医生查看本人待接诊记录 | 已实现 |

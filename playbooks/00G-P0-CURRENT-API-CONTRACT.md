@@ -13,7 +13,7 @@
 - 现有文档还没有把“当前已实现接口”的参数约束、身份要求和真实业务语义讲到足够完整。
 - [../docs/01-OVERVIEW.md](../docs/01-OVERVIEW.md)、[../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md)、[../docs/03A-JAVA_CONFIG.md](../docs/03A-JAVA_CONFIG.md) 里包含大量目标设计或后续规划接口，不能直接当作当前仓库的对外契约。
 - [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md)、[00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md)、[00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md) 适合看完成度和实现顺序，但对当前已实现接口的细节覆盖仍不够。
-- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、门诊场次查询、挂号、接诊列表。AI 问诊、EMR、处方、审计接口都还没有对外落地。
+- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI 问诊、AI 会话回看、AI 导诊结果、门诊场次查询、挂号、接诊列表。EMR、处方、审计接口还没有对外落地。
 
 ## 2. 通用协议
 
@@ -33,7 +33,7 @@
 补充说明：
 
 - 带 `@AuthorizeScenario` 的接口，会先做场景权限判断；如果权限不满足，会直接返回 `403 + 1003`，不一定进入后续的角色校验逻辑。
-- 当前仓库没有对外 `SSE` 接口；这里的契约只覆盖已经实现的 `JSON HTTP` 接口。
+- 当前仓库已经对外提供 `POST /api/v1/ai/chat/stream` 这一 `SSE` 接口；本文仍以 `JSON HTTP` 为主，`SSE` 口径在下文单列说明。
 - 因为浏览器 `Number` 无法安全表示雪花 ID，诸如 `userId`、`patientId`、`doctorId`、`knowledgeBaseId`、`documentId`、`sessionId` 这类字段在响应 JSON 中都应按字符串解析。
 
 ## 3. 当前已实现接口总览
@@ -60,6 +60,10 @@
 | 知识文档后台管理 | `POST /api/v1/admin/knowledge-documents/import` | 已登录 + 知识文档导入权限 + 依赖 AI service 配置 | 后台上传文档并触发 prepare/index 链路 |
 | 知识文档后台管理 | `GET /api/v1/admin/knowledge-documents` | 已登录 + 知识文档列表权限 | 后台按知识库分页查询文档及处理状态 |
 | 知识文档后台管理 | `DELETE /api/v1/admin/knowledge-documents/{documentId}` | 已登录 + 知识文档删除权限 | 后台物理删除文档及其下游 chunk |
+| AI 问诊 | `POST /api/v1/ai/chat` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起非流式问诊，返回 `answer + triageResult` |
+| AI 问诊 | `POST /api/v1/ai/chat/stream` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起流式问诊，对外返回 `message/meta/end/error` SSE 事件 |
+| AI 会话回看 | `GET /api/v1/ai/sessions/{sessionId}` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话的基础信息、轮次和消息内容 |
+| AI 导诊结果 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话最新成功问诊的结构化导诊结果 |
 | 门诊挂号 | `GET /api/v1/clinic-sessions` | 已登录 | 查询当前可挂号的开放门诊场次 |
 | 门诊挂号 | `POST /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 当前患者创建挂号，同时预创建接诊记录 |
 | 门诊挂号 | `GET /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 查询当前患者自己的挂号列表 |
@@ -421,14 +425,50 @@
 - 当前实现只做接诊列表，不包含接诊详情、AI 摘要、病历、处方。
 - 没有接诊权限的医生会先在场景鉴权阶段收到 `403 + 1003`。
 
-## 10. 容易被文档误导的未实现接口
+## 10. 当前已实现 AI 接口补充
+
+### 10.1 `POST /api/v1/ai/chat`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `PATIENT` 角色 |
+| 请求体 | `sessionId?`、`message`、`departmentId?`、`sceneType`、`useStream` |
+| 额外约束 | `useStream` 必须是 `false`；否则返回 `400 + 1002` |
+| 响应字段 | `sessionId`、`turnId`、`answer`、`triageResult` |
+| `triageResult` | `riskLevel`、`guardrailAction`、`nextAction`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
+
+### 10.2 `POST /api/v1/ai/chat/stream`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `PATIENT` 角色 |
+| 请求体 | 与非流式接口一致 |
+| 事件类型 | `message`、`meta`、`end`、`error` |
+| `meta` | `sessionId`、`turnId`、`triageResult` |
+
+### 10.3 `GET /api/v1/ai/sessions/{sessionId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `PATIENT` 角色 |
+| 访问范围 | 当前仅患者本人可查看自己的 AI 会话 |
+| 响应字段 | `sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?`、`turns[]` |
+| `turns[]` | `turnId`、`turnNo`、`turnStatus`、`startedAt`、`completedAt?`、`errorCode?`、`errorMessage?`、`messages[]` |
+| `messages[]` | `role`、`content`、`createdAt` |
+
+### 10.4 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `PATIENT` 角色 |
+| 访问范围 | 当前仅患者本人可查看自己的导诊结果 |
+| 响应字段 | `sessionId`、`riskLevel`、`guardrailAction`、`nextAction`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
+| 历史数据 | 老会话如果生成时未落完整结构化 detail，`chiefComplaintSummary`、`recommendedDepartments`、`careAdvice` 可能为空 |
+
+## 11. 容易被文档误导的未实现接口
 
 下面这些接口在设计文档里已经出现，但当前代码里还没有对应 controller，不应当被当成当前可调用契约：
 
-- `POST /api/v1/ai/chat`
-- `POST /api/v1/ai/chat/stream`
-- `GET /api/v1/ai/sessions/{sessionId}`
-- `GET /api/v1/ai/sessions/{sessionId}/triage-result`
 - `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 - `GET /api/v1/encounters/{encounterId}`
 - `GET /api/v1/encounters/{encounterId}/ai-summary`
@@ -439,6 +479,6 @@
 - `GET /api/v1/audit/events`
 - `GET /api/v1/audit/data-access`
 
-## 11. 一句话结论
+## 12. 一句话结论
 
 如果目的是“按当前代码联调或写前后端接口文档”，应以本文档为准；如果目的是“看目标架构或后续计划”，再看 `01-OVERVIEW`、`10A`、`00E` 等设计/排期文档。

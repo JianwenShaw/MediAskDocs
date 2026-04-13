@@ -28,7 +28,7 @@
 |------|------|--------|
 | `POST /api/v1/ai/chat` | 非流式问诊 | 患者 H5 / 调试 |
 | `POST /api/v1/ai/chat/stream` | 流式问诊（SSE） | 患者 H5 |
-| `GET /api/v1/ai/sessions/{sessionId}` | 会话详情与轮次列表 | 患者 H5 / 医生 Web |
+| `GET /api/v1/ai/sessions/{sessionId}` | 会话详情与轮次列表 | 患者 H5 |
 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 导诊结果、风险结果、引用与推荐科室 | 患者 H5 |
 | `POST /api/v1/ai/sessions/{sessionId}/registration-handoff` | 从 AI 结果生成挂号承接参数 | 患者 H5 |
 | `GET /api/v1/encounters/{encounterId}/ai-summary` | 医生查看接诊前 AI 摘要 | 医生 Web |
@@ -118,6 +118,42 @@ SSE 事件固定为：
 
 ## 6. 导诊结果与挂号承接
 
+### 6.0 `GET /api/v1/ai/sessions/{sessionId}`
+
+`data` 至少包含：
+
+- `sessionId`
+- `sceneType`
+- `status`
+- `departmentId`
+- `chiefComplaintSummary`
+- `summary`
+- `startedAt`
+- `endedAt`
+- `turns`
+
+`turns[]` 至少包含：
+
+- `turnId`
+- `turnNo`
+- `turnStatus`
+- `startedAt`
+- `completedAt`
+- `errorCode`
+- `errorMessage`
+- `messages`
+
+`messages[]` 至少包含：
+
+- `role`
+- `content`
+- `createdAt`
+
+规则：
+
+- 当前实现仅支持患者本人回看自己的 AI 会话
+- 医生侧查看 AI 内容仍走后续 `GET /api/v1/encounters/{encounterId}/ai-summary`
+
 ### 6.1 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
 
 `data` 至少包含：
@@ -130,6 +166,11 @@ SSE 事件固定为：
 - `recommendedDepartments`
 - `careAdvice`
 - `citations`
+
+补充说明：
+
+- 历史老会话如果生成时尚未持久化完整结构化导诊 detail，`chiefComplaintSummary`、`recommendedDepartments`、`careAdvice` 可能为空
+- 前端应以该接口返回的结构化字段作为导诊结果真相，不从聊天文本中自行解析
 
 ### 6.2 `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 

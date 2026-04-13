@@ -151,7 +151,7 @@
 |------|------------------|-----------------------------|
 | `POST /api/v1/ai/chat` | `sessionId?`、`message`、`departmentId?`、`sceneType`、`useStream` | `sessionId`、`turnId`、`answer`、`triageResult` |
 | `POST /api/v1/ai/chat/stream` | 同上 | `message` 文本片段；`meta.sessionId`、`meta.turnId`、`meta.triageResult` |
-| `GET /api/v1/ai/sessions/{id}` | Path `sessionId` | `sessionId`、`sceneType`、`turns[]` |
+| `GET /api/v1/ai/sessions/{id}` | Path `sessionId` | `sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?`、`turns[]` |
 | `GET /api/v1/ai/sessions/{id}/triage-result` | Path `sessionId` | `sessionId`、`riskLevel`、`guardrailAction`、`nextAction`、`recommendedDepartments`、`careAdvice`、`citations` |
 
 ### `triageResult` 最小字段
@@ -165,6 +165,12 @@
 | `recommendedDepartments` | 推荐科室列表 |
 | `careAdvice` | 保守建议或就医提示 |
 | `citations` | 引用片段列表 |
+
+`GET /api/v1/ai/sessions/{id}` 补充约定：
+
+- 当前实现仅允许患者本人回看自己的 AI 会话
+- `turns[]` 至少返回 `turnId`、`turnNo`、`turnStatus`、`startedAt`、`completedAt?`、`errorCode?`、`errorMessage?`、`messages[]`
+- `messages[]` 至少返回 `role`、`content`、`createdAt`
 
 ## 4.3 挂号承接
 

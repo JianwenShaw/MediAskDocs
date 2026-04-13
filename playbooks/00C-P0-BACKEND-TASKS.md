@@ -126,10 +126,10 @@
 ### 交付物
 
 - [x] `AiChatPort`、`PythonAiChatPortAdapter`、请求/响应 DTO 契约
-- [ ] `POST /api/v1/ai/chat`
-- [ ] `POST /api/v1/ai/chat/stream`
-- [ ] `GET /api/v1/ai/sessions/{sessionId}`
-- [ ] `GET /api/v1/ai/sessions/{sessionId}/triage-result`
+- [x] `POST /api/v1/ai/chat`
+- [x] `POST /api/v1/ai/chat/stream`
+- [x] `GET /api/v1/ai/sessions/{sessionId}`
+- [x] `GET /api/v1/ai/sessions/{sessionId}/triage-result`
 
 ### 关键表
 
@@ -142,17 +142,17 @@
 
 ### 实现规则
 
-- [ ] Java 预创建 `ai_model_run`
-- [ ] Java 持久化 `ai_session`、`ai_turn`、`ai_turn_content`
-- [ ] Java 调 Python 时透传 `model_run_id + request_id`
+- [x] Java 预创建 `ai_model_run`
+- [x] Java 持久化 `ai_session`、`ai_turn`、`ai_turn_content`
+- [x] Java 调 Python 时透传 `model_run_id + request_id`
 - [ ] Python 负责检索、生成、护栏、引用写入
-- [ ] Java 负责会话主事实、对外协议、审计串联
+- [x] Java 负责会话主事实、对外协议、审计串联
 
 ### 验收标准
 
-- [ ] 回答可展示引用
-- [ ] 返回 `riskLevel / guardrailAction / nextAction`
-- [ ] 高风险分支不继续普通问答
+- [x] 回答可展示引用
+- [x] 返回 `riskLevel / guardrailAction / nextAction`
+- [x] 高风险分支不继续普通问答
 
 ## 3.5 Task E：AI 到挂号承接
 

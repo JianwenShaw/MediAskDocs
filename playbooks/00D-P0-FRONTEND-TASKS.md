@@ -53,9 +53,11 @@
 - [ ] 展示 `careAdvice`
 - [ ] 展示引用来源
 - [ ] 展示是否可继续挂号
+- [ ] 支持从 `sessionId` 刷新恢复结果页，不依赖首次 chat 响应缓存
 
 ### 依赖接口
 
+- [ ] `/api/v1/ai/sessions/{sessionId}`
 - [ ] `/api/v1/ai/sessions/{sessionId}/triage-result`
 - [ ] `/api/v1/ai/sessions/{sessionId}/registration-handoff`
 
@@ -64,6 +66,8 @@
 - [ ] `VIEW_TRIAGE_RESULT`：正常展示结果
 - [ ] `GO_REGISTRATION`：展示挂号入口
 - [ ] `EMERGENCY_OFFLINE` / `MANUAL_SUPPORT`：跳转高风险提示页
+- [ ] 不从聊天文本中解析推荐科室、风险或引用，结构化结果以 `triage-result` 为准
+- [ ] 历史老会话若 `chiefComplaintSummary`、`recommendedDepartments`、`careAdvice` 为空，应允许空态展示
 
 ## 2.4 Page D：高风险提示页
 
