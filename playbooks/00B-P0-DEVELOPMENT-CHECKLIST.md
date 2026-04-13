@@ -143,6 +143,7 @@
 
 - [x] `POST /api/v1/ai/chat`
 - [x] `POST /api/v1/ai/chat/stream`
+- [x] `GET /api/v1/ai/sessions`
 - [x] `GET /api/v1/ai/sessions/{sessionId}`
 - [x] `GET /api/v1/ai/sessions/{sessionId}/triage-result`
 

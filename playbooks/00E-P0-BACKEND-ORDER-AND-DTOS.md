@@ -151,6 +151,7 @@
 |------|------------------|-----------------------------|
 | `POST /api/v1/ai/chat` | `sessionId?`、`message`、`departmentId?`、`sceneType`、`useStream` | `sessionId`、`turnId`、`answer`、`triageResult` |
 | `POST /api/v1/ai/chat/stream` | 同上 | `message` 文本片段；`meta.sessionId`、`meta.turnId`、`meta.triageResult` |
+| `GET /api/v1/ai/sessions` | 无 | `items[].sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?` |
 | `GET /api/v1/ai/sessions/{id}` | Path `sessionId` | `sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?`、`turns[]` |
 | `GET /api/v1/ai/sessions/{id}/triage-result` | Path `sessionId` | `sessionId`、`riskLevel`、`guardrailAction`、`nextAction`、`recommendedDepartments`、`careAdvice`、`citations` |
 
@@ -165,6 +166,12 @@
 | `recommendedDepartments` | 推荐科室列表 |
 | `careAdvice` | 保守建议或就医提示 |
 | `citations` | 引用片段列表 |
+
+`GET /api/v1/ai/sessions` 补充约定：
+
+- 当前实现仅允许患者本人查看自己的会话列表
+- 当前版本不分页、不筛选，按 `startedAt DESC` 返回
+- 只返回最小摘要字段，不携带 `turns[]` 或导诊结构化结果
 
 `GET /api/v1/ai/sessions/{id}` 补充约定：
 

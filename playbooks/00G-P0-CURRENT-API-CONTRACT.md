@@ -62,6 +62,7 @@
 | 知识文档后台管理 | `DELETE /api/v1/admin/knowledge-documents/{documentId}` | 已登录 + 知识文档删除权限 | 后台物理删除文档及其下游 chunk |
 | AI 问诊 | `POST /api/v1/ai/chat` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起非流式问诊，返回 `answer + triageResult` |
 | AI 问诊 | `POST /api/v1/ai/chat/stream` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起流式问诊，对外返回 `message/meta/end/error` SSE 事件 |
+| AI 会话列表 | `GET /api/v1/ai/sessions` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回当前患者的 AI 会话最小摘要列表 |
 | AI 会话回看 | `GET /api/v1/ai/sessions/{sessionId}` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话的基础信息、轮次和消息内容 |
 | AI 导诊结果 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话最新成功问诊的结构化导诊结果 |
 | 门诊挂号 | `GET /api/v1/clinic-sessions` | 已登录 | 查询当前可挂号的开放门诊场次 |
@@ -446,7 +447,18 @@
 | 事件类型 | `message`、`meta`、`end`、`error` |
 | `meta` | `sessionId`、`turnId`、`triageResult` |
 
-### 10.3 `GET /api/v1/ai/sessions/{sessionId}`
+### 10.3 `GET /api/v1/ai/sessions`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `PATIENT` 角色 |
+| 访问范围 | 当前仅患者本人可查看自己的 AI 会话列表 |
+| 查询参数 | 当前无 |
+| 排序 | `startedAt DESC`，同一时间按 `sessionId DESC` |
+| 响应字段 | `items[].sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?` |
+| 返回范围 | 仅最小摘要，不返回 `turns[]`、消息原文或导诊结构化结果 |
+
+### 10.4 `GET /api/v1/ai/sessions/{sessionId}`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -456,7 +468,7 @@
 | `turns[]` | `turnId`、`turnNo`、`turnStatus`、`startedAt`、`completedAt?`、`errorCode?`、`errorMessage?`、`messages[]` |
 | `messages[]` | `role`、`content`、`createdAt` |
 
-### 10.4 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
+### 10.5 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
