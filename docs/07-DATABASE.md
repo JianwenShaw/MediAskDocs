@@ -32,6 +32,7 @@
 - 同一实例内对审计与事件采用 schema 隔离：`audit` schema 放监管表，`event` schema 放领域事件与 Outbox；本文默认省略 schema 前缀
 - 字符集：UTF-8（PostgreSQL 默认）
 - 主键：`BIGINT`（业务侧雪花 ID）
+- 跨服务写库方必须遵循同一雪花 ID 规则，不能各自定义本地唯一策略
 - 时间字段：`TIMESTAMPTZ`
 - 核心交易表包含 `version INT NOT NULL DEFAULT 0`
 - 高敏正文默认独立分表，按列加密或应用层加密后存储

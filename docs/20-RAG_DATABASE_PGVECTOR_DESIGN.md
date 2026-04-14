@@ -225,6 +225,7 @@ flowchart LR
 - `search_tsv` 负责 sparse / keyword retrieval
 - `authority_score` 和 `freshness_score` 为融合排序预留业务加权位
 - `search_tsv` 建议由 `search_lexemes` 生成，而不是直接吃原始中文文本
+- `is_active` 仅代表投影侧可检索状态；真实读取时仍应同时校验 `knowledge_chunk.chunk_status = ACTIVE` 且 `deleted_at IS NULL`
 
 ### 5.5 `ai_run_citation`
 

@@ -240,6 +240,12 @@ SSE 事件：
 POST /api/v1/knowledge/search
 ```
 
+定位：
+
+- 内部 RAG retrieval 接口，不面向终端用户直接暴露搜索能力
+- 主要供 `chat` / `chat_stream` 在生成前执行检索，也允许 Java/Python 联调或后台试搜复用
+- `model_run_id` 仅控制是否写入 `ai_run_citation`，不改变检索排序逻辑
+
 请求：
 
 ```json
@@ -250,6 +256,37 @@ POST /api/v1/knowledge/search
   "knowledge_base_ids": [1001]
 }
 ```
+
+响应：
+
+```json
+{
+  "query": "高血压饮食注意事项",
+  "items": [
+    {
+      "chunk_id": 7001001,
+      "score": 0.0323,
+      "vector_score": 0.812,
+      "keyword_score": 0.426,
+      "document_id": 6001001,
+      "knowledge_base_id": 1001,
+      "content_preview": "高血压患者应减少钠盐摄入。",
+      "citation_label": "高血压指南 / 生活方式管理 / P3",
+      "section_title": "生活方式管理",
+      "page_no": 3
+    }
+  ],
+  "is_degraded": false
+}
+```
+
+约束：
+
+- `knowledge_base_ids` 必填，且至少包含一个知识库
+- `model_run_id` 可选；传入时写 `ai_run_citation`，不传时只返回结果
+- `score` 为融合排序分数；`vector_score` / `keyword_score` 仅用于解释命中来源
+- 命中结果除满足 chunk/index 有效条件外，还必须满足 `knowledge_document.document_status = ACTIVE` 且 `deleted_at IS NULL`
+- 当前 `chat/chat_stream` 还未接入这一步 retrieval；`search` 现阶段主要用于内部联调、检索验证和下一轮 RAG chat 复用
 
 ### 5.6 文档预处理与切块准备
 
@@ -365,20 +402,26 @@ sequenceDiagram
 
 - `knowledge_document` 和 `knowledge_chunk` 属于业务主事实，必须由 Java 持久化
 - Python 负责生成 chunk payload，但不直接写 `knowledge_chunk`
-- Python 在 `knowledge/index` 阶段根据 `document_id` 自行读取已持久化的 `knowledge_chunk`
+- Python 在 `knowledge/index` 阶段根据 `document_id` 自行读取已持久化的 `knowledge_chunk`，但仅为 `chunk_status=ACTIVE 且 deleted_at IS NULL` 的 chunk 建立或更新检索投影
 - Python 直接写库的范围仅限检索投影 `knowledge_chunk_index`，与 AI 运行期的 `ai_run_citation`
+- Python 写 `ai_run_citation.id` 时必须使用与 Java 一致的雪花 ID 规则，不能使用仅进程内唯一的本地计数器
 
 ### 7.2 查询流程
 
 1. Java 预创建 `ai_model_run`
-2. Java 传入 `model_run_id`
+2. Java 在运行期传入 `model_run_id`；联调/试搜场景可省略
 3. Python 做查询归一、PII 预处理
 4. Query 向量化
 5. pgvector 向量检索 + tsvector 关键词检索
 6. RRF 融合与阈值过滤
-7. Python 写入 `ai_run_citation(model_run_id, chunk_id, ...)`
+7. Python 在提供 `model_run_id` 时写入 `ai_run_citation(model_run_id, chunk_id, ...)`
 8. 调用 LLM
 9. 返回 answer + citations + guardrail + run metadata
+
+补充约束：
+
+- 检索命中结果必须同时满足 `knowledge_chunk_index.is_active = TRUE` 与 `knowledge_chunk.chunk_status = ACTIVE AND deleted_at IS NULL`
+- `knowledge_chunk_index` 是检索投影，不得替代 `knowledge_chunk` 作为业务主事实判断依据
 
 ### 7.3 输出边界
 
