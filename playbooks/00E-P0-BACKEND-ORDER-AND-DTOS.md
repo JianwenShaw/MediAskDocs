@@ -183,12 +183,19 @@
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
 |------|------------------|----------------------|
-| `POST /api/v1/ai/sessions/{id}/registration-handoff` | Path `sessionId` | `sessionId`、`recommendedDepartmentId`、`recommendedDepartmentName`、`chiefComplaintSummary`、`suggestedVisitType`、`registrationQuery` |
+| `POST /api/v1/ai/sessions/{id}/registration-handoff` | Path `sessionId` | `sessionId`、`recommendedDepartmentId?`、`recommendedDepartmentName?`、`chiefComplaintSummary?`、`suggestedVisitType?`、`blockedReason?`、`registrationQuery?` |
 | `GET /api/v1/clinic-sessions` | `departmentId?`、`dateFrom?`、`dateTo?` | `items[]` |
 | `POST /api/v1/registrations` | `clinicSessionId`、`clinicSlotId`、`sourceAiSessionId?` | `registrationId`、`orderNo`、`status` |
 | `GET /api/v1/registrations` | `status?` | `items[]` |
 
 说明：登录态或 `CurrentUserResponse` 中的 `patientId` 表示 `patient_profile.id`；医疗业务表中的 `patient_id`（如 `registration_order.patient_id`）统一表示 `users.id`，两者不能混用。
+
+补充约定：
+
+- `suggestedVisitType` 当前固定为 `OUTPATIENT`，仅表达普通门诊承接类型，不映射现有 `clinicType`
+- `registrationQuery` 最小字段为 `departmentId`、`dateFrom`、`dateTo`
+- 默认查询窗口为今天起未来 7 天
+- `riskLevel=high` 时返回 `blockedReason=EMERGENCY_OFFLINE`，不返回普通挂号查询参数
 
 ## 4.4 接诊、病历、处方
 

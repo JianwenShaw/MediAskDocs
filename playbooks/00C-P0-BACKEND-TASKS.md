@@ -23,7 +23,7 @@
 | Task B：认证、角色、数据范围基线 | 部分完成 | 登录/刷新/登出/当前用户、本人资料、管理员患者管理已完成；对象级授权仍缺资源解析实现 |
 | Task C：知识库与 RAG 底座 | 未完成 | 表结构与 Java AI client 骨架已在仓库中，知识导入与索引链路未开始 |
 | Task D：AI 问诊主链路 | 未完成 | 没有 AI Controller/UseCase/会话持久化/对外接口 |
-| Task E：AI 到挂号承接 | 部分完成 | 场次查询、挂号创建、挂号列表已完成；`registration-handoff` 未完成 |
+| Task E：AI 到挂号承接 | 大体完成 | 场次查询、挂号创建、挂号列表、`registration-handoff` 已完成；AI 来源校验与完整验收仍待补强 |
 | Task F：医生接诊、病历、处方 | 部分完成 | 接诊列表已完成；接诊详情、AI 摘要、病历、处方未完成 |
 | Task G：审计与敏感访问留痕 | 未完成 | 审计表已建，写入与查询完全未落地 |
 
@@ -159,7 +159,7 @@
 
 ### 交付物
 
-- [ ] `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
+- [x] `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 - [x] `GET /api/v1/clinic-sessions`
 - [x] `POST /api/v1/registrations`
 - [x] `GET /api/v1/registrations`
@@ -175,8 +175,8 @@
 - [x] 患者可基于现有门诊场次完成挂号
 - [x] 挂号成功后预创建 `visit_encounter`
 - [x] `registration_order.source_ai_session_id` 字段已预留
-- [ ] AI 推荐科室可转成挂号查询条件
-- [ ] `registration_order.source_ai_session_id` 可从 AI 主链真实追溯
+- [x] AI 推荐科室可转成挂号查询条件
+- [x] `registration_order.source_ai_session_id` 已具备现有入参与落库追溯能力，后续仅补强校验与验收
 
 ## 3.6 Task F：医生接诊、病历、处方
 

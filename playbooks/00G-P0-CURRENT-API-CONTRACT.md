@@ -65,6 +65,7 @@
 | AI 会话列表 | `GET /api/v1/ai/sessions` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回当前患者的 AI 会话最小摘要列表 |
 | AI 会话回看 | `GET /api/v1/ai/sessions/{sessionId}` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话的基础信息、轮次和消息内容 |
 | AI 导诊结果 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话最新成功问诊的结构化导诊结果 |
+| AI 挂号承接 | `POST /api/v1/ai/sessions/{sessionId}/registration-handoff` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话的挂号承接参数或阻断原因 |
 | 门诊挂号 | `GET /api/v1/clinic-sessions` | 已登录 | 查询当前可挂号的开放门诊场次 |
 | 门诊挂号 | `POST /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 当前患者创建挂号，同时预创建接诊记录 |
 | 门诊挂号 | `GET /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 查询当前患者自己的挂号列表 |
@@ -477,11 +478,23 @@
 | 响应字段 | `sessionId`、`riskLevel`、`guardrailAction`、`nextAction`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
 | 历史数据 | 老会话如果生成时未落完整结构化 detail，`chiefComplaintSummary`、`recommendedDepartments`、`careAdvice` 可能为空 |
 
+### 10.6 `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `PATIENT` 角色 |
+| 访问范围 | 当前仅患者本人可查看自己的挂号承接结果 |
+| 请求体 | 无 |
+| 响应字段 | `sessionId`、`recommendedDepartmentId?`、`recommendedDepartmentName?`、`chiefComplaintSummary?`、`suggestedVisitType?`、`blockedReason?`、`registrationQuery?` |
+| `registrationQuery` | `departmentId`、`dateFrom`、`dateTo` |
+| 普通分支 | 当前固定返回 `suggestedVisitType=OUTPATIENT`，并生成“今天起未来 7 天”的挂号查询窗口 |
+| 高风险分支 | `blockedReason=EMERGENCY_OFFLINE`，不返回普通挂号查询参数 |
+| 缺少推荐科室 | 非高风险但没有推荐科室时，返回 `409 + 6020` |
+
 ## 11. 容易被文档误导的未实现接口
 
 下面这些接口在设计文档里已经出现，但当前代码里还没有对应 controller，不应当被当成当前可调用契约：
 
-- `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 - `GET /api/v1/encounters/{encounterId}`
 - `GET /api/v1/encounters/{encounterId}/ai-summary`
 - `POST /api/v1/emr`

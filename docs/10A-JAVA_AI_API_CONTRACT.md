@@ -210,9 +210,11 @@ SSE 事件固定为：
   "recommendedDepartmentName": "神经内科",
   "chiefComplaintSummary": "头痛三天伴低烧",
   "suggestedVisitType": "OUTPATIENT",
+  "blockedReason": null,
   "registrationQuery": {
     "departmentId": "101",
-    "dateFrom": "2026-03-15"
+    "dateFrom": "2026-03-15",
+    "dateTo": "2026-03-21"
   }
 }
 ```
@@ -220,7 +222,9 @@ SSE 事件固定为：
 规则：
 
 - 该接口只做承接信息生成，不直接创建 `registration_order`
-- 如果 `nextAction = EMERGENCY_OFFLINE`，则返回紧急线下处置提示，不生成普通挂号承接参数
+- `suggestedVisitType` 当前固定为 `OUTPATIENT`，仅表达普通门诊承接类型，不等同于线下场次里的 `clinicType`
+- 默认返回未来 7 天的挂号查询窗口：`dateFrom = 今天`，`dateTo = 今天 + 6 天`
+- 如果 `riskLevel = high`，则返回 `blockedReason = EMERGENCY_OFFLINE`，不生成普通挂号承接参数；此时 `suggestedVisitType`、`registrationQuery`、推荐挂号科室字段返回 `null`
 
 ## 7. 医生接诊摘要承接
 

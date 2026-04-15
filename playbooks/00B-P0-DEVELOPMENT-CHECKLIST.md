@@ -181,7 +181,7 @@
 
 ### Java 对外接口
 
-- [ ] `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
+- [x] `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 - [x] `GET /api/v1/clinic-sessions`
 - [x] `POST /api/v1/registrations`
 - [x] `GET /api/v1/registrations`
@@ -197,8 +197,8 @@
 - [x] 患者能基于现有门诊场次完成挂号
 - [x] 挂号成功后预创建 `visit_encounter`
 - [x] `registration_order.source_ai_session_id` 字段已预留
-- [ ] AI 结果能带出推荐科室和挂号查询参数
-- [ ] `registration_order.source_ai_session_id` 通过 AI 承接链路真实写入
+- [x] AI 结果能带出推荐科室和挂号查询参数
+- [x] `registration_order.source_ai_session_id` 字段已支持通过现有挂号入参承接，后续仅补强校验与验收
 
 ## 4.6 Phase F：医生接诊、病历、处方
 
@@ -267,7 +267,7 @@
 | AI 问诊页 | `/api/v1/ai/chat`、`/api/v1/ai/chat/stream` | `ai_session`、`ai_turn`、`ai_model_run` | 发起问诊、流式问答 | 未开始 |
 | 导诊结果页 | `/api/v1/ai/sessions/{id}/triage-result` | `ai_run_citation`、`knowledge_chunk` | 展示引用、风险和推荐科室 | 后端已实现，前端未开始 |
 | 挂号页 | `/api/v1/clinic-sessions`、`/api/v1/registrations` | `clinic_session`、`clinic_slot`、`registration_order` | 查门诊、创建挂号、查看我的挂号 | 已实现 |
-| AI 到挂号承接 | `/api/v1/ai/sessions/{id}/registration-handoff` | `ai_session`、`registration_order` | 把 AI 结果转为挂号入口 | 未开始 |
+| AI 到挂号承接 | `/api/v1/ai/sessions/{id}/registration-handoff` | `ai_session`、`registration_order` | 把 AI 结果转为挂号入口 | 后端已实现，前端未开始 |
 | 医生接诊列表 | `/api/v1/encounters` | `visit_encounter`、`registration_order` | 医生查看本人待接诊记录 | 已实现 |
 | 接诊详情 / 病历 / 处方 | `/api/v1/encounters/{id}`、`/api/v1/emr/*`、`/api/v1/prescriptions/*` | `visit_encounter`、`emr_*`、`prescription_*` | 接诊详情、病历录入、处方录入 | 未开始 |
 | 审计页 | `/api/v1/audit/*` | `audit_event`、`data_access_log` | 审计查询与敏感访问追溯 | 未开始 |
