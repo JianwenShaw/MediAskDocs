@@ -34,7 +34,7 @@ app/
         logging.py               # 结构化日志
         errors.py                # 错误码与异常映射
     middleware/
-        auth.py                  # X-API-Key 校验
+        auth.py                  # 预留：后续如需接入 API Key 鉴权时使用
         request_context.py       # X-Request-Id 透传与日志上下文
     services/
         llm/
@@ -149,7 +149,6 @@ APP_ENV=prod make run
 ```http
 GET /health
 GET /ready
-GET /metrics
 ```
 
 ### 5.2 Request ID 规范
@@ -183,15 +182,22 @@ X-Request-Id: req_01hrx6m5q4x5v2f6k4w4x1c7pz
   "message": "头痛三天，伴有低烧，应该先看什么科？",
   "context_summary": "患者女性，28岁，无已知慢病",
   "use_rag": true,
-  "stream": false
+  "knowledge_base_ids": [5001001]
 }
 ```
+
+约束：
+
+- `use_rag=true` 时，`knowledge_base_ids` 必填且至少包含一个知识库
+- `use_rag=false` 时，不执行检索，`knowledge_base_ids` 可省略
 
 响应：
 
 ```json
 {
   "model_run_id": 9001001,
+  "turn_id": 8002001,
+  "session_uuid": "ai-sess-001",
   "provider_run_id": "deepseek-run-abc",
   "answer": "建议尽快线下就医，优先考虑神经内科或发热门诊分诊。",
   "summary": "头痛三天伴低烧，建议线下就医并优先分诊。",
@@ -230,9 +236,33 @@ POST /api/v1/chat/stream
 SSE 事件：
 
 - `message`：流式文本片段
-- `meta`：在结束前返回一次结构化元数据（`citations/risk_level`）；`request_id` 由 Header 串联
+- `meta`：在结束前返回一次结构化元数据（`citations/risk_level/guardrail_action/is_degraded`）；`request_id` 由 Header 串联
 - `end`：正常结束
 - `error`：异常结束
+
+`meta` 事件当前至少包含：
+
+```json
+{
+  "risk_level": "low",
+  "guardrail_action": "allow",
+  "recommended_departments": [],
+  "citations": [
+    {
+      "chunk_id": 7003001,
+      "retrieval_rank": 1,
+      "fusion_score": 0.82,
+      "snippet": "持续头痛伴发热应结合感染风险进行线下评估。"
+    }
+  ],
+  "is_degraded": false
+}
+```
+
+说明：
+
+- `recommended_departments` 当前固定返回空数组，本轮不在 Python 内部契约中扩展推荐科室生成
+- `is_degraded=true` 表示本次请求要求使用 RAG，但检索未命中可用结果，最终走保守回答路径
 
 ### 5.5 知识检索
 
@@ -286,7 +316,8 @@ POST /api/v1/knowledge/search
 - `model_run_id` 可选；传入时写 `ai_run_citation`，不传时只返回结果
 - `score` 为融合排序分数；`vector_score` / `keyword_score` 仅用于解释命中来源
 - 命中结果除满足 chunk/index 有效条件外，还必须满足 `knowledge_document.document_status = ACTIVE` 且 `deleted_at IS NULL`
-- 当前 `chat/chat_stream` 还未接入这一步 retrieval；`search` 现阶段主要用于内部联调、检索验证和下一轮 RAG chat 复用
+- 当前 `chat/chat_stream` 已直接复用这一步 retrieval 构建上下文、返回 citations，并在传入 `model_run_id` 时写入 `ai_run_citation`
+- `search` 仍可独立用于内部联调、检索验证和试搜场景
 
 ### 5.6 文档预处理与切块准备
 
@@ -356,11 +387,13 @@ POST /api/v1/knowledge/index
 - `knowledge/index` 不再由 Java 回传整批 chunk 文本
 - Python 根据 `document_id` 自行读取 `knowledge_chunk`，并为这些稳定 `chunk_id` 生成索引投影
 
-## 6. 认证与安全
+## 6. 请求上下文与安全现状
 
-- Header：`X-API-Key: <API_KEY>`
-- 未通过返回 `401`，失败体统一为 `{code, msg, requestId, timestamp}`，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md)
-- 强制要求：输入/输出 PII 脱敏、风险分级、拒答策略、审计字段与 `request_id`
+- 当前代码已实现 `X-Request-Id` 透传；若缺失则兼容 `X-Trace-Id`，两者都没有时由服务端生成 UUID v4
+- 当前代码会在响应头中回写 `X-Request-Id`
+- 当前代码尚未实现 `X-API-Key` 鉴权中间件；如需补齐，应作为后续安全治理项单独落地，而不是视为现状契约
+- 失败响应统一为 `{code, msg, requestId, timestamp}`，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md)
+- 输入/输出 PII 脱敏、风险分级、拒答策略与 `request_id` 串联仍是本服务的设计约束
 
 ## 7. RAG 流程
 

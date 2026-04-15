@@ -376,14 +376,14 @@ sequenceDiagram
     J->>J: 接收后台上传文件
     J->>J: 写入对象存储/文件存储并生成 sourceUri
     J->>PG: 创建 knowledge_document(status=UPLOADED/INGESTING)
-    J->>P: POST /api/v1/knowledge/prepare(documentId, sourceUri, metadata)
+    J->>P: POST /api/v1/knowledge/prepare(document_id, document_uuid, knowledge_base_id, title, source_type, source_uri)
     P->>P: 解析原始文档
     P->>P: 文本清洗 / 术语归一 / chunk 切分
     P-->>J: 返回 chunk payload
     Note over P,PG: Python 不直接写 knowledge_chunk
     J->>PG: 持久化 knowledge_chunk
     J->>PG: 更新 knowledge_document(status=CHUNKED/INDEXING)
-    J->>P: POST /api/v1/knowledge/index(documentId / chunkIds)
+    J->>P: POST /api/v1/knowledge/index(document_id, knowledge_base_id)
     P->>E: 生成 embedding
     P->>PG: upsert knowledge_chunk_index
     J->>PG: 更新 knowledge_document(status=ACTIVE)
