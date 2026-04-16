@@ -127,7 +127,6 @@
 
 - [x] `AiChatPort`、`PythonAiChatPortAdapter`、请求/响应 DTO 契约
 - [x] `POST /api/v1/ai/chat`
-- [x] `POST /api/v1/ai/chat/stream`
 - [x] `GET /api/v1/ai/sessions`
 - [x] `GET /api/v1/ai/sessions/{sessionId}`
 - [x] `GET /api/v1/ai/sessions/{sessionId}/triage-result`

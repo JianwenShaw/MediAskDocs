@@ -9,15 +9,16 @@
 ## 1. 设计原则
 
 - 浏览器只访问 `mediask-api`，不直连 `mediask-ai`
-- Java 对外 `JSON` 接口统一使用 `Result<T>`：`{code, msg, data, requestId, timestamp}`；SSE 走事件流协议
+- Java 对外 `JSON` 接口统一使用 `Result<T>`：`{code, msg, data, requestId, timestamp}`
 - Java 对外 `JSON` 中涉及业务主键的 `Long/long` 字段统一按字符串返回，前端按字符串处理 `sessionId`、`turnId`、`encounterId`、`chunkId` 等 ID
 - Python 内部返回 `risk_level`、`guardrail_action`、`citations` 等执行结果；Java 负责整理成前端可直接消费的业务结果
 - AI 结果必须能承接到挂号和医生接诊，而不是停留在一段聊天文本
+- 导诊结构化结果采用单真相模型：`chat`、`triage-result`、`registration-handoff` 共享同一份已持久化 run 结果
 
 ## 2. P0 必须打通的用户链路
 
 1. 患者发起 AI 问诊
-2. 前端接收流式回答、引用和风险结果
+2. 前端接收回答、引用和风险结果；如需流式观感，由上层基于完整回答做伪流式展示
 3. 患者查看导诊结果与推荐科室
 4. 患者从 AI 结果跳转挂号
 5. 医生在接诊页查看 AI 摘要
@@ -27,7 +28,6 @@
 | 接口 | 说明 | 调用方 |
 |------|------|--------|
 | `POST /api/v1/ai/chat` | 非流式问诊 | 患者 H5 / 调试 |
-| `POST /api/v1/ai/chat/stream` | 流式问诊（SSE） | 患者 H5 |
 | `GET /api/v1/ai/sessions` | 当前患者 AI 会话列表 | 患者 H5 |
 | `GET /api/v1/ai/sessions/{sessionId}` | 会话详情与轮次列表 | 患者 H5 |
 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 导诊结果、风险结果、引用与推荐科室 | 患者 H5 |
@@ -58,9 +58,10 @@
   "turnId": "90011",
   "answer": "建议尽快线下就医，优先考虑神经内科或发热门诊分诊。",
   "triageResult": {
+    "triageStage": "READY",
     "riskLevel": "medium",
     "guardrailAction": "caution",
-    "nextAction": "GO_REGISTRATION",
+    "nextAction": "VIEW_TRIAGE_RESULT",
     "recommendedDepartments": [
       {
         "departmentId": "101",
@@ -83,39 +84,18 @@
 }
 ```
 
-## 5. 流式问诊
+补充说明：
 
-### 5.1 `POST /api/v1/ai/chat/stream`
+- `READY` 后聊天链路统一先进入结果页，不再从聊天页直接跳挂号页
+- `COLLECTING` 阶段的 `triageResult` 需要额外返回 `followUpQuestions`
+- `followUpQuestions` 只出现在 `POST /api/v1/ai/chat` 的 `COLLECTING` 场景，不出现在 `GET /triage-result`
+- `followUpQuestions` 最多返回 2 个
 
-请求字段与非流式一致。
+## 5. 伪流式展示
 
-SSE 事件固定为：
-
-- `message`：文本片段
-- `meta`：结构化结果，只返回一次
-- `end`：正常结束
-- `error`：异常结束
-
-`meta` 事件示例：
-
-```json
-{
-  "sessionId": "90001",
-  "turnId": "90011",
-  "triageResult": {
-    "riskLevel": "low",
-    "guardrailAction": "allow",
-    "nextAction": "VIEW_TRIAGE_RESULT",
-    "recommendedDepartments": [],
-    "citations": []
-  }
-}
-```
-
-约束：
-
-- 前端以 `meta.triageResult` 作为结构化真相，不从 `message` 文本里解析推荐科室
-- SSE 断开或 `error` 结束时，前端仍使用 `requestId` 排障
+- Python 内部服务收口为 `POST /api/v1/chat`
+- Java 或前端如需“边打字边显示”的体验，只允许基于完整 `answer` 做展示层伪流式切片
+- 结构化真相仍只来自完整 `triageResult`，不从伪流式文本中反解析推荐科室、风险状态或跳转动作
 
 ## 6. 导诊结果与挂号承接
 
@@ -184,9 +164,15 @@ SSE 事件固定为：
 `data` 至少包含：
 
 - `sessionId`
+- `resultStatus`
+- `triageStage`
 - `riskLevel`
 - `guardrailAction`
 - `nextAction`
+- `finalizedTurnId`
+- `finalizedAt`
+- `hasActiveCycle`
+- `activeCycleTurnNo`
 - `chiefComplaintSummary`
 - `recommendedDepartments`
 - `careAdvice`
@@ -194,8 +180,30 @@ SSE 事件固定为：
 
 补充说明：
 
-- 历史老会话如果生成时尚未持久化完整结构化导诊 detail，`chiefComplaintSummary`、`recommendedDepartments`、`careAdvice` 可能为空
+- 当前目标设计中，`triage-result` 读取的是 session 最近一次 finalized `ai_model_run.triage_snapshot_json`，再结合 guardrail 与 citations 组装结果
+- 如果历史上已有 finalized 结果，而当前新一轮仍处于 `COLLECTING`，`GET /triage-result` 继续返回旧结果
+- 此时返回 `resultStatus = UPDATING`，明确表示“当前展示的是上一版 finalized 结果，而不是当前聊天中的最新状态”
+- `GET /triage-result` 仅在“从未产出过 finalized snapshot 且当前仍处于 `COLLECTING`”时返回 `409`
+- 历史老会话如果对应 run 尚未持久化 `triage_snapshot_json`，可能不存在 `triage-result`
 - 前端应以该接口返回的结构化字段作为导诊结果真相，不从聊天文本中自行解析
+- Python 内部用于判定 `triageStage` 的 `risk_blockers`、`missing_critical_info`、`follow_up_questions`、`department_recommendation_confidence` 不对浏览器暴露，前端不消费这些内部判定材料
+
+`resultStatus` 固定值：
+
+- `CURRENT`
+- `UPDATING`
+
+含义：
+
+- `CURRENT`：当前展示的是最新 finalized 结果，当前没有新的 active cycle 在收集
+- `UPDATING`：当前展示的是上一版 finalized 结果，但当前有新的 active cycle 仍在 `COLLECTING`
+
+结果页行为约束：
+
+- `CURRENT`：正常展示 finalized 结果
+- `UPDATING`：必须展示“正在重新评估”的提示文案
+- `UPDATING` 场景仍允许展示结果页 CTA，但应明确这是“按上一版结果继续”
+- `GET /triage-result` 成功返回时，`triageStage` 只允许 `READY` 或 `BLOCKED`
 
 ### 6.3 `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 
@@ -222,6 +230,8 @@ SSE 事件固定为：
 规则：
 
 - 该接口只做承接信息生成，不直接创建 `registration_order`
+- 该接口只消费已持久化的 run 结果，不依赖聊天文本，也不依赖单独 finalize 结果
+- 该接口只从结果页触发，不再作为聊天页 `nextAction` 的直接跳转目标
 - `suggestedVisitType` 当前固定为 `OUTPATIENT`，仅表达普通门诊承接类型，不等同于线下场次里的 `clinicType`
 - 默认返回未来 7 天的挂号查询窗口：`dateFrom = 今天`，`dateTo = 今天 + 6 天`
 - 如果 `riskLevel = high`，则返回 `blockedReason = EMERGENCY_OFFLINE`，不生成普通挂号承接参数；此时 `suggestedVisitType`、`registrationQuery`、推荐挂号科室字段返回 `null`
@@ -251,15 +261,16 @@ SSE 事件固定为：
 
 | 内部结果 | Java 对外 `nextAction` | 前端表现 |
 |----------|------------------------|----------|
-| `low + allow` | `VIEW_TRIAGE_RESULT` | 正常展示答案、引用、推荐科室 |
-| `medium + caution` | `GO_REGISTRATION` | 展示保守建议和挂号入口 |
+| `collecting` | `CONTINUE_TRIAGE` | 继续问诊，不进入结果页 |
+| `ready` | `VIEW_TRIAGE_RESULT` | 统一进入结果页，由结果页决定是否展示挂号 CTA |
 | `high + refuse` | `EMERGENCY_OFFLINE` 或 `MANUAL_SUPPORT` | 不继续普通问诊，展示紧急就医/人工求助提示 |
 
 约束：
 
 - 高风险场景不输出会被误解为诊断结论的文本
 - 高风险场景由 Java 负责把内部护栏结果映射成明确的下一步动作
-- 前端只依据 `nextAction` 做跳转和交互，不自行解释规则命中细节
+- 前端只依据 `nextAction` 做聊天结束后的跳转和交互，不自行解释规则命中细节
+- 是否出现挂号入口由结果页根据 finalized snapshot 决定，而不是由聊天态 `nextAction` 直接决定
 
 ## 9. 与内部 Python 契约的关系
 

@@ -23,8 +23,7 @@
 - `/api/v1/knowledge/index`：支持对 Java 已持久化的 chunk 批量建立索引
 - `/api/v1/knowledge/search`：作为内部 retrieval 接口，能返回 top_k chunks（含 `chunk_id/score/metadata`），并在提供 `model_run_id` 时写入 `ai_run_citation`
 - `/api/v1/chat`：`use_rag=true` 时返回 `answer + citations + risk_level`，并由 Java 回填 `ai_model_run/ai_turn_content/ai_guardrail_event`
-- `/api/v1/chat/stream`：稳定输出 `message/meta/end/error`
-- 当前代码阶段：`knowledge/search` 已可独立验证；`chat/chat_stream` 的真实 retrieval 接线保留到下一轮实现
+- 当前代码阶段：`knowledge/search` 已可独立验证；`chat` 的真实 retrieval 接线保留到下一轮实现
 - 索引成功后，只有 Java 显式确认后才能把 `knowledge_document` 更新为可用状态；索引失败必须保留重试入口
 
 ### 3.2 质量验收
@@ -48,7 +47,7 @@
 
 ### 阶段 0：冻结协议（0.5-1 天）
 
-- 确认 `chat/chat_stream` 请求体字段：`model_run_id/turn_id/session_uuid`，并通过 Header 透传 `X-Request-Id`
+- 确认 `chat` 请求体字段：`model_run_id/turn_id/session_uuid`，并通过 Header 透传 `X-Request-Id`
 - 确认 `ai_run_citation` 字段：`model_run_id/chunk_id/retrieval_rank/*score`
 - 冻结 Python 失败响应：`code/msg/requestId/timestamp`
 - 明确知识入库 ownership：Java 维护 `knowledge_document/chunk`，Python 只维护 `knowledge_chunk_index/ai_run_citation`

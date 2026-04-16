@@ -208,7 +208,63 @@ AI 问诊原文里经常包含：
 - `action_taken`：是通过、谨慎回答还是拒答
 - `matched_rule_codes`：规则命中详情，支撑复盘
 - `input_hash` / `output_hash`：满足追溯而不强制长期暴露原文
-- `event_detail_json`：留扩展空间，如命中片段、二级分类等
+- `event_detail_json`：仅保留监管扩展信息，如命中片段、二级分类等；不再承载最终推荐科室或导诊建议等业务真相
+
+## 7A. `ai_model_run.triage_snapshot_json`
+
+### 7A.1 这个字段回答什么问题
+
+- 这次成功问诊最终生成了什么导诊结果
+- 推荐科室、主诉摘要、导诊建议的业务真相是什么
+- 患者结果页和挂号承接应该读取哪一份结构化结果
+
+### 7A.2 为什么挂在 `ai_model_run` 更合理
+
+导诊结果不是监管事实，也不是引用事实。
+
+如果继续把它塞在 `ai_guardrail_event.event_detail_json` 里，会有几个问题：
+
+- 风控表和业务输出职责混淆
+- `triage-result` 只能依赖“最近一次护栏事件”临时反组装
+- 额外新建一张导诊表会带来新的写入点和一致性点
+
+导诊结果本质上就是一次成功 `ai_model_run` 的输出，因此更合理的做法是直接在 `ai_model_run` 增加 `triage_snapshot_json`：
+
+- `ai_guardrail_event` 管风控
+- `ai_model_run.triage_snapshot_json` 管导诊
+- `ai_run_citation` 管引用
+
+### 7A.3 最小内容建议
+
+- `triage_stage`
+- `triage_completion_reason`
+- `chief_complaint_summary`
+- `recommended_departments`
+- `care_advice`
+
+说明：
+
+- `triage_stage` 在 snapshot 中只允许 `READY` 或 `BLOCKED`
+- `risk_level` / `guardrail_action` 不在这里重复存储，继续来自 `ai_guardrail_event`
+- `citations` 不在这里重复存储，继续来自 `ai_run_citation`
+- `follow_up_questions` 不在这里存储，因为 `triage_snapshot_json` 只承接 finalized 结果，而不是收集中间态
+- `triage_snapshot_json` 只承接“当前 run 的 finalized 导诊业务结果”
+
+### 7A.4 与对外链路的关系
+
+- `POST /api/v1/ai/chat` 返回当前 run 的导诊快照
+- `GET /api/v1/ai/sessions/{sessionId}/triage-result` 返回 session 最近一次 finalized run 的导诊快照
+- `POST /api/v1/ai/sessions/{sessionId}/registration-handoff` 只消费最近一次 finalized run 对应的结果
+
+### 7A.5 与可导诊目录的关系
+
+导诊推荐科室不再直接来自原始 `departments` 表全量临床科室，而应来自 Java 维护的独立 `TriageDepartmentCatalog` 业务目录。
+
+这意味着：
+
+- `departments` 仍然是医院组织主数据
+- `TriageDepartmentCatalog` 是面向患者导诊的业务目录
+- Python 只能从 `TriageDepartmentCatalog` 同步到的目录中选择推荐科室
 
 ## 8. `ai_feedback_task`
 

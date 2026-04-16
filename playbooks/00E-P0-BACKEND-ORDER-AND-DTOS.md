@@ -72,17 +72,16 @@
 |------|------|------|----------|
 | `A1` | `/api/v1/auth/login`、`/api/v1/auth/me` | 先解决身份入口 | `M1` |
 | `A2` | `/api/v1/ai/chat` | 先打通非流式 AI 主链 | `M1-M5` |
-| `A3` | `/api/v1/ai/chat/stream` | 再补流式回答 | `M1-M5` |
-| `A4` | `/api/v1/ai/sessions/{id}` | 会话详情与回看 | `M5` |
-| `A5` | `/api/v1/ai/sessions/{id}/triage-result` | 导诊结果页 | `M5` |
-| `A6` | `/api/v1/ai/sessions/{id}/registration-handoff` | AI 到挂号承接 | `M5-M6` |
-| `A7` | `/api/v1/clinic-sessions` | 挂号页门诊查询 | `M6` |
-| `A8` | `/api/v1/registrations` | 创建和查看挂号 | `M6` |
-| `A9` | `/api/v1/encounters`、`/api/v1/encounters/{id}` | 医生接诊入口 | `M6-M7` |
-| `A10` | `/api/v1/encounters/{id}/ai-summary` | 医生查看 AI 摘要 | `M5-M7` |
-| `A11` | `/api/v1/emr` | 病历录入 | `M7` |
-| `A12` | `/api/v1/prescriptions` | 处方录入 | `M7` |
-| `A13` | `/api/v1/audit/events`、`/api/v1/audit/data-access` | 最小审计查询 | `M8` |
+| `A3` | `/api/v1/ai/sessions/{id}` | 会话详情与回看 | `M5` |
+| `A4` | `/api/v1/ai/sessions/{id}/triage-result` | 导诊结果页 | `M5` |
+| `A5` | `/api/v1/ai/sessions/{id}/registration-handoff` | AI 到挂号承接 | `M5-M6` |
+| `A6` | `/api/v1/clinic-sessions` | 挂号页门诊查询 | `M6` |
+| `A7` | `/api/v1/registrations` | 创建和查看挂号 | `M6` |
+| `A8` | `/api/v1/encounters`、`/api/v1/encounters/{id}` | 医生接诊入口 | `M6-M7` |
+| `A9` | `/api/v1/encounters/{id}/ai-summary` | 医生查看 AI 摘要 | `M5-M7` |
+| `A10` | `/api/v1/emr` | 病历录入 | `M7` |
+| `A11` | `/api/v1/prescriptions` | 处方录入 | `M7` |
+| `A12` | `/api/v1/audit/events`、`/api/v1/audit/data-access` | 最小审计查询 | `M8` |
 
 ## 3.2 Python 内部接口优先顺序
 
@@ -93,7 +92,6 @@
 | `P3` | `/api/v1/knowledge/index` | 对稳定 `chunk_id` 建立检索投影 |
 | `P4` | `/api/v1/knowledge/search` | 检索能力验证 |
 | `P5` | `/api/v1/chat` | 非流式生成 |
-| `P6` | `/api/v1/chat/stream` | 流式生成 |
 
 ## 4. 外部 API DTO 清单
 
@@ -150,19 +148,25 @@
 | 接口 | 请求 DTO 最小字段 | 响应 `data` / 事件最小字段 |
 |------|------------------|-----------------------------|
 | `POST /api/v1/ai/chat` | `sessionId?`、`message`、`departmentId?`、`sceneType`、`useStream` | `sessionId`、`turnId`、`answer`、`triageResult` |
-| `POST /api/v1/ai/chat/stream` | 同上 | `message` 文本片段；`meta.sessionId`、`meta.turnId`、`meta.triageResult` |
 | `GET /api/v1/ai/sessions` | 无 | `items[].sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?` |
 | `GET /api/v1/ai/sessions/{id}` | Path `sessionId` | `sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?`、`turns[]` |
-| `GET /api/v1/ai/sessions/{id}/triage-result` | Path `sessionId` | `sessionId`、`riskLevel`、`guardrailAction`、`nextAction`、`recommendedDepartments`、`careAdvice`、`citations` |
+| `GET /api/v1/ai/sessions/{id}/triage-result` | Path `sessionId` | `sessionId`、`resultStatus`、`triageStage`、`riskLevel`、`guardrailAction`、`nextAction`、`recommendedDepartments`、`careAdvice`、`citations` |
 
 ### `triageResult` 最小字段
 
 | 字段 | 说明 |
 |------|------|
+| `resultStatus` | `CURRENT / UPDATING` |
+| `triageStage` | `COLLECTING / READY / BLOCKED` |
 | `riskLevel` | `low / medium / high` |
 | `guardrailAction` | `allow / caution / refuse` |
-| `nextAction` | `VIEW_TRIAGE_RESULT / GO_REGISTRATION / EMERGENCY_OFFLINE / MANUAL_SUPPORT` |
+| `nextAction` | `CONTINUE_TRIAGE / VIEW_TRIAGE_RESULT / EMERGENCY_OFFLINE / MANUAL_SUPPORT` |
+| `finalizedTurnId` | 当前结果对应的 finalized turn |
+| `finalizedAt` | 当前结果完成时间 |
+| `hasActiveCycle` | 当前是否存在新的 active cycle 在收集 |
+| `activeCycleTurnNo` | 若有进行中 active cycle，其患者轮次 |
 | `chiefComplaintSummary` | 症状摘要 |
+| `followUpQuestions` | 仅在 chat / stream 的 `COLLECTING` 场景出现，最多 2 个 |
 | `recommendedDepartments` | 推荐科室列表 |
 | `careAdvice` | 保守建议或就医提示 |
 | `citations` | 引用片段列表 |
@@ -230,6 +234,17 @@
 |------|----------|
 | Java -> Python | `modelRunId`、`sessionId`、`turnId`、`message`、`sceneType`、`departmentId?`、`requestId` |
 | Python -> Java | `answer`、`risk_level`、`guardrail_action`、`chief_complaint_summary`、`recommended_departments`、`care_advice`、`citations` |
+
+`recommended_departments[]` 最小字段：
+
+- `department_id`
+- `department_name`
+- `priority`
+- `reason`
+
+补充约定：
+
+- `department_id` 由 Python 内部映射规则直接产出，不要求 Java 再根据聊天文本或科室名反推
 
 ## 5.1A Java 调 Python Knowledge Prepare
 

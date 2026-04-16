@@ -30,20 +30,19 @@
 ### 页面目标
 
 - [ ] 输入症状描述
-- [ ] 展示流式回答
+- [ ] 展示伪流式回答
 - [ ] 展示引用片段
 - [ ] 展示风险提示与下一步动作
 
 ### 依赖接口
 
 - [ ] `/api/v1/ai/chat`
-- [ ] `/api/v1/ai/chat/stream`
 
 ### 页面规则
 
 - [ ] 不从聊天文本里猜推荐科室
-- [ ] 一切结构化结果以 `meta.triageResult` 为准
-- [ ] 断流或报错时保留 `requestId` 以便排障
+- [ ] 一切业务动作以完整响应中的 `triageResult` 为准
+- [ ] 伪流式只切 `answer` 展示文本，不参与结构化状态判断
 
 ## 2.3 Page C：导诊结果页
 
@@ -64,7 +63,7 @@
 ### 页面规则
 
 - [ ] `VIEW_TRIAGE_RESULT`：正常展示结果
-- [ ] `GO_REGISTRATION`：展示挂号入口
+- [ ] 结果页根据 finalized snapshot 展示挂号入口
 - [ ] `EMERGENCY_OFFLINE` / `MANUAL_SUPPORT`：跳转高风险提示页
 - [ ] 不从聊天文本中解析推荐科室、风险或引用，结构化结果以 `triage-result` 为准
 - [ ] 历史老会话若 `chiefComplaintSummary`、`recommendedDepartments`、`careAdvice` 为空，应允许空态展示

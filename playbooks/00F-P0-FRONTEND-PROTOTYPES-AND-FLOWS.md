@@ -122,10 +122,10 @@
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#E5F0FF', 'primaryTextColor': '#1C1C1E', 'primaryBorderColor': '#007AFF', 'lineColor': '#8E8E93', 'secondaryColor': '#E8F8EE', 'tertiaryColor': '#FFF4E5', 'background': '#FFFFFF', 'mainBkg': '#E5F0FF', 'nodeBorder': '#007AFF', 'clusterBkg': '#F2F2F7', 'clusterBorder': '#8E8E93', 'titleColor': '#1C1C1E', 'edgeLabelBackground': '#FFFFFF'}}}%%
 flowchart LR
     A("登录页") --> B("AI 问诊页")
-    B --> C("导诊结果页")
-    C -->|GO_REGISTRATION| D("挂号提交页")
-    C -->|VIEW_TRIAGE_RESULT| B
-    C -->|EMERGENCY_OFFLINE / MANUAL_SUPPORT| E("高风险提示页")
+    B -->|VIEW_TRIAGE_RESULT| C("导诊结果页")
+    B -->|EMERGENCY_OFFLINE / MANUAL_SUPPORT| E("高风险提示页")
+    C -->|结果页 CTA| D("挂号提交页")
+    C -->|继续补充症状| B
     D --> F("我的挂号页")
 ```
 
@@ -140,12 +140,12 @@ stateDiagram-v2
     SENDING --> ERROR: 请求失败
     STREAMING --> TRIAGE_READY: 收到 meta
     STREAMING --> ERROR: 收到 error
-    TRIAGE_READY --> HIGH_RISK: nextAction = EMERGENCY_OFFLINE / MANUAL_SUPPORT
-    TRIAGE_READY --> READY_FOR_REG: nextAction = GO_REGISTRATION
-    TRIAGE_READY --> CAN_CONTINUE: nextAction = VIEW_TRIAGE_RESULT
+    TRIAGE_READY --> COLLECTING: triageStage = COLLECTING\nnextAction = CONTINUE_TRIAGE
+    TRIAGE_READY --> HIGH_RISK: triageStage = BLOCKED\nnextAction = EMERGENCY_OFFLINE / MANUAL_SUPPORT
+    TRIAGE_READY --> RESULT_READY: triageStage = READY\nnextAction = VIEW_TRIAGE_RESULT
+    COLLECTING --> IDLE: 展示 followUpQuestions 后继续问诊
     HIGH_RISK --> [*]
-    READY_FOR_REG --> [*]
-    CAN_CONTINUE --> IDLE: 继续问诊
+    RESULT_READY --> [*]
     ERROR --> IDLE: 重试
 ```
 
@@ -175,13 +175,35 @@ flowchart LR
 10. 处方编辑页
 11. 审计查询页
 
-## 9. 设计约束
+## 9. 结果页状态语义
+
+结果页不只展示导诊结果，还要表达“这份结果和当前对话是什么关系”。
+
+固定语义：
+
+- `resultStatus = CURRENT`
+  - 当前展示的是最新 finalized 结果
+  - 当前没有新的 active cycle 在收集
+- `resultStatus = UPDATING`
+  - 当前展示的是上一版 finalized 结果
+  - 当前有新的 active cycle 仍在 `COLLECTING`
+
+页面行为：
+
+- `CURRENT`：正常展示结果、引用、挂号入口
+- `UPDATING`：展示上一版 finalized 结果，同时在页面顶部展示“系统正在基于你新补充的信息重新评估”的提示
+- `UPDATING`：继续补充症状应作为主操作；挂号入口保留但应明确为“按上一版结果继续”
+
+## 10. 设计约束
 
 - AI 结果页必须展示结构化结果，不只是一段对话文本
 - 高风险页必须与普通导诊结果页分开，避免用户误以为还能继续普通问答
 - 医生页默认只显示 AI 摘要，不默认暴露 AI 原文
-- 页面所有成功/失败判断都以 `code` 和 `nextAction` 为准
+- 页面所有成功/失败判断都以 `code`、`triageStage` 和 `nextAction` 为准
+- `COLLECTING` 阶段前端应展示浏览器契约中的 `followUpQuestions`
+- 结果页还应消费 `resultStatus`，用于区分 `CURRENT` 与 `UPDATING`
+- 前端不消费 Python 内部判定材料，例如 `risk_blockers`、`missing_critical_info`、`follow_up_questions`、`department_recommendation_confidence`
 
-## 10. 一句话结论
+## 11. 一句话结论
 
 前端真正需要先定下来的不是组件库细节，而是每一页最少要承接什么信息、下一页往哪里走，以及高风险分支如何和普通流程彻底分开。

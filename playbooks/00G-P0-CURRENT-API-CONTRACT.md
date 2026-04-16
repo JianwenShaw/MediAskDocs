@@ -33,7 +33,7 @@
 补充说明：
 
 - 带 `@AuthorizeScenario` 的接口，会先做场景权限判断；如果权限不满足，会直接返回 `403 + 1003`，不一定进入后续的角色校验逻辑。
-- 当前仓库已经对外提供 `POST /api/v1/ai/chat/stream` 这一 `SSE` 接口；本文仍以 `JSON HTTP` 为主，`SSE` 口径在下文单列说明。
+- 当前 Python AI 服务已收口为同步 `/api/v1/chat`；如上层需要“流式”观感，应基于完整回答做伪流式展示，而不是依赖 Python SSE。
 - 因为浏览器 `Number` 无法安全表示雪花 ID，诸如 `userId`、`patientId`、`doctorId`、`knowledgeBaseId`、`documentId`、`sessionId` 这类字段在响应 JSON 中都应按字符串解析。
 
 ## 3. 当前已实现接口总览
@@ -61,7 +61,6 @@
 | 知识文档后台管理 | `GET /api/v1/admin/knowledge-documents` | 已登录 + 知识文档列表权限 | 后台按知识库分页查询文档及处理状态 |
 | 知识文档后台管理 | `DELETE /api/v1/admin/knowledge-documents/{documentId}` | 已登录 + 知识文档删除权限 | 后台物理删除文档及其下游 chunk |
 | AI 问诊 | `POST /api/v1/ai/chat` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起非流式问诊，返回 `answer + triageResult` |
-| AI 问诊 | `POST /api/v1/ai/chat/stream` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起流式问诊，对外返回 `message/meta/end/error` SSE 事件 |
 | AI 会话列表 | `GET /api/v1/ai/sessions` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回当前患者的 AI 会话最小摘要列表 |
 | AI 会话回看 | `GET /api/v1/ai/sessions/{sessionId}` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话的基础信息、轮次和消息内容 |
 | AI 导诊结果 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话最新成功问诊的结构化导诊结果 |
@@ -439,14 +438,18 @@
 | 响应字段 | `sessionId`、`turnId`、`answer`、`triageResult` |
 | `triageResult` | `riskLevel`、`guardrailAction`、`nextAction`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
 
-### 10.2 `POST /api/v1/ai/chat/stream`
+补充说明：
+
+- 目标设计文档中已经引入 `triageStage`、`followUpQuestions`、`resultStatus` 以及“结果页准入”语义，但当前代码尚未实现，不能当作现状契约
+- 目标设计里还计划移除聊天态 `GO_REGISTRATION`，改为统一先进入结果页；当前代码尚未实现该收敛
+
+### 10.2 伪流式展示口径
 
 | 项目 | 当前代码口径 |
 |------|--------------|
-| 认证/身份 | 已登录 + `PATIENT` 角色 |
-| 请求体 | 与非流式接口一致 |
-| 事件类型 | `message`、`meta`、`end`、`error` |
-| `meta` | `sessionId`、`turnId`、`triageResult` |
+| Python 能力 | 仅提供同步 `/api/v1/chat` |
+| 上层表现 | Java 或前端可基于完整 `answer` 做伪流式展示 |
+| 结构化真相 | 只消费完整 `triageResult`，不从展示文本反解析 |
 
 ### 10.3 `GET /api/v1/ai/sessions`
 
@@ -478,6 +481,12 @@
 | 响应字段 | `sessionId`、`riskLevel`、`guardrailAction`、`nextAction`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
 | 历史数据 | 老会话如果生成时未落完整结构化 detail，`chiefComplaintSummary`、`recommendedDepartments`、`careAdvice` 可能为空 |
 
+补充说明：
+
+- 目标设计里计划让“从未产出过 finalized snapshot 且当前仍 `COLLECTING`”时返回 `409`，但当前代码尚未实现该语义；当前仓库仍以现有 controller/usecase 行为为准
+- 目标设计里还计划让“已有旧 finalized 结果而当前新一轮仍 `COLLECTING`”时继续返回旧结果；当前代码尚未实现该区分
+- 目标设计里还计划让 `GET /triage-result` 成功响应增加 `resultStatus / finalizedAt / hasActiveCycle` 等版本语义字段；当前代码尚未实现
+
 ### 10.6 `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 
 | 项目 | 当前代码口径 |
@@ -490,6 +499,10 @@
 | 普通分支 | 当前固定返回 `suggestedVisitType=OUTPATIENT`，并生成“今天起未来 7 天”的挂号查询窗口 |
 | 高风险分支 | `blockedReason=EMERGENCY_OFFLINE`，不返回普通挂号查询参数 |
 | 缺少推荐科室 | 非高风险但没有推荐科室时，返回 `409 + 6020` |
+
+补充说明：
+
+- 目标设计里计划让 `registration-handoff` 只消费最近一次 finalized snapshot；当前代码尚未实现“旧结果与新收集中轮次分离”的口径
 
 ## 11. 容易被文档误导的未实现接口
 

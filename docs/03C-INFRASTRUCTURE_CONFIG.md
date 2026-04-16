@@ -618,19 +618,10 @@ server {
         proxy_pass http://java_backend;
     }
 
-    # ---- AI SSE 流式接口 ----
-    location /api/v1/ai/chat/stream {
+    # ---- AI 问诊接口 ----
+    location /api/v1/ai/chat {
         proxy_pass http://java_backend;
         proxy_set_header X-Request-Id $mediask_request_id;
-
-        # SSE 特殊配置
-        proxy_buffering off;                   # 关闭缓冲，支持流式输出
-        proxy_cache off;
-        proxy_read_timeout 300s;               # SSE 长连接超时 5 分钟
-        proxy_set_header Connection "";
-        proxy_http_version 1.1;
-
-        chunked_transfer_encoding on;
     }
 
     # ---- 健康检查 ----

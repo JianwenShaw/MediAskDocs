@@ -632,6 +632,7 @@ Java 收到后，对应落库建议：
 - `citations` -> 作为响应展示字段返回；明细已由 Python 写入 `ai_run_citation`
 - `summary / routing / rag_context` -> `ai_run_artifact`（通用调试/中间产物）
 - `risk_level / guardrail_action / matched_rule_codes` -> `ai_guardrail_event`
+- 最终推荐科室、主诉摘要、导诊建议、`triage_stage`、`triage_completion_reason` 等业务真相不再落 `ai_guardrail_event.event_detail_json`，应转入 `ai_model_run.triage_snapshot_json`
 
 ### 13.4 不建议的错误模式
 

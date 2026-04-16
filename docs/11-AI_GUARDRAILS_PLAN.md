@@ -67,7 +67,7 @@
 | `risk_level` + `action` | Java 对外 `nextAction` | 前端承接方式 |
 |-------------------------|----------------------|--------------|
 | `low + allow` | `VIEW_TRIAGE_RESULT` | 正常展示答案、引用、推荐科室 |
-| `medium + caution` | `GO_REGISTRATION` | 强调免责声明，保守建议线下就医，并提供挂号入口 |
+| `medium + caution` | `VIEW_TRIAGE_RESULT` | 统一进入结果页，由结果页展示保守建议和挂号入口 |
 | `high + refuse` | `EMERGENCY_OFFLINE` 或 `MANUAL_SUPPORT` | 不继续普通问答，展示紧急就医/人工求助提示 |
 
 规则：

@@ -386,12 +386,12 @@ sequenceDiagram
     Client->>API: POST /api/v1/ai/chat
     API->>PG: 创建 ai_session / ai_turn
     API->>PG: 预创建 ai_model_run(status=RUNNING)
-    API->>AI: POST /api/v1/chat/stream<br/>X-Request-Id / X-API-Key / model_run_id
+    API->>AI: POST /api/v1/chat<br/>X-Request-Id / X-API-Key / model_run_id
     AI->>PG: 向量检索 knowledge_chunk_index<br/>(Python 直接读)
     AI->>LLM: 带上下文的 Prompt
-    LLM-->>AI: SSE Token 流
+    LLM-->>AI: 完整回答
     AI->>PG: 写入 ai_run_citation(model_run_id=model_run_id)<br/>(Python 直接写)
-    AI-->>API: SSE 流式响应 + 结构化元数据
+    AI-->>API: 完整回答 + 结构化结果
     API->>PG: 更新 ai_model_run / 写入 ai_run_artifact / ai_guardrail_event
     API-->>Client: SSE 转发
 ```
@@ -421,7 +421,7 @@ sequenceDiagram
 | 请求上下文串联 | `X-Request-Id` 请求头透传，Python 侧注入日志和 DB 操作；`X-Trace-Id` 仅兼容旧口径 |
 | 降级策略 | 检索或 Embedding 不可用时返回保守辅助问诊响应，`ai_model_run.is_degraded = true` |
 
-补充约束：Python AI 服务是 **内部服务**，浏览器与移动端不直接访问；所有 AI 问诊入口统一经由 `mediask-api` 暴露、鉴权、审计和 SSE 转发。
+补充约束：Python AI 服务是 **内部服务**，浏览器与移动端不直接访问；所有 AI 问诊入口统一经由 `mediask-api` 暴露、鉴权、审计；如需流式观感，由上层基于完整回答做伪流式展示。
 
 ---
 
@@ -669,18 +669,18 @@ flowchart LR
 
 - `code = 0` 表示成功，非 0 表示失败
 - 对外统一协议以 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) 为准
-- AI `SSE` 事件流不逐帧包 `Result<T>`，其事件口径以 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md) 为准
+- AI 结果以完整 `JSON` 响应为准；如需伪流式展示，其页面口径以 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md) 为准
 
 ### 12.3 AI 对外契约（P0）
 
 浏览器只依赖 Java 暴露的 AI 外部接口，不直接感知 Python 内部 DTO。`P0` 先冻结以下用户链路：
 
-- 患者问诊：`POST /api/v1/ai/chat`、`POST /api/v1/ai/chat/stream`
+- 患者问诊：`POST /api/v1/ai/chat`
 - 导诊结果：`GET /api/v1/ai/sessions/{sessionId}/triage-result`
 - 挂号承接：`POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 - 医生查看 AI 摘要：`GET /api/v1/encounters/{encounterId}/ai-summary`
 
-详细字段与 SSE 事件口径见 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md)。
+详细字段口径见 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md)。
 
 ### 12.4 API 文档
 

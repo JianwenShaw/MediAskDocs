@@ -2,7 +2,7 @@
 
 > 定位：`mediask-ai` 是 Java 主系统的内部 AI 执行服务。
 >
-> 当前口径：本文件为重写基线；Python 负责 RAG 检索、LLM 调用、护栏执行、流式输出，以及检索投影/引用追溯写库，不维护业务主事实。
+> 当前口径：本文件为重写基线；Python 负责 RAG 检索、LLM 调用、护栏执行、同步结构化输出，以及检索投影/引用追溯写库，不维护业务主事实。
 >
 > 浏览器经 Java 访问的外部 AI 契约，见 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md)。
 
@@ -12,7 +12,7 @@
 
 - 上游：Java 后端 `mediask-be`
 - 下游：DeepSeek / OpenAI 兼容 LLM API、阿里百炼 Embedding API、PostgreSQL + pgvector
-- 交互：内部 HTTP JSON + SSE
+- 交互：内部 HTTP JSON
 
 边界冻结如下：
 
@@ -27,7 +27,7 @@
 app/
     api/
         v1/
-            chat.py              # /api/v1/chat, /api/v1/chat/stream
+            chat.py              # /api/v1/chat
             knowledge.py         # /api/v1/knowledge/prepare, /api/v1/knowledge/index, /api/v1/knowledge/search
     core/
         settings.py              # Pydantic Settings
@@ -42,7 +42,7 @@ app/
         rag/
             indexer.py           # knowledge_chunk_index upsert
             retriever.py         # 混合检索 + citations
-            pipeline.py          # chat/chat_stream 主流程
+            pipeline.py          # chat 主流程
             normalize.py         # 术语归一/PII 预处理
     schemas/
         chat.py
@@ -170,6 +170,7 @@ Header：
 
 ```http
 X-Request-Id: req_01hrx6m5q4x5v2f6k4w4x1c7pz
+X-API-Key: <java-to-python-service-key>
 ```
 
 ```json
@@ -178,6 +179,10 @@ X-Request-Id: req_01hrx6m5q4x5v2f6k4w4x1c7pz
   "turn_id": 8002001,
   "session_uuid": "ai-sess-001",
   "department_id": 101,
+  "hospital_scope": "default-hospital",
+  "department_catalog_version": "deptcat-v20260416-01",
+  "patient_turn_no_in_active_cycle": 3,
+  "force_finalize": false,
   "scene_type": "PRE_CONSULTATION",
   "message": "头痛三天，伴有低烧，应该先看什么科？",
   "context_summary": "患者女性，28岁，无已知慢病",
@@ -190,6 +195,15 @@ X-Request-Id: req_01hrx6m5q4x5v2f6k4w4x1c7pz
 
 - `use_rag=true` 时，`knowledge_base_ids` 必填且至少包含一个知识库
 - `use_rag=false` 时，不执行检索，`knowledge_base_ids` 可省略
+- `hospital_scope` 表示本次问诊允许使用的候选科室范围；当前单医院部署时可等价于默认医院
+- 当前单医院部署默认使用 `default-hospital`；Java 必须显式传该值，不允许由 Python 自行猜测
+- `department_catalog_version` 表示该 scope 下候选科室目录版本
+- Python 不直查业务库；若本地该 scope 的目录不存在或版本不匹配，应先向 Java 拉取最新目录再继续推理
+- `recommended_departments.department_id` 必须来自当前 `hospital_scope` 对应的目录缓存
+- `patient_turn_no_in_active_cycle` 表示当前 active triage cycle 内的患者发言轮次，从 1 开始递增
+- `force_finalize=true` 表示当前回合必须收口，Python 不允许再返回 `COLLECTING`
+- `X-API-Key` 用于 Java -> Python 服务鉴权；这是目标契约，不要求当前代码已实现
+- `triage_stage` 由 Python 明确判定，Java 不根据 `recommended_departments`、`chief_complaint_summary` 是否为空来反推 READY/BLOCKED
 
 响应：
 
@@ -200,7 +214,18 @@ X-Request-Id: req_01hrx6m5q4x5v2f6k4w4x1c7pz
   "session_uuid": "ai-sess-001",
   "provider_run_id": "deepseek-run-abc",
   "answer": "建议尽快线下就医，优先考虑神经内科或发热门诊分诊。",
-  "summary": "头痛三天伴低烧，建议线下就医并优先分诊。",
+  "triage_stage": "READY",
+  "triage_completion_reason": "SUFFICIENT_INFO",
+  "chief_complaint_summary": "头痛三天伴低烧",
+  "recommended_departments": [
+    {
+      "department_id": 101,
+      "department_name": "神经内科",
+      "priority": 1,
+      "reason": "头痛伴低烧，优先排查神经系统相关风险"
+    }
+  ],
+  "care_advice": "建议尽快线下就医，优先考虑神经内科或发热门诊分诊。",
   "citations": [
     {
       "chunk_id": 7003001,
@@ -221,48 +246,183 @@ X-Request-Id: req_01hrx6m5q4x5v2f6k4w4x1c7pz
 
 说明：`request_id` 由响应头 `X-Request-Id` 回写，不要求重复放入业务响应体。
 
+补充说明：
+
+- `/chat` 是 Python 对 Java 的唯一正式问诊接口；Python 不再提供 `/api/v1/chat/stream`
+- Java 或前端如需“流式体验”，只允许基于完整 `answer` 做展示层伪流式，不从 Python 请求 token/SSE
+- `recommended_departments` 是本次成功问诊的最终结构化输出，不区分 preview / final
+- Java 会在持久化导诊快照成功后，才把该结构化结果对外暴露给浏览器
+- `triage_stage = COLLECTING` 时，只返回 `follow_up_questions`；不返回 `recommended_departments`、`care_advice`
+- `triage_stage = READY / BLOCKED` 时，返回 `recommended_departments`、`care_advice`；不返回 `follow_up_questions`
+- `department_recommendation_confidence`、`risk_blockers`、`missing_critical_info` 只作为 Python 内部判定材料，不再作为稳定对外契约字段
+- `FAILED` 不属于成功业务响应中的 `triage_stage`；执行异常、目录同步失败、结构化响应解析失败都应直接以失败响应结束请求
+- Python 不以“是否猜到病因”判定 `READY`，而以“推荐方向是否已足够稳定可交付”判定
+- `triage_completion_reason` 固定表达本次收口原因；`READY` 只能来自 `SUFFICIENT_INFO` 或 `MAX_TURNS_REACHED`
+- `triage_stage = COLLECTING` 时，`triage_completion_reason` 固定为 `null`
+
 响应头：
 
 ```http
 X-Request-Id: req_01hrx6m5q4x5v2f6k4w4x1c7pz
 ```
 
-### 5.4 流式对话
+### 5.4 伪流式约定
+
+- Python 不提供 `/api/v1/chat/stream`，也不承担 SSE/token streaming 职责
+- Java 或前端若需要聊天逐字显示效果，应在拿到完整 `/chat` 响应后，仅对 `answer` 做展示层切片
+- 结构化字段必须在完整响应返回后一次性消费，不得从伪流式文本里反解析推荐科室、风险状态或页面跳转
+- Python 的对外职责固定为：一次同步调用返回完整 `answer + 当前轮结构化状态`
+
+`triage_stage` 固定值：
+
+- `COLLECTING`
+- `READY`
+- `BLOCKED`
+
+判定规则：
+
+- Python 是导诊阶段判定者
+- Python 正常响应先生成判定材料，再在服务内部映射 `triage_stage`
+- `BLOCKED`：`risk_blockers` 非空，或 `triage_completion_reason = HIGH_RISK_BLOCKED`
+- `COLLECTING`：未达到强制收口条件，且仍存在关键缺口
+- `READY`：`triage_completion_reason = SUFFICIENT_INFO` 或 `MAX_TURNS_REACHED`
+
+判定材料固定为：
+
+- `risk_blockers`
+- `missing_critical_info`
+- `follow_up_questions`
+- `department_recommendation_confidence`
+
+服务层控制字段固定为：
+
+- `patient_turn_no_in_active_cycle`
+- `force_finalize`
+- `triage_completion_reason`
+
+字段语义：
+
+- `risk_blockers`：已识别出的阻断普通导诊的危险信号列表
+- `missing_critical_info`：当前仍缺失、且会影响分诊方向的关键信息列表
+- `follow_up_questions`：下一轮必须追问的问题列表，最多 2 个
+- `department_recommendation_confidence`：当前推荐方向是否已足够稳定可交付
+
+`triage_completion_reason` 固定值：
+
+- `SUFFICIENT_INFO`
+- `MAX_TURNS_REACHED`
+- `HIGH_RISK_BLOCKED`
+
+`department_recommendation_confidence` 固定值：
+
+- `UNSTABLE`
+- `STABLE`
+
+保守型 READY 门槛固定为：
+
+- 只要还有一个可能明显改变推荐方向的关键问题没问清，且 `force_finalize = false`，就继续 `COLLECTING`
+- 不要求病因正确
+- 不要求医学事实完整
+- 只要求当前推荐方向已经足够稳定，继续多问一轮也不太会发生明显翻转
+
+强制收口规则固定为：
+
+- Java 在每个 active triage cycle 内维护 `patient_turn_no_in_active_cycle`
+- 到第 5 个患者回合时，Java 必须传 `force_finalize = true`
+- `force_finalize = true` 时，Python 不允许再返回 `COLLECTING`
+- `force_finalize = true` 且未命中危险信号时，必须返回 `READY + MAX_TURNS_REACHED`
+- `MAX_TURNS_REACHED` 时，`follow_up_questions` 必须为空
+- `MAX_TURNS_REACHED` 时，`answer` / `care_advice` 必须显式说明“基于当前有限信息先建议……”
+
+`BLOCKED` 首版只依赖少量高价值危险信号集合，不建设全病种风险模板库。危险信号集合至少包括：
+
+- 意识障碍或明显意识改变
+- 明显呼吸困难
+- 持续或剧烈胸痛
+- 大出血
+- 抽搐
+- 中风样表现
+- 严重过敏反应
+- 婴幼儿 / 孕产妇 / 高龄 / 严重基础病人群合并明显危险信号
+
+### 5.4A Prompt 合同
+
+Python 的 Prompt 合同必须冻结到“输出稳定、不会无限追问”的程度。最小要求：
+
+- system prompt 明确限制：只输出导诊建议，不输出诊断结论、处方、确定性病因
+- 输出必须遵守固定 JSON schema，不能自由发挥字段
+- `COLLECTING` 时最多提出 2 个最高信息增益问题，不重复、不发散
+- `follow_up_questions` 与 `answer` 中的追问语义必须一致
+- `BLOCKED` 时停止普通追问，直接输出紧急线下就医文案
+- `MAX_TURNS_REACHED` 时禁止继续追问，必须给 best-effort 推荐
+- 推荐科室只能从 Java 下发目录中选择，不得臆造科室 ID
+
+### 5.4B 候选科室目录同步
+
+定位：
+
+- 这是 Java 和 Python 之间的内部主数据同步接口
+- Java 是 `TriageDepartmentCatalog` 真相来源
+- Python 只维护本地推理缓存，不拥有主数据 ownership
 
 ```http
-POST /api/v1/chat/stream
+GET /api/v1/internal/triage-department-catalogs/{hospital_scope}
 ```
 
-SSE 事件：
+请求头：
 
-- `message`：流式文本片段
-- `meta`：在结束前返回一次结构化元数据（`citations/risk_level/guardrail_action/is_degraded`）；`request_id` 由 Header 串联
-- `end`：正常结束
-- `error`：异常结束
+```http
+X-Request-Id: req_01hrx6m5q4x5v2f6k4w4x1c7pz
+X-API-Key: <python-to-java-service-key>
+```
 
-`meta` 事件当前至少包含：
+响应至少包含：
 
 ```json
 {
-  "risk_level": "low",
-  "guardrail_action": "allow",
-  "recommended_departments": [],
-  "citations": [
+  "hospital_scope": "default-hospital",
+  "department_catalog_version": "deptcat-v20260416-01",
+  "department_candidates": [
     {
-      "chunk_id": 7003001,
-      "retrieval_rank": 1,
-      "fusion_score": 0.82,
-      "snippet": "持续头痛伴发热应结合感染风险进行线下评估。"
+      "department_id": 101,
+      "department_name": "神经内科",
+      "routing_hint": "headache, dizziness, neurologic symptoms",
+      "aliases": ["神内"],
+      "sort_order": 10
+    },
+    {
+      "department_id": 102,
+      "department_name": "发热门诊",
+      "routing_hint": "fever, infection screening",
+      "aliases": ["发热"],
+      "sort_order": 20
     }
-  ],
-  "is_degraded": false
+  ]
 }
 ```
 
-说明：
+约束：
 
-- `recommended_departments` 当前固定返回空数组，本轮不在 Python 内部契约中扩展推荐科室生成
-- `is_degraded=true` 表示本次请求要求使用 RAG，但检索未命中可用结果，最终走保守回答路径
+- 仅面向内网服务间调用，不面向浏览器开放
+- Java 只返回该 `hospital_scope` 下可导诊目录中的科室，不等价于原始 `departments` 全量临床科室
+- 目录版本只要内容变化就必须变化，但不在接口层写死具体版本算法
+- Python 可按 `hospital_scope -> triage department catalog` 维护本地内存缓存或本地持久缓存
+- `X-API-Key` 用于 Python -> Java 服务鉴权；这是目标契约，不要求当前代码已实现
+
+状态码语义：
+
+- `200`：成功返回完整目录
+- `401/403`：服务鉴权失败
+- `404`：`hospital_scope` 不存在
+- `409`：目录版本或 scope 状态异常，当前目录不可用
+- `5xx`：Java 内部错误
+
+缓存协商规则：
+
+- Python 收到 chat 请求后，若本地 `hospital_scope` 对应目录缺失或版本不匹配，必须先调用该接口拉取全量目录
+- 本轮不设计“只查版本”的探针接口
+- 本轮不设计增量同步接口
+- 目录同步失败时，当前 chat 直接失败，不做静默降级
 
 ### 5.5 知识检索
 
@@ -273,7 +433,7 @@ POST /api/v1/knowledge/search
 定位：
 
 - 内部 RAG retrieval 接口，不面向终端用户直接暴露搜索能力
-- 主要供 `chat` / `chat_stream` 在生成前执行检索，也允许 Java/Python 联调或后台试搜复用
+- 主要供 `chat` 在生成前执行检索，也允许 Java/Python 联调或后台试搜复用
 - `model_run_id` 仅控制是否写入 `ai_run_citation`，不改变检索排序逻辑
 
 请求：
@@ -316,7 +476,7 @@ POST /api/v1/knowledge/search
 - `model_run_id` 可选；传入时写 `ai_run_citation`，不传时只返回结果
 - `score` 为融合排序分数；`vector_score` / `keyword_score` 仅用于解释命中来源
 - 命中结果除满足 chunk/index 有效条件外，还必须满足 `knowledge_document.document_status = ACTIVE` 且 `deleted_at IS NULL`
-- 当前 `chat/chat_stream` 已直接复用这一步 retrieval 构建上下文、返回 citations，并在传入 `model_run_id` 时写入 `ai_run_citation`
+- 当前 `chat` 已直接复用这一步 retrieval 构建上下文、返回 citations，并在传入 `model_run_id` 时写入 `ai_run_citation`
 - `search` 仍可独立用于内部联调、检索验证和试搜场景
 
 ### 5.6 文档预处理与切块准备
@@ -492,7 +652,7 @@ Python 输出应固定在以下范围：
 
 - 单元测试：`Retriever`、`RagPipeline`、护栏规则、降级路径
 - 接口测试：`httpx.AsyncClient`
-- 关键覆盖：`model_run_id` 透传、`request_id` 透传、`ai_run_citation` 写入、SSE `meta/end/error`
+- 关键覆盖：`model_run_id` 透传、`request_id` 透传、`ai_run_citation` 写入、`COLLECTING/READY/BLOCKED` 分阶段字段裁剪
 - 联调覆盖：成功、超时、异常映射、无检索结果降级
 
 ## 10. Makefile 约定

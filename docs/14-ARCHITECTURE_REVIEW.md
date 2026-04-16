@@ -18,7 +18,7 @@
 
 1. 文档为准，当前代码不作为架构依据
 2. Java 分层依赖必须统一为可实现的 Hexagonal 口径
-3. AI `chat/chat_stream` 的 `model_run_id` 时序必须闭环
+3. AI `chat` 的 `model_run_id` 时序必须闭环
 4. 知识入库链路必须明确 ownership，避免 Java/Python 双主事实
 
 ## 2. P0 实现边界
