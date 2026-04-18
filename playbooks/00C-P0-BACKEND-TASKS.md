@@ -183,8 +183,8 @@
 ### 交付物
 
 - [x] `GET /api/v1/encounters`
-- [ ] `GET /api/v1/encounters/{encounterId}`
-- [ ] `GET /api/v1/encounters/{encounterId}/ai-summary`
+- [x] `GET /api/v1/encounters/{encounterId}`
+- [x] `GET /api/v1/encounters/{encounterId}/ai-summary`
 - [ ] `POST /api/v1/emr`
 - [ ] `GET /api/v1/emr/{encounterId}`
 - [ ] `POST /api/v1/prescriptions`

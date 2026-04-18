@@ -13,7 +13,7 @@
 - 现有文档还没有把“当前已实现接口”的参数约束、身份要求和真实业务语义讲到足够完整。
 - [../docs/01-OVERVIEW.md](../docs/01-OVERVIEW.md)、[../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md)、[../docs/03A-JAVA_CONFIG.md](../docs/03A-JAVA_CONFIG.md) 里包含大量目标设计或后续规划接口，不能直接当作当前仓库的对外契约。
 - [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md)、[00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md)、[00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md) 适合看完成度和实现顺序，但对当前已实现接口的细节覆盖仍不够。
-- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI 问诊、AI 会话回看、AI 导诊结果、门诊场次查询、挂号、接诊列表。EMR、处方、审计接口还没有对外落地。
+- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI 问诊、AI 会话回看、AI 导诊结果、门诊场次查询、挂号、接诊列表、接诊详情、医生侧 AI 摘要。EMR、处方、审计接口还没有对外落地。
 
 ## 2. 通用协议
 
@@ -61,14 +61,16 @@
 | 知识文档后台管理 | `GET /api/v1/admin/knowledge-documents` | 已登录 + 知识文档列表权限 | 后台按知识库分页查询文档及处理状态 |
 | 知识文档后台管理 | `DELETE /api/v1/admin/knowledge-documents/{documentId}` | 已登录 + 知识文档删除权限 | 后台物理删除文档及其下游 chunk |
 | AI 问诊 | `POST /api/v1/ai/chat` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起非流式问诊，返回 `answer + triageResult` |
-| AI 会话列表 | `GET /api/v1/ai/sessions` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回当前患者的 AI 会话最小摘要列表 |
-| AI 会话回看 | `GET /api/v1/ai/sessions/{sessionId}` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话的基础信息、轮次和消息内容 |
-| AI 导诊结果 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话最新成功问诊的结构化导诊结果 |
-| AI 挂号承接 | `POST /api/v1/ai/sessions/{sessionId}/registration-handoff` | 已登录 + `PATIENT` 角色 + 仅患者本人 | 返回指定会话的挂号承接参数或阻断原因 |
+| AI 会话列表 | `GET /api/v1/ai/sessions` | 已登录 + `PATIENT` 角色 + 仅患者本人 + 依赖 AI service 配置 | 返回当前患者的 AI 会话最小摘要列表 |
+| AI 会话回看 | `GET /api/v1/ai/sessions/{sessionId}` | 已登录 + `PATIENT` 角色 + 仅患者本人 + 依赖 AI service 配置 | 返回指定会话的基础信息、轮次和消息内容 |
+| AI 导诊结果 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 已登录 + `PATIENT` 角色 + 仅患者本人 + 依赖 AI service 配置 | 返回指定会话最新成功问诊的结构化导诊结果 |
+| AI 挂号承接 | `POST /api/v1/ai/sessions/{sessionId}/registration-handoff` | 已登录 + `PATIENT` 角色 + 仅患者本人 + 依赖 AI service 配置 | 返回指定会话的挂号承接参数或阻断原因 |
 | 门诊挂号 | `GET /api/v1/clinic-sessions` | 已登录 | 查询当前可挂号的开放门诊场次 |
 | 门诊挂号 | `POST /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 当前患者创建挂号，同时预创建接诊记录 |
 | 门诊挂号 | `GET /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 查询当前患者自己的挂号列表 |
 | 医生接诊 | `GET /api/v1/encounters` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生自己的接诊列表 |
+| 医生接诊 | `GET /api/v1/encounters/{encounterId}` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生自己的单个接诊详情 |
+| 医生接诊 | `GET /api/v1/encounters/{encounterId}/ai-summary` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生可查看的接诊 AI 预问诊摘要 |
 
 ## 4. 认证与当前用户
 
@@ -524,8 +526,6 @@
 
 下面这些接口在设计文档里已经出现，但当前代码里还没有对应 controller，不应当被当成当前可调用契约：
 
-- `GET /api/v1/encounters/{encounterId}`
-- `GET /api/v1/encounters/{encounterId}/ai-summary`
 - `POST /api/v1/emr`
 - `GET /api/v1/emr/{encounterId}`
 - `POST /api/v1/prescriptions`
