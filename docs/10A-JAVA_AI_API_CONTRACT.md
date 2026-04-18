@@ -32,6 +32,7 @@
 | `GET /api/v1/ai/sessions/{sessionId}` | 会话详情与轮次列表 | 患者 H5 |
 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 导诊结果、风险结果、引用与推荐科室 | 患者 H5 |
 | `POST /api/v1/ai/sessions/{sessionId}/registration-handoff` | 从 AI 结果生成挂号承接参数 | 患者 H5 |
+| `GET /api/v1/internal/triage-department-catalogs/{hospitalScope}` | 仅供 Python 拉取可导诊目录 | Python 内部 |
 | `GET /api/v1/encounters/{encounterId}/ai-summary` | 医生查看接诊前 AI 摘要 | 医生 Web |
 
 ## 4. 问诊请求
@@ -235,6 +236,18 @@
 - `suggestedVisitType` 当前固定为 `OUTPATIENT`，仅表达普通门诊承接类型，不等同于线下场次里的 `clinicType`
 - 默认返回未来 7 天的挂号查询窗口：`dateFrom = 今天`，`dateTo = 今天 + 6 天`
 - 如果 `riskLevel = high`，则返回 `blockedReason = EMERGENCY_OFFLINE`，不生成普通挂号承接参数；此时 `suggestedVisitType`、`registrationQuery`、推荐挂号科室字段返回 `null`
+
+### 6.4 `GET /api/v1/internal/triage-department-catalogs/{hospitalScope}`
+
+用途：供 Python 拉取当前医院范围下的可导诊目录。
+
+规则：
+
+- 该接口仅供内部调用，需携带 `X-API-Key`
+- 该接口直接返回 raw JSON，不包 `Result<T>`
+- 字段名固定为 snake_case
+- 对外暴露的是“可导诊目录”语义，不等于 `departments` 全量
+- 本轮目录由 Java 基于现有 `departments` 做受控投影生成，不新增独立目录表
 
 ## 7. 医生接诊摘要承接
 

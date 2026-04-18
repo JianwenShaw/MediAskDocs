@@ -31,11 +31,11 @@
 
 | 能力域 | 当前状态 | 结论 |
 |------|----------|------|
-| 公共协议与认证 | 完成 | `Result<T>`、错误处理、`requestId`、JWT 登录/刷新/登出/当前用户、对外 `SSE` 协议与结构化日志基线已完成；当前 `6001` 属于 Java -> Python AI 联调问题 |
+| 公共协议与认证 | 完成 | `Result<T>`、错误处理、`requestId`、JWT 登录/刷新/登出/当前用户、结构化日志基线已完成；AI 外部链路已收口到普通 `JSON` 接口 |
 | 身份、组织、后台患者管理 | 大体完成 | 用户/角色/权限/组织表齐全；管理员患者管理、患者/医生本人资料接口已落地 |
 | 门诊挂号 | 大体完成 | 门诊场次查询、挂号创建、我的挂号、挂号后预创建 `visit_encounter` 已完成 |
 | 医生接诊 | 部分完成 | 医生接诊列表已完成；接诊详情、AI 摘要、病历、处方未完成 |
-| AI 问诊与 RAG | 未完成 | 只有表结构与 Java 调 Python 的 client/DTO 骨架，没有 AI 主链接口和持久化 |
+| AI 问诊与 RAG | 部分完成 | Java `chat/sessions/triage-result/registration-handoff` 已落地，并已收口到 `triageStage + finalized snapshot` 模型；知识导入/索引与 Python RAG 写库仍未完成 |
 | 审计与敏感访问 | 未完成 | `audit_event`、`data_access_log` 只有 schema，没有写入与查询链路 |
 | 对象级授权 | 部分完成 | `ScenarioAuthorization`、`data_scope_rules` 装载已具备；资源解析和 `EMR/AI` 对象级校验未落地 |
 | 前端页面 | 未完成 | 当前仓库未包含前端实现 |
@@ -46,7 +46,7 @@
 |------|----------|
 | 浏览器入口 | 浏览器只访问 `mediask-api`，不直连 Python |
 | Java 对外协议 | `JSON` 接口统一使用 `Result<T>` |
-| AI 流式协议 | `SSE` 统一使用 `message / meta / end / error` |
+| AI 问诊协议 | 浏览器仅走 `POST /api/v1/ai/chat`；如需流式观感，只做展示层伪流式 |
 | 成功语义 | `code = 0` 为成功 |
 | 请求串联 | `X-Request-Id` / `request_id` 是唯一主线 |
 | Python 写库边界 | Python 只写 `knowledge_chunk_index`、`ai_run_citation` |
@@ -64,7 +64,6 @@
 - [x] Java -> Python 调用透传 `X-Request-Id`
 - [x] 基础认证链路可用（登录、刷新、登出、当前用户、角色识别）
 - [x] Java `health/readiness/liveness` 端点已开放
-- [x] Java 对外 `SSE` 转发骨架完成
 - [x] Java 结构化日志配置落地，日志中稳定输出 `request_id`
 
 ### Python
@@ -262,7 +261,7 @@
 | 认证 | `/api/v1/auth/login`、`/api/v1/auth/refresh`、`/api/v1/auth/logout`、`/api/v1/auth/me` | `users`、`user_roles` | 登录、刷新、登出、识别身份 | 已实现 |
 | 患者/医生本人资料 | `/api/v1/patients/me/profile`、`/api/v1/doctors/me/profile` | `patient_profile`、`doctors`、`doctor_department_rel` | 查看/更新本人资料 | 已实现 |
 | 管理员患者管理 | `/api/v1/admin/patients/*` | `users`、`patient_profile`、`user_roles` | 后台管理患者 | 已实现 |
-| AI 问诊页 | `/api/v1/ai/chat` | `ai_session`、`ai_turn`、`ai_model_run` | 发起问诊、伪流式展示 | 未开始 |
+| AI 问诊页 | `/api/v1/ai/chat` | `ai_session`、`ai_turn`、`ai_model_run` | 发起问诊、有限收集、结果页准入 | 后端已实现，前端未开始 |
 | 导诊结果页 | `/api/v1/ai/sessions/{id}/triage-result` | `ai_run_citation`、`knowledge_chunk` | 展示引用、风险和推荐科室 | 后端已实现，前端未开始 |
 | 挂号页 | `/api/v1/clinic-sessions`、`/api/v1/registrations` | `clinic_session`、`clinic_slot`、`registration_order` | 查门诊、创建挂号、查看我的挂号 | 已实现 |
 | AI 到挂号承接 | `/api/v1/ai/sessions/{id}/registration-handoff` | `ai_session`、`registration_order` | 把 AI 结果转为挂号入口 | 后端已实现，前端未开始 |
@@ -281,7 +280,7 @@
 
 ### 除 RAG 之外仍未完成
 
-- [ ] Java 对外 AI 主链接口、SSE 转发与导诊结果页接口
+- [x] Java 对外 AI 主链接口与导诊结果页接口
 - [ ] AI -> 挂号承接接口
 - [ ] 接诊详情、AI 摘要、病历、处方接口与写库链路
 - [ ] 对象级授权真正落到 `EMR_RECORD` / `AI_SESSION`
@@ -305,7 +304,7 @@
 4. AI -> 挂号承接：`triage-result` + `registration-handoff`
 5. 诊疗闭环：接诊详情、AI 摘要、病历、处方
 6. 权限与审计：对象级授权、`audit_event`、`data_access_log`
-7. 可观测性收口：`SSE`、结构化日志、`request_id` 全链路串联
+7. 可观测性收口：结构化日志、`request_id`、AI 结果页链路串联
 
 ## 9. 拆分阅读
 

@@ -436,12 +436,13 @@
 | 请求体 | `sessionId?`、`message`、`departmentId?`、`sceneType`、`useStream` |
 | 额外约束 | `useStream` 必须是 `false`；否则返回 `400 + 1002` |
 | 响应字段 | `sessionId`、`turnId`、`answer`、`triageResult` |
-| `triageResult` | `riskLevel`、`guardrailAction`、`nextAction`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
+| `triageResult` | `triageStage`、`riskLevel`、`guardrailAction`、`nextAction`、`followUpQuestions[]`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
 
 补充说明：
 
-- 目标设计文档中已经引入 `triageStage`、`followUpQuestions`、`resultStatus` 以及“结果页准入”语义，但当前代码尚未实现，不能当作现状契约
-- 目标设计里还计划移除聊天态 `GO_REGISTRATION`，改为统一先进入结果页；当前代码尚未实现该收敛
+- 当前实现已经收口到 `triageStage = COLLECTING / READY / BLOCKED`
+- `COLLECTING` 时返回 `followUpQuestions`，`nextAction = CONTINUE_TRIAGE`
+- 聊天态已移除 `GO_REGISTRATION`；`READY` 统一先进入结果页，`nextAction = VIEW_TRIAGE_RESULT`
 
 ### 10.2 伪流式展示口径
 
@@ -478,14 +479,14 @@
 |------|--------------|
 | 认证/身份 | 已登录 + `PATIENT` 角色 |
 | 访问范围 | 当前仅患者本人可查看自己的导诊结果 |
-| 响应字段 | `sessionId`、`riskLevel`、`guardrailAction`、`nextAction`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
-| 历史数据 | 老会话如果生成时未落完整结构化 detail，`chiefComplaintSummary`、`recommendedDepartments`、`careAdvice` 可能为空 |
+| 响应字段 | `sessionId`、`resultStatus`、`triageStage`、`riskLevel`、`guardrailAction`、`nextAction`、`finalizedTurnId`、`finalizedAt`、`hasActiveCycle`、`activeCycleTurnNo`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
+| 数据来源 | 当前读取最近一次 finalized `ai_model_run.triage_snapshot_json`，并结合 guardrail 与 citations 组装 |
 
 补充说明：
 
-- 目标设计里计划让“从未产出过 finalized snapshot 且当前仍 `COLLECTING`”时返回 `409`，但当前代码尚未实现该语义；当前仓库仍以现有 controller/usecase 行为为准
-- 目标设计里还计划让“已有旧 finalized 结果而当前新一轮仍 `COLLECTING`”时继续返回旧结果；当前代码尚未实现该区分
-- 目标设计里还计划让 `GET /triage-result` 成功响应增加 `resultStatus / finalizedAt / hasActiveCycle` 等版本语义字段；当前代码尚未实现
+- 如果历史上已有 finalized 结果，而当前新一轮仍在 `COLLECTING`，接口返回旧结果并标记 `resultStatus = UPDATING`
+- 如果从未产出过 finalized snapshot 且当前仍 `COLLECTING`，接口返回 `409 + 6021`
+- 成功返回时 `triageStage` 只允许 `READY` 或 `BLOCKED`
 
 ### 10.6 `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 
@@ -502,7 +503,22 @@
 
 补充说明：
 
-- 目标设计里计划让 `registration-handoff` 只消费最近一次 finalized snapshot；当前代码尚未实现“旧结果与新收集中轮次分离”的口径
+- 当前只消费最近一次 finalized snapshot，不再从聊天文本或收集中轮次临时反组装
+
+### 10.7 `GET /api/v1/internal/triage-department-catalogs/{hospitalScope}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要 `X-API-Key`，仅供 Python 内部调用 |
+| 路径参数 | `hospitalScope` |
+| 响应结构 | 直接返回原始 JSON；不包 `Result<T>` |
+| 响应字段 | `hospital_scope`、`department_catalog_version`、`department_candidates[]` |
+| `department_candidates[]` | `department_id`、`department_name`、`routing_hint`、`aliases[]`、`sort_order` |
+
+补充说明：
+
+- 当前目录语义是“可导诊目录”，不是 `departments` 全量透出
+- 当前实现由 Java 基于活动中的临床科室做受控投影，不新增独立目录表
 
 ## 11. 容易被文档误导的未实现接口
 

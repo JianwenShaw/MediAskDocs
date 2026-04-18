@@ -20,7 +20,7 @@
 1. 导诊收集必须有限且必然收口
 2. 最终结果只保留一份，并且能被稳定回读
 3. 聊天页、结果页、挂号承接三段链路职责明确
-4. 候选科室不能直接来自原始科室表，而要来自 Java 维护的可导诊目录
+4. 候选科室不能直接来自原始科室表全量，而要来自 Java 暴露的可导诊目录
 
 ## 2. 设计结论
 
@@ -323,13 +323,14 @@ sequenceDiagram
 
 ### 5.1 `TriageDepartmentCatalog`
 
-候选科室不再直接来自原始 `departments` 表，而是来自 Java 维护的独立业务概念：`TriageDepartmentCatalog`。
+候选科室不再直接来自原始 `departments` 表，而是来自 Java 维护的业务概念：`TriageDepartmentCatalog`。
 
 固定原则：
 
 - Java 是 `TriageDepartmentCatalog` 真相来源
 - Python 同步的是“可导诊目录”，不是“医院所有临床科室”
 - 目录只包含明确允许被 AI 推荐给患者的科室
+- 本轮不要求新增独立目录表；可由 Java 基于 `departments` 做受控投影后对 Python 暴露
 
 目录项最小字段固定为：
 
@@ -519,7 +520,7 @@ Python 在目录同步失败时，本次问诊失败，不做静默降级。
   - `hasActiveCycle`
   - `activeCycleTurnNo`
 - 新增仅内部使用的 triage catalog 拉取接口
-- 新增独立业务概念 `TriageDepartmentCatalog`
+- 新增受控“可导诊目录”业务概念 `TriageDepartmentCatalog`
 - `GET /triage-result` 的数据来源改为 `latest finalized ai_model_run.triage_snapshot_json + guardrail + citations`
 
 ## 11. 状态流转

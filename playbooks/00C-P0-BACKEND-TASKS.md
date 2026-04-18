@@ -19,11 +19,11 @@
 
 | 任务包 | 当前状态 | 说明 |
 |------|----------|------|
-| Task A：公共协议与请求上下文 | 完成 | `Result<T>`、错误处理、`requestId`、JWT、健康检查、对外 `SSE` 协议与结构化日志基线已完成；当前 `6001` 属于 Java -> Python AI 联调问题，不再归入 Task A |
+| Task A：公共协议与请求上下文 | 完成 | `Result<T>`、错误处理、`requestId`、JWT、健康检查、结构化日志基线已完成；AI 浏览器外部协议已收口为普通 `JSON` 接口 |
 | Task B：认证、角色、数据范围基线 | 部分完成 | 登录/刷新/登出/当前用户、本人资料、管理员患者管理已完成；对象级授权仍缺资源解析实现 |
 | Task C：知识库与 RAG 底座 | 未完成 | 表结构与 Java AI client 骨架已在仓库中，知识导入与索引链路未开始 |
-| Task D：AI 问诊主链路 | 未完成 | 没有 AI Controller/UseCase/会话持久化/对外接口 |
-| Task E：AI 到挂号承接 | 大体完成 | 场次查询、挂号创建、挂号列表、`registration-handoff` 已完成；AI 来源校验与完整验收仍待补强 |
+| Task D：AI 问诊主链路 | 部分完成 | `chat/sessions/triage-result`、会话持久化、`triageStage`、5 回合强制收口、`triage_snapshot_json` 已落地；Python RAG 写库与联调仍待完成 |
+| Task E：AI 到挂号承接 | 部分完成 | `registration-handoff` 已改为只消费最近一次 finalized snapshot；完整联调与 AI 来源校验仍待补强 |
 | Task F：医生接诊、病历、处方 | 部分完成 | 接诊列表已完成；接诊详情、AI 摘要、病历、处方未完成 |
 | Task G：审计与敏感访问留痕 | 未完成 | 审计表已建，写入与查询完全未落地 |
 
@@ -38,7 +38,7 @@
 - [x] `X-Request-Id` 生成、透传、回写
 - [x] Java `health/readiness/liveness` 端点开放
 - [x] Java -> Python 的 `X-Request-Id` 与 `X-API-Key` client 基础设施
-- [x] Java `JSON` 接口与 `SSE` 接口口径分离
+- [x] Java AI 对外接口收口为 `JSON`
 - [x] Logback 结构化日志 / `request_id` 日志输出
 
 ### 关键文件/模块
@@ -53,7 +53,6 @@
 
 - [x] 所有 `JSON` 接口返回 `Result<T>`
 - [x] 任意报错都带稳定 `requestId`
-- [x] `SSE` 返回 `message / meta / end / error`
 - [x] Java 日志中稳定输出 `request_id`
 
 ## 3.2 Task B：认证、角色、数据范围基线
@@ -147,6 +146,8 @@
 - [x] Java 调 Python 时透传 `model_run_id + request_id`
 - [ ] Python 负责检索、生成、护栏、引用写入
 - [x] Java 负责会话主事实、对外协议、审计串联
+- [x] `ai_model_run.triage_snapshot_json` 作为 finalized 导诊真相
+- [x] `GET /api/v1/internal/triage-department-catalogs/{hospitalScope}` 内部目录接口
 
 ### 验收标准
 
@@ -230,10 +231,10 @@
 | 能力 | Java | Python | 当前状态 |
 |------|------|--------|----------|
 | 认证与权限 | 负责 | 不负责 | Java 基础认证已完成，对象级授权未闭环 |
-| 会话主事实 | 负责 | 不负责 | 未开始 |
-| RAG 检索 | 调用与整合 | 负责执行 | Java client 骨架已完成，实际链路未开始 |
-| 护栏输出 | 映射 `nextAction` | 输出 `risk_level` 与 `guardrail_action` | 未开始 |
-| 浏览器协议 | 负责 | 不负责 | Java 对外 AI 接口未开始 |
+| 会话主事实 | 负责 | 不负责 | 已完成 session/turn/model_run/triage snapshot 持久化 |
+| RAG 检索 | 调用与整合 | 负责执行 | Java 已完成调用口与结果承接，实际 Python 检索链路待联调 |
+| 护栏输出 | 映射 `nextAction` | 输出 `risk_level` 与 `guardrail_action` | 已完成 Java 映射，Python 联调待验收 |
+| 浏览器协议 | 负责 | 不负责 | Java 对外 AI 接口已实现并删除旧 SSE 入口 |
 | `knowledge_chunk_index` | 不写 | 负责 | 未开始 |
 | `ai_run_citation` | 不写 | 负责 | 未开始 |
 | 审计 / 访问日志 | 负责 | 不负责 | schema 已有，写入未开始 |
@@ -247,15 +248,15 @@
 1. Java 落地 `ai_session` / `ai_turn` / `ai_model_run` 与 `POST /api/v1/ai/chat`
 2. Python 落地 `/health`、`/ready`、`/api/v1/chat`、`/api/v1/knowledge/*`
 3. 打通 RAG 索引与检索闭环
-4. 补 Java 对外 `SSE` 转发与 `triage-result`
+4. 打通 Python RAG 与引用写库联调
 5. 完成 `registration-handoff`
 6. 完成接诊详情、AI 摘要、病历、处方
 7. 完成对象级授权、`audit_event`、`data_access_log`
-8. 补结构化日志与 `request_id` 全链路可观测性
+8. 补结构化日志与 `request_id` 全链路可观测性验收
 
 ## 6. 一句话结论
 
-除了 `RAG` 本身，当前后端还缺的是：`AI 对外主链接口`、`AI -> 挂号承接`、`病历/处方闭环`、`对象级授权与审计留痕`、`SSE` 和 `request_id` 可观测性闭环。
+除了 `RAG` 本身，当前后端还缺的是：`Python 检索/索引写库联调`、`病历/处方闭环`、`对象级授权与审计留痕`、以及 `request_id` 可观测性验收。
 
 ## 7. 进一步细化
 

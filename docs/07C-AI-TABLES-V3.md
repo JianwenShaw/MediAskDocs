@@ -258,13 +258,14 @@ AI 问诊原文里经常包含：
 
 ### 7A.5 与可导诊目录的关系
 
-导诊推荐科室不再直接来自原始 `departments` 表全量临床科室，而应来自 Java 维护的独立 `TriageDepartmentCatalog` 业务目录。
+导诊推荐科室不再直接来自原始 `departments` 表全量临床科室，而应来自 Java 暴露的“可导诊目录”业务视图。
 
 这意味着：
 
 - `departments` 仍然是医院组织主数据
-- `TriageDepartmentCatalog` 是面向患者导诊的业务目录
-- Python 只能从 `TriageDepartmentCatalog` 同步到的目录中选择推荐科室
+- `TriageDepartmentCatalog` 是面向患者导诊的业务概念，不要求本轮新增独立主数据表
+- 本轮由 Java 基于现有 `departments` 做受控投影，对 Python 暴露可导诊目录
+- Python 只能从这份目录中选择推荐科室
 
 ## 8. `ai_feedback_task`
 
