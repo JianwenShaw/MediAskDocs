@@ -68,6 +68,8 @@
 | 门诊挂号 | `GET /api/v1/clinic-sessions` | 已登录 | 查询当前可挂号的开放门诊场次 |
 | 门诊挂号 | `POST /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 当前患者创建挂号，同时预创建接诊记录 |
 | 门诊挂号 | `GET /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 查询当前患者自己的挂号列表 |
+| 门诊挂号 | `GET /api/v1/registrations/{registrationId}` | 已登录 + `PATIENT` 角色 | 查询当前患者自己的单个挂号详情 |
+| 门诊挂号 | `PATCH /api/v1/registrations/{registrationId}/cancel` | 已登录 + `PATIENT` 角色 | 取消当前患者自己的挂号，并联动释放号源与取消预创建接诊 |
 | 医生接诊 | `GET /api/v1/encounters` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生自己的接诊列表 |
 | 医生接诊 | `GET /api/v1/encounters/{encounterId}` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生自己的单个接诊详情 |
 | 医生接诊 | `GET /api/v1/encounters/{encounterId}/ai-summary` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生可查看的接诊 AI 预问诊摘要 |
@@ -311,6 +313,39 @@
 - 这里的患者主体使用的是当前登录用户的 `userId`。
 - `CurrentUserResponse.patientId` 是 `patient_profile.id`，不要和挂号业务里的患者用户 ID 混用。
 - `createdAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
+
+### 7.4 `GET /api/v1/registrations/{registrationId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和 `PATIENT` 角色 |
+| 路径参数 | `registrationId` |
+| 响应字段 | `registrationId`、`orderNo`、`status`、`createdAt`、`sourceAiSessionId`、`clinicSessionId`、`clinicSlotId`、`departmentId`、`departmentName`、`doctorId`、`doctorName`、`sessionDate`、`periodCode`、`fee`、`cancelledAt?`、`cancellationReason?` |
+| 真实语义 | 只允许查看当前登录患者自己的挂号详情；不存在或不属于本人时统一返回 `404 + 3008`；关联医生/科室/场次若已软删除，历史订单仍应可查看 |
+
+补充说明：
+
+- `createdAt`、`cancelledAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移。
+- `sessionDate` 当前按 Jackson 默认 `LocalDate` 结构返回。
+- `periodCode` 当前直接返回枚举名，例如 `MORNING`。
+- 当关联主数据已软删除时，`departmentName`、`doctorName`、`sessionDate`、`periodCode` 允许返回 `null`。
+
+### 7.5 `PATCH /api/v1/registrations/{registrationId}/cancel`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和 `PATIENT` 角色 |
+| 路径参数 | `registrationId` |
+| 请求体 | 无 |
+| 响应字段 | `registrationId`、`status`、`cancelledAt` |
+| 真实语义 | 只允许取消当前登录患者自己的挂号；取消成功后会释放对应占用号源、刷新场次剩余号数，并把预创建的 `visit_encounter` 置为 `CANCELLED` |
+
+补充说明：
+
+- 不存在或不属于本人时返回 `404 + 3008`。
+- 当挂号状态已不允许取消，或关联接诊不再处于 `SCHEDULED`，或号源无法释放时，返回 `409 + 3009`。
+- 当前仅 `PENDING_PAYMENT`、`CONFIRMED` 两种挂号状态允许取消；其他状态会触发 `409 + 3006`。
+- `PENDING_PAYMENT` 取消时要求 slot 当前为 `LOCKED`；`CONFIRMED` 取消时要求 slot 当前为 `BOOKED`；两种场景取消后都会回退为 `AVAILABLE`。
 
 ## 8. 知识库与知识文档后台管理
 
