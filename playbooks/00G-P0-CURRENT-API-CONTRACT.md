@@ -310,6 +310,7 @@
 
 - 这里的患者主体使用的是当前登录用户的 `userId`。
 - `CurrentUserResponse.patientId` 是 `patient_profile.id`，不要和挂号业务里的患者用户 ID 混用。
+- `createdAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
 
 ## 8. 知识库与知识文档后台管理
 
@@ -465,6 +466,10 @@
 | 响应字段 | `items[].sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?` |
 | 返回范围 | 仅最小摘要，不返回 `turns[]`、消息原文或导诊结构化结果 |
 
+补充说明：
+
+- `startedAt`、`endedAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
+
 ### 10.4 `GET /api/v1/ai/sessions/{sessionId}`
 
 | 项目 | 当前代码口径 |
@@ -474,6 +479,10 @@
 | 响应字段 | `sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?`、`turns[]` |
 | `turns[]` | `turnId`、`turnNo`、`turnStatus`、`startedAt`、`completedAt?`、`errorCode?`、`errorMessage?`、`messages[]` |
 | `messages[]` | `role`、`content`、`createdAt` |
+
+补充说明：
+
+- `startedAt`、`endedAt`、`turns[].startedAt`、`turns[].completedAt`、`messages[].createdAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
 
 ### 10.5 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
 
@@ -489,6 +498,7 @@
 - 如果历史上已有 finalized 结果，而当前新一轮仍在 `COLLECTING`，接口返回旧结果并标记 `resultStatus = UPDATING`
 - 如果从未产出过 finalized snapshot 且当前仍 `COLLECTING`，接口返回 `409 + 6021`
 - 成功返回时 `triageStage` 只允许 `READY` 或 `BLOCKED`
+- `finalizedAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
 
 ### 10.6 `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 

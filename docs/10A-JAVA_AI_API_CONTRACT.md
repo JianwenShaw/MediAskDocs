@@ -123,6 +123,7 @@
 - 列表按 `startedAt DESC` 排序；同一时间按 `sessionId DESC`
 - 该接口只返回最小摘要，不返回 `turns`、消息原文或导诊结构化结果
 - 详情仍走 `GET /api/v1/ai/sessions/{sessionId}`，导诊结果仍走 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
+- `startedAt`、`endedAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
 
 ### 6.1 `GET /api/v1/ai/sessions/{sessionId}`
 
@@ -159,6 +160,7 @@
 
 - 当前实现仅支持患者本人回看自己的 AI 会话
 - 医生侧查看 AI 内容仍走后续 `GET /api/v1/encounters/{encounterId}/ai-summary`
+- `startedAt`、`endedAt`、`turns[].startedAt`、`turns[].completedAt`、`messages[].createdAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
 
 ### 6.2 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
 
@@ -188,6 +190,7 @@
 - 历史老会话如果对应 run 尚未持久化 `triage_snapshot_json`，可能不存在 `triage-result`
 - 前端应以该接口返回的结构化字段作为导诊结果真相，不从聊天文本中自行解析
 - Python 内部用于判定 `triageStage` 的 `risk_blockers`、`missing_critical_info`、`follow_up_questions`、`department_recommendation_confidence` 不对浏览器暴露，前端不消费这些内部判定材料
+- `finalizedAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
 
 `resultStatus` 固定值：
 

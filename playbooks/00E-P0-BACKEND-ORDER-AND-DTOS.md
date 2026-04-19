@@ -176,12 +176,14 @@
 - 当前实现仅允许患者本人查看自己的会话列表
 - 当前版本不分页、不筛选，按 `startedAt DESC` 返回
 - 只返回最小摘要字段，不携带 `turns[]` 或导诊结构化结果
+- `startedAt`、`endedAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
 
 `GET /api/v1/ai/sessions/{id}` 补充约定：
 
 - 当前实现仅允许患者本人回看自己的 AI 会话
 - `turns[]` 至少返回 `turnId`、`turnNo`、`turnStatus`、`startedAt`、`completedAt?`、`errorCode?`、`errorMessage?`、`messages[]`
 - `messages[]` 至少返回 `role`、`content`、`createdAt`
+- `startedAt`、`endedAt`、`turns[].startedAt`、`turns[].completedAt`、`messages[].createdAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
 
 ## 4.3 挂号承接
 
@@ -200,6 +202,7 @@
 - `registrationQuery` 最小字段为 `departmentId`、`dateFrom`、`dateTo`
 - 默认查询窗口为今天起未来 7 天
 - `riskLevel=high` 时返回 `blockedReason=EMERGENCY_OFFLINE`，不返回普通挂号查询参数
+- `createdAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
 
 ## 4.4 接诊、病历、处方
 
@@ -218,6 +221,7 @@
 - `GET /api/v1/encounters` 只基于 `visit_encounter` 查询，不用 `registration_order` 直接拼“待接诊”列表。
 - 挂号创建成功后即预创建 `visit_encounter`，初始状态固定为 `SCHEDULED`。
 - `status` 只接受 `SCHEDULED`、`IN_PROGRESS`、`COMPLETED`、`CANCELLED`，不传则返回当前医生全部可见记录。
+- `startedAt`、`endedAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
 
 ## 4.5 审计
 
