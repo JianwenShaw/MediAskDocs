@@ -191,6 +191,7 @@
 |------|------------------|----------------------|
 | `POST /api/v1/ai/sessions/{id}/registration-handoff` | Path `sessionId` | `sessionId`、`recommendedDepartmentId?`、`recommendedDepartmentName?`、`chiefComplaintSummary?`、`suggestedVisitType?`、`blockedReason?`、`registrationQuery?` |
 | `GET /api/v1/clinic-sessions` | `departmentId?`、`dateFrom?`、`dateTo?` | `items[]` |
+| `GET /api/v1/clinic-sessions/{id}/slots` | Path `clinicSessionId` | `items[].clinicSlotId`、`slotSeq`、`slotStartTime`、`slotEndTime` |
 | `POST /api/v1/registrations` | `clinicSessionId`、`clinicSlotId`、`sourceAiSessionId?` | `registrationId`、`orderNo`、`status` |
 | `GET /api/v1/registrations` | `status?` | `items[]` |
 | `GET /api/v1/registrations/{id}` | Path `registrationId` | `registrationId`、`orderNo`、`status`、`createdAt`、`sourceAiSessionId`、`clinicSessionId`、`clinicSlotId`、`departmentId`、`departmentName`、`doctorId`、`doctorName`、`sessionDate`、`periodCode`、`fee`、`cancelledAt?`、`cancellationReason?` |
@@ -205,6 +206,7 @@
 - 默认查询窗口为今天起未来 7 天
 - `riskLevel=high` 时返回 `blockedReason=EMERGENCY_OFFLINE`，不返回普通挂号查询参数
 - `createdAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
+- `GET /api/v1/clinic-sessions` 返回场次头摘要，不直接内嵌 slot；前端应先选场次，再调用 `GET /api/v1/clinic-sessions/{id}/slots` 拿 `clinicSlotId`
 - 历史挂号详情以 `registration_order` 为准；若关联 `clinic_session` / `departments` / `doctors` / `users` 已软删除，详情仍返回订单，相关展示字段允许为空
 - `clinic_slot` 最小状态语义按 `AVAILABLE / LOCKED / BOOKED / USED / CANCELLED` 收口；当前取消链路要求 `PENDING_PAYMENT -> LOCKED`、`CONFIRMED -> BOOKED`
 

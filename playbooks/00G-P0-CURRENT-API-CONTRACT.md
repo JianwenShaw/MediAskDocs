@@ -279,8 +279,24 @@
 
 - 当前实现没有额外限制必须是患者才能调用；任意已登录用户都可以查询。
 - `periodCode`、`clinicType` 当前直接输出枚举名。
+- 该接口只返回场次头摘要，不直接返回可提交的 `clinicSlotId`。
 
-### 7.2 `POST /api/v1/registrations`
+### 7.2 `GET /api/v1/clinic-sessions/{clinicSessionId}/slots`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态 |
+| 路径参数 | `clinicSessionId` |
+| 响应字段 | `items[].clinicSlotId`、`slotSeq`、`slotStartTime`、`slotEndTime` |
+| 真实语义 | 查询指定开放门诊场次下当前仍可挂的具体号源，供前端选号后再提交挂号 |
+
+补充说明：
+
+- 当前只返回 `slot_status = AVAILABLE` 的号源。
+- `slotStartTime`、`slotEndTime` 统一返回秒级 ISO-8601 字符串，包含时区偏移。
+- 前端应先查 `GET /api/v1/clinic-sessions` 选场次，再查本接口拿 `clinicSlotId`。
+
+### 7.3 `POST /api/v1/registrations`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -297,7 +313,7 @@
 - 如果号源已满或无法预占，会返回 `409 + 3005`。
 - 已登录但不是患者角色时，返回 `403 + 2008`。
 
-### 7.3 `GET /api/v1/registrations`
+### 7.4 `GET /api/v1/registrations`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -314,7 +330,7 @@
 - `CurrentUserResponse.patientId` 是 `patient_profile.id`，不要和挂号业务里的患者用户 ID 混用。
 - `createdAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
 
-### 7.4 `GET /api/v1/registrations/{registrationId}`
+### 7.5 `GET /api/v1/registrations/{registrationId}`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -330,7 +346,7 @@
 - `periodCode` 当前直接返回枚举名，例如 `MORNING`。
 - 当关联主数据已软删除时，`departmentName`、`doctorName`、`sessionDate`、`periodCode` 允许返回 `null`。
 
-### 7.5 `PATCH /api/v1/registrations/{registrationId}/cancel`
+### 7.6 `PATCH /api/v1/registrations/{registrationId}/cancel`
 
 | 项目 | 当前代码口径 |
 |------|--------------|

@@ -180,6 +180,7 @@
 
 - [x] `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 - [x] `GET /api/v1/clinic-sessions`
+- [x] `GET /api/v1/clinic-sessions/{clinicSessionId}/slots`
 - [x] `POST /api/v1/registrations`
 - [x] `GET /api/v1/registrations`
 
@@ -263,7 +264,7 @@
 | 管理员患者管理 | `/api/v1/admin/patients/*` | `users`、`patient_profile`、`user_roles` | 后台管理患者 | 已实现 |
 | AI 问诊页 | `/api/v1/ai/chat` | `ai_session`、`ai_turn`、`ai_model_run` | 发起问诊、有限收集、结果页准入 | 后端已实现，前端未开始 |
 | 导诊结果页 | `/api/v1/ai/sessions/{id}/triage-result` | `ai_run_citation`、`knowledge_chunk` | 展示引用、风险和推荐科室 | 后端已实现，前端未开始 |
-| 挂号页 | `/api/v1/clinic-sessions`、`/api/v1/registrations` | `clinic_session`、`clinic_slot`、`registration_order` | 查门诊、创建挂号、查看我的挂号 | 已实现 |
+| 挂号页 | `/api/v1/clinic-sessions`、`/api/v1/clinic-sessions/{id}/slots`、`/api/v1/registrations` | `clinic_session`、`clinic_slot`、`registration_order` | 查门诊、选号、创建挂号、查看我的挂号 | 已实现 |
 | AI 到挂号承接 | `/api/v1/ai/sessions/{id}/registration-handoff` | `ai_session`、`registration_order` | 把 AI 结果转为挂号入口 | 后端已实现，前端未开始 |
 | 医生接诊列表 | `/api/v1/encounters` | `visit_encounter`、`registration_order` | 医生查看本人待接诊记录 | 已实现 |
 | 接诊详情 / 病历 / 处方 | `/api/v1/encounters/{id}`、`/api/v1/emr/*`、`/api/v1/prescriptions/*` | `visit_encounter`、`emr_*`、`prescription_*` | 接诊详情、病历录入、处方录入 | 未开始 |

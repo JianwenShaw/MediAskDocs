@@ -161,6 +161,7 @@
 
 - [x] `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 - [x] `GET /api/v1/clinic-sessions`
+- [x] `GET /api/v1/clinic-sessions/{clinicSessionId}/slots`
 - [x] `POST /api/v1/registrations`
 - [x] `GET /api/v1/registrations`
 
@@ -173,6 +174,7 @@
 ### 验收标准
 
 - [x] 患者可基于现有门诊场次完成挂号
+- [x] 患者可先选门诊场次，再查询具体可挂号源并提交 `clinicSlotId`
 - [x] 挂号成功后预创建 `visit_encounter`
 - [x] `registration_order.source_ai_session_id` 字段已预留
 - [x] AI 推荐科室可转成挂号查询条件
