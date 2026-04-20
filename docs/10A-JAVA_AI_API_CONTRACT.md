@@ -11,6 +11,7 @@
 - 浏览器只访问 `mediask-api`，不直连 `mediask-ai`
 - Java 对外 `JSON` 接口统一使用 `Result<T>`：`{code, msg, data, requestId, timestamp}`
 - Java 对外 `JSON` 中涉及业务主键的 `Long/long` 字段统一按字符串返回，前端按字符串处理 `sessionId`、`turnId`、`encounterId`、`chunkId` 等 ID
+- 对外响应中的业务 ID 字符串化、业务日期格式、业务日期时间格式必须在响应 DTO 上显式声明；不要依赖全局 Jackson 配置隐式兜底
 - Python 内部返回 `risk_level`、`guardrail_action`、`citations` 等执行结果；Java 负责整理成前端可直接消费的业务结果
 - AI 结果必须能承接到挂号和医生接诊，而不是停留在一段聊天文本
 - 导诊结构化结果采用单真相模型：`chat`、`triage-result`、`registration-handoff` 共享同一份已持久化 run 结果
@@ -105,6 +106,7 @@
 - 业务日期时间字段统一返回秒级 ISO-8601 字符串，并带时区偏移，例如 `2026-04-19T10:34:54+08:00`
 - 业务日期字段统一返回 `yyyy-MM-dd` 字符串，例如 `2026-04-19`
 - `Result.timestamp` 固定为毫秒时间戳；它是统一响应包裹层字段，不属于业务字段时间格式规则
+- 上述格式规则由响应 DTO 注解固定，不由全局 `ObjectMapper` 或 Spring Boot Jackson 定制器单独保障
 
 ### 6.0 `GET /api/v1/ai/sessions`
 
