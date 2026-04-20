@@ -45,6 +45,9 @@ Java 对浏览器/前端暴露的所有 **JSON HTTP 接口**，统一使用 `Res
 - 不再使用 HTTP `200/500` 作为业务成功/失败码语义
 - 前端判断成功与否只看 `code`，不看 `msg`
 - Java 对外 `JSON` 中所有 `Long/long` 业务字段统一按字符串序列化，避免浏览器/前端 `Number` 精度丢失；前端应按字符串处理各类业务 ID，如 `userId`、`patientId`、`doctorId`、`sessionId`、`documentId`
+- Java 对外 `JSON` 中所有业务日期时间字段统一按秒级 ISO-8601 字符串序列化，并带时区偏移，例如 `2026-04-19T10:34:54+08:00`
+- Java 对外 `JSON` 中所有业务日期字段统一按 `yyyy-MM-dd` 字符串序列化，例如 `2026-04-19`
+- `Result.timestamp` 固定为 Unix 毫秒时间戳；它是统一响应元数据，不与业务日期/日期时间字段混用
 - `SSE` 流式接口不逐帧包 `Result<T>`；其结构化结果通过 `meta/error` 事件返回，`requestId` 仍通过 Header 串联
 
 ## 3. HTTP 状态码与业务码的关系

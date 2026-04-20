@@ -145,6 +145,12 @@
 
 ## 4.2 AI 问诊
 
+时间字段总规则：
+
+- 所有业务日期时间字段统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
+- 所有业务日期字段统一返回 `yyyy-MM-dd` 字符串，例如 `2026-04-19`
+- `Result.timestamp` 固定为毫秒时间戳；它属于统一响应元数据，不属于业务字段时间格式规则
+
 | 接口 | 请求 DTO 最小字段 | 响应 `data` / 事件最小字段 |
 |------|------------------|-----------------------------|
 | `POST /api/v1/ai/chat` | `sessionId?`、`message`、`departmentId?`、`sceneType`、`useStream` | `sessionId`、`turnId`、`answer`、`triageResult` |
@@ -206,6 +212,7 @@
 - 默认查询窗口为今天起未来 7 天
 - `riskLevel=high` 时返回 `blockedReason=EMERGENCY_OFFLINE`，不返回普通挂号查询参数
 - `createdAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
+- `registrationQuery.dateFrom`、`registrationQuery.dateTo`、`sessionDate` 这类业务日期字段统一返回 `yyyy-MM-dd` 字符串，不返回数组结构
 - `GET /api/v1/clinic-sessions` 返回场次头摘要，不直接内嵌 slot；前端应先选场次，再调用 `GET /api/v1/clinic-sessions/{id}/slots` 拿 `clinicSlotId`
 - 历史挂号详情以 `registration_order` 为准；若关联 `clinic_session` / `departments` / `doctors` / `users` 已软删除，详情仍返回订单，相关展示字段允许为空
 - `clinic_slot` 最小状态语义按 `AVAILABLE / LOCKED / BOOKED / USED / CANCELLED` 收口；当前取消链路要求 `PENDING_PAYMENT -> LOCKED`、`CONFIRMED -> BOOKED`
@@ -228,6 +235,7 @@
 - 挂号创建成功后即预创建 `visit_encounter`，初始状态固定为 `SCHEDULED`。
 - `status` 只接受 `SCHEDULED`、`IN_PROGRESS`、`COMPLETED`、`CANCELLED`，不传则返回当前医生全部可见记录。
 - `startedAt`、`endedAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
+- `sessionDate` 作为业务日期字段，统一返回 `yyyy-MM-dd` 字符串
 
 ## 4.5 审计
 

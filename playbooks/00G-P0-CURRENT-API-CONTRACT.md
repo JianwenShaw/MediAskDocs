@@ -27,6 +27,9 @@
 | 认证要求 | 除公开接口外，其余 `/api/**` 都要求登录态 |
 | 空字段输出 | 当前 Jackson 配置为 `non_null`，`null` 字段不会出现在 JSON 中 |
 | 长整型字段 | 当前 Jackson 配置会把所有对外 `Long/long` 业务字段序列化为字符串，避免前端精度丢失 |
+| 业务日期时间字段 | 当前 Jackson 配置会把所有对外 `OffsetDateTime` 业务字段统一序列化为秒级 ISO-8601 字符串，并带时区偏移，例如 `2026-04-19T10:34:54+08:00` |
+| 业务日期字段 | 当前 Jackson 配置会把所有对外 `LocalDate` 业务字段统一序列化为 `yyyy-MM-dd`，例如 `2026-04-19` |
+| 统一响应时间戳 | `Result.timestamp` 固定为 Unix 毫秒时间戳；它是统一响应元数据，不属于业务日期/日期时间字段规则 |
 | 参数错误 | 参数解析失败、类型不匹配、构造器抛 `IllegalArgumentException` 时统一返回 `400 + 1002` |
 | 401/403 | 未认证返回 `401`；权限不足或角色不匹配返回 `403` |
 
@@ -35,6 +38,11 @@
 - 带 `@AuthorizeScenario` 的接口，会先做场景权限判断；如果权限不满足，会直接返回 `403 + 1003`，不一定进入后续的角色校验逻辑。
 - 当前 Python AI 服务已收口为同步 `/api/v1/chat`；如上层需要“流式”观感，应基于完整回答做伪流式展示，而不是依赖 Python SSE。
 - 因为浏览器 `Number` 无法安全表示雪花 ID，诸如 `userId`、`patientId`、`doctorId`、`knowledgeBaseId`、`documentId`、`sessionId` 这类字段在响应 JSON 中都应按字符串解析。
+- 前端不要再按“某些接口返回时间字符串、某些接口返回时间数组”的思路适配；当前已实现 JSON API 中，业务日期时间统一是字符串，业务日期统一也是字符串。
+- 具体区分规则：
+  - 业务日期时间字段：通常命名为 `*At`、`*Time`，例如 `startedAt`、`createdAt`、`slotStartTime`
+  - 业务日期字段：通常表示自然日，例如 `birthDate`、`sessionDate`、`dateFrom`、`dateTo`
+  - `Result.timestamp`：统一响应包裹层字段，始终为毫秒时间戳
 
 ## 3. 当前已实现接口总览
 
@@ -280,6 +288,7 @@
 - 当前实现没有额外限制必须是患者才能调用；任意已登录用户都可以查询。
 - `periodCode`、`clinicType` 当前直接输出枚举名。
 - 该接口只返回场次头摘要，不直接返回可提交的 `clinicSlotId`。
+- `dateFrom`、`dateTo`、`sessionDate` 作为业务日期字段，统一返回 `yyyy-MM-dd` 字符串。
 
 ### 7.2 `GET /api/v1/clinic-sessions/{clinicSessionId}/slots`
 
@@ -342,7 +351,7 @@
 补充说明：
 
 - `createdAt`、`cancelledAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移。
-- `sessionDate` 当前按 Jackson 默认 `LocalDate` 结构返回。
+- `sessionDate` 当前统一返回 `yyyy-MM-dd` 字符串，例如 `2026-04-03`。
 - `periodCode` 当前直接返回枚举名，例如 `MORNING`。
 - 当关联主数据已软删除时，`departmentName`、`doctorName`、`sessionDate`、`periodCode` 允许返回 `null`。
 
@@ -520,6 +529,7 @@
 补充说明：
 
 - `startedAt`、`endedAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
+- 本接口如果未来补充纯日期字段，仍应统一返回 `yyyy-MM-dd` 字符串，而不是数组结构。
 
 ### 10.4 `GET /api/v1/ai/sessions/{sessionId}`
 
@@ -534,6 +544,7 @@
 补充说明：
 
 - `startedAt`、`endedAt`、`turns[].startedAt`、`turns[].completedAt`、`messages[].createdAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
+- 本接口内若未来出现纯日期字段，统一返回 `yyyy-MM-dd` 字符串。
 
 ### 10.5 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
 
@@ -550,6 +561,7 @@
 - 如果从未产出过 finalized snapshot 且当前仍 `COLLECTING`，接口返回 `409 + 6021`
 - 成功返回时 `triageStage` 只允许 `READY` 或 `BLOCKED`
 - `finalizedAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
+- `finalizedAt` 是业务日期时间字段，不是时间戳数字。
 
 ### 10.6 `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
 

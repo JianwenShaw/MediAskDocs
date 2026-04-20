@@ -100,6 +100,12 @@
 
 ## 6. 导诊结果与挂号承接
 
+时间字段统一约定：
+
+- 业务日期时间字段统一返回秒级 ISO-8601 字符串，并带时区偏移，例如 `2026-04-19T10:34:54+08:00`
+- 业务日期字段统一返回 `yyyy-MM-dd` 字符串，例如 `2026-04-19`
+- `Result.timestamp` 固定为毫秒时间戳；它是统一响应包裹层字段，不属于业务字段时间格式规则
+
 ### 6.0 `GET /api/v1/ai/sessions`
 
 用途：返回当前患者的 AI 会话历史列表，用于结果页或历史页选择具体会话后继续查看详情和导诊结果。
@@ -230,6 +236,11 @@
   }
 }
 ```
+
+补充说明：
+
+- `registrationQuery.dateFrom`、`registrationQuery.dateTo` 属于业务日期字段，统一返回 `yyyy-MM-dd` 字符串
+- 该接口里的 `sessionId`、`recommendedDepartmentId`、`departmentId` 仍按 Long 字符串返回，不与日期字段混淆
 
 规则：
 
