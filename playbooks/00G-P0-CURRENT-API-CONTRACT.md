@@ -81,6 +81,7 @@
 | 医生接诊 | `GET /api/v1/encounters` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生自己的接诊列表 |
 | 医生接诊 | `GET /api/v1/encounters/{encounterId}` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生自己的单个接诊详情 |
 | 医生接诊 | `GET /api/v1/encounters/{encounterId}/ai-summary` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生可查看的接诊 AI 预问诊摘要 |
+| 医生接诊 | `PATCH /api/v1/encounters/{encounterId}` | 已登录 + 接诊更新权限 + `DOCTOR` 角色 | 更新当前医生自己的接诊状态（开始/完成） |
 
 ## 4. 认证与当前用户
 
@@ -504,6 +505,24 @@
 - `patientSummary.age` 当前按接诊 `sessionDate` 与 `birthDate` 计算；任一字段缺失时返回 `null`。
 - `patientSummary.patientUserId`、`departmentId`、`encounterId`、`registrationId` 对外统一序列化为字符串。
 - `patientSummary.sessionDate` 统一返回 `yyyy-MM-dd` 字符串；`startedAt`、`endedAt` 统一返回带时区偏移的秒级 ISO-8601 字符串。
+- 接诊不存在返回 `404 + 4004`；接诊不属于当前医生返回 `403 + 4003`。
+
+### 9.3 `PATCH /api/v1/encounters/{encounterId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态、接诊更新权限、`DOCTOR` 角色 |
+| 路径参数 | `encounterId` |
+| 请求体 | `action`，可选值：`START`、`COMPLETE` |
+| 非法 `action` | 返回 `400 + 1002` |
+| 响应字段 | `encounterId`、`encounterStatus`、`startedAt`、`endedAt` |
+| 真实语义 | 永远只允许当前登录医生更新自己的接诊记录；`START` 仅允许 `SCHEDULED -> IN_PROGRESS`，`COMPLETE` 仅允许 `IN_PROGRESS -> COMPLETED` |
+
+补充说明：
+
+- `COMPLETE` 成功后会同步把对应 `registration_order.order_status` 更新为 `COMPLETED`。
+- 当前实现不联动 `clinic_slot` 状态。
+- 状态流转不合法返回 `409 + 4010`；并发更新冲突返回 `409 + 4011`；挂号状态同步失败返回 `409 + 4012`。
 - 接诊不存在返回 `404 + 4004`；接诊不属于当前医生返回 `403 + 4003`。
 
 ## 10. 当前已实现 AI 接口补充

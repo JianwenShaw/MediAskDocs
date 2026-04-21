@@ -77,7 +77,7 @@
 | `A5` | `/api/v1/ai/sessions/{id}/registration-handoff` | AI 到挂号承接 | `M5-M6` |
 | `A6` | `/api/v1/clinic-sessions` | 挂号页门诊查询 | `M6` |
 | `A7` | `/api/v1/registrations` | 创建和查看挂号 | `M6` |
-| `A8` | `/api/v1/encounters`、`/api/v1/encounters/{id}` | 医生接诊入口 | `M6-M7` |
+| `A8` | `/api/v1/encounters`、`/api/v1/encounters/{id}`、`PATCH /api/v1/encounters/{id}` | 医生接诊入口 | `M6-M7` |
 | `A9` | `/api/v1/encounters/{id}/ai-summary` | 医生查看 AI 摘要 | `M5-M7` |
 | `A10` | `/api/v1/emr` | 病历录入 | `M7` |
 | `A11` | `/api/v1/prescriptions` | 处方录入 | `M7` |
@@ -224,6 +224,7 @@
 | `GET /api/v1/encounters` | `status?` | `items[].encounterId`、`registrationId`、`patientUserId`、`patientName`、`departmentId`、`departmentName`、`sessionDate`、`periodCode`、`encounterStatus`、`startedAt`、`endedAt` |
 | `GET /api/v1/encounters/{id}` | Path `encounterId` | `encounterId`、`registrationId`、`patientSummary` |
 | `GET /api/v1/encounters/{id}/ai-summary` | Path `encounterId` | `encounterId`、`sessionId`、`chiefComplaintSummary`、`structuredSummary`、`riskLevel`、`recommendedDepartments`、`latestCitations` |
+| `PATCH /api/v1/encounters/{id}` | Path `encounterId` + Body `action` | `encounterId`、`encounterStatus`、`startedAt`、`endedAt` |
 | `POST /api/v1/emr` | `encounterId`、`chiefComplaint`、`historyOfPresentIllness`、`diagnoses[]` | `emrRecordId`、`encounterId` |
 | `GET /api/v1/emr/{encounterId}` | Path `encounterId` | `emrRecordId`、`content`、`diagnoses[]` |
 | `POST /api/v1/prescriptions` | `encounterId`、`items[]` | `prescriptionOrderId`、`status` |
@@ -234,6 +235,8 @@
 - `GET /api/v1/encounters` 只基于 `visit_encounter` 查询，不用 `registration_order` 直接拼“待接诊”列表。
 - 挂号创建成功后即预创建 `visit_encounter`，初始状态固定为 `SCHEDULED`。
 - `status` 只接受 `SCHEDULED`、`IN_PROGRESS`、`COMPLETED`、`CANCELLED`，不传则返回当前医生全部可见记录。
+- `PATCH /api/v1/encounters/{id}` 的 `action` 仅支持 `START`、`COMPLETE`。`START` 仅允许 `SCHEDULED -> IN_PROGRESS`；`COMPLETE` 仅允许 `IN_PROGRESS -> COMPLETED`。
+- `COMPLETE` 成功后同步更新 `registration_order.order_status = COMPLETED`；当前不联动 `clinic_slot`。
 - `startedAt`、`endedAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
 - `sessionDate` 作为业务日期字段，统一返回 `yyyy-MM-dd` 字符串
 
