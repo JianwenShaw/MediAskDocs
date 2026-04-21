@@ -153,9 +153,8 @@ flowchart LR
     end
 
     subgraph D["挂号交易层"]
-        O1("registration_hold")
-        O2("registration_order")
-        O3("visit_encounter")
+        O1("registration_order")
+        O2("visit_encounter")
     end
 
     R1 --> J1
@@ -175,7 +174,6 @@ flowchart LR
 
     P3 --> O1
     O1 --> O2
-    O2 --> O3
 ```
 
 ### 4.2 关键边界说明
@@ -470,36 +468,25 @@ stateDiagram-v2
     }
 
     state "clinic_slot" as Slot {
-        [*] --> FREE
-        FREE --> HELD: 锁号
-        HELD --> BOOKED: 支付成功
-        HELD --> FREE: 超时释放/主动放弃
-        FREE --> CANCELLED: 人工关闭号源
-        BOOKED --> CANCELLED: 订单取消且允许回退
-        BOOKED --> USED: 完成就诊
+        [*] --> AVAILABLE
+        AVAILABLE --> BOOKED: 成功挂号
+        AVAILABLE --> CANCELLED: 人工关闭号源
+        BOOKED --> AVAILABLE: 挂号取消后释放号源
+        BOOKED --> CANCELLED: 人工关闭号源
         CANCELLED --> [*]
-        USED --> [*]
     }
 
     state "registration_order" as Order {
-        [*] --> INIT
-        INIT --> HELD: 创建订单并锁号
-        HELD --> CONFIRMED: 支付成功
-        HELD --> CANCELLED: 超时未支付/主动取消
-        CONFIRMED --> VISITED: 完成就诊
+        [*] --> CONFIRMED: 创建挂号
         CONFIRMED --> CANCELLED: 就诊前取消
-        CONFIRMED --> NO_SHOW: 过号未到诊
-        CANCELLED --> REFUNDED: 已支付退款
-        VISITED --> [*]
-        NO_SHOW --> [*]
-        REFUNDED --> [*]
+        CONFIRMED --> COMPLETED: 接诊完成
+        CANCELLED --> [*]
+        COMPLETED --> [*]
     }
 
-    Session.OPEN --> Slot.FREE: 场次开放后生成可售号源
-    Slot.HELD --> Order.HELD: 锁号成功后创建持有订单
-    Slot.BOOKED --> Order.CONFIRMED: 支付成功
-    Order.CANCELLED --> Slot.FREE: 未就诊取消后释放号源
-    Order.VISITED --> Slot.USED: 接诊完成
+    Session.OPEN --> Slot.AVAILABLE: 场次开放后生成可售号源
+    Slot.AVAILABLE --> Order.CONFIRMED: 创建挂号成功
+    Order.CANCELLED --> Slot.AVAILABLE: 未就诊取消后释放号源
     Session.CANCELLED --> Slot.CANCELLED: 整场停诊关闭全部未使用号源
 ```
 

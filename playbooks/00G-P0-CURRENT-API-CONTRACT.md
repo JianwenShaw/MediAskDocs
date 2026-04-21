@@ -319,6 +319,7 @@
 补充说明：
 
 - `clinicSessionId`、`clinicSlotId` 在当前 DTO 层没有显式 Bean Validation，但业务上都被当作必需 ID 使用。
+- 当前实现创建成功后 `status` 固定返回 `CONFIRMED`。
 - 当前实现会先校验场次是否存在且处于开放状态；不存在时返回 `404 + 3004`。
 - 如果号源已满或无法预占，会返回 `409 + 3005`。
 - 已登录但不是患者角色时，返回 `403 + 2008`。
@@ -329,7 +330,7 @@
 |------|--------------|
 | 认证 | 需要登录态和 `PATIENT` 角色 |
 | 查询参数 | `status?` |
-| `status` 可选值 | `PENDING_PAYMENT`、`CONFIRMED`、`CANCELLED`、`COMPLETED` |
+| `status` 可选值 | `CONFIRMED`、`CANCELLED`、`COMPLETED` |
 | 非法 `status` | 返回 `400 + 1002` |
 | 响应字段 | `items[].registrationId`、`orderNo`、`status`、`createdAt`、`sourceAiSessionId` |
 | 真实语义 | 永远只查当前登录患者自己的挂号列表，不支持按任意患者 ID 查询 |
@@ -370,8 +371,8 @@
 
 - 不存在或不属于本人时返回 `404 + 3008`。
 - 当挂号状态已不允许取消，或关联接诊不再处于 `SCHEDULED`，或号源无法释放时，返回 `409 + 3009`。
-- 当前仅 `PENDING_PAYMENT`、`CONFIRMED` 两种挂号状态允许取消；其他状态会触发 `409 + 3006`。
-- `PENDING_PAYMENT` 取消时要求 slot 当前为 `LOCKED`；`CONFIRMED` 取消时要求 slot 当前为 `BOOKED`；两种场景取消后都会回退为 `AVAILABLE`。
+- 当前仅 `CONFIRMED` 状态允许取消；其他状态会触发 `409 + 3006`。
+- 取消时要求 slot 当前为 `BOOKED`，成功后回退为 `AVAILABLE`。
 
 ## 8. 知识库与知识文档后台管理
 
@@ -521,6 +522,7 @@
 补充说明：
 
 - `COMPLETE` 成功后会同步把对应 `registration_order.order_status` 更新为 `COMPLETED`。
+- `START` 执行时会要求关联挂号状态为 `CONFIRMED`。
 - 当前实现不联动 `clinic_slot` 状态。
 - 状态流转不合法返回 `409 + 4010`；并发更新冲突返回 `409 + 4011`；挂号状态同步失败返回 `409 + 4012`。
 - 接诊不存在返回 `404 + 4004`；接诊不属于当前医生返回 `403 + 4003`。

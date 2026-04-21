@@ -215,7 +215,7 @@
 - `registrationQuery.dateFrom`、`registrationQuery.dateTo`、`sessionDate` 这类业务日期字段统一返回 `yyyy-MM-dd` 字符串，不返回数组结构
 - `GET /api/v1/clinic-sessions` 返回场次头摘要，不直接内嵌 slot；前端应先选场次，再调用 `GET /api/v1/clinic-sessions/{id}/slots` 拿 `clinicSlotId`
 - 历史挂号详情以 `registration_order` 为准；若关联 `clinic_session` / `departments` / `doctors` / `users` 已软删除，详情仍返回订单，相关展示字段允许为空
-- `clinic_slot` 最小状态语义按 `AVAILABLE / LOCKED / BOOKED / USED / CANCELLED` 收口；当前取消链路要求 `PENDING_PAYMENT -> LOCKED`、`CONFIRMED -> BOOKED`
+- `clinic_slot` 最小状态语义按 `AVAILABLE / BOOKED / CANCELLED` 收口；当前取消链路要求 slot 处于 `BOOKED`
 
 ## 4.4 接诊、病历、处方
 
