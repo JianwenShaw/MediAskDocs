@@ -34,7 +34,7 @@
 | 公共协议与认证 | 完成 | `Result<T>`、错误处理、`requestId`、JWT 登录/刷新/登出/当前用户、结构化日志基线已完成；AI 外部链路已收口到普通 `JSON` 接口 |
 | 身份、组织、后台患者管理 | 大体完成 | 用户/角色/权限/组织表齐全；管理员患者管理、患者/医生本人资料接口已落地 |
 | 门诊挂号 | 大体完成 | 门诊场次查询、挂号创建、我的挂号、挂号后预创建 `visit_encounter` 已完成 |
-| 医生接诊 | 部分完成 | 医生接诊列表已完成；接诊详情、AI 摘要、病历、处方未完成 |
+| 医生接诊 | 部分完成 | 医生接诊列表、接诊详情、AI 摘要已完成；病历、处方未完成 |
 | AI 问诊与 RAG | 部分完成 | Java `chat/sessions/triage-result/registration-handoff` 已落地，并已收口到 `triageStage + finalized snapshot` 模型；知识导入/索引与 Python RAG 写库仍未完成 |
 | 审计与敏感访问 | 未完成 | `audit_event`、`data_access_log` 只有 schema，没有写入与查询链路 |
 | 对象级授权 | 部分完成 | `ScenarioAuthorization`、`data_scope_rules` 装载已具备；资源解析和 `EMR/AI` 对象级校验未落地 |
@@ -229,8 +229,8 @@
 ### 必做能力
 
 - [x] 医生可查看本人接诊列表
-- [ ] 医生可查看接诊详情
-- [ ] 医生可看到 AI 摘要，不默认展示 AI 原文
+- [x] 医生可查看接诊详情（当前 `patientSummary` 已返回 `gender`、`age`）
+- [x] 医生可看到 AI 摘要，不默认展示 AI 原文
 - [ ] 医生完成病历、诊断、处方闭环
 - [ ] 病历正文与索引分层查询落地，列表不直接暴露正文
 

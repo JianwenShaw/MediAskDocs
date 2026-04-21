@@ -489,6 +489,23 @@
 - 当前实现只做接诊列表，不包含接诊详情、AI 摘要、病历、处方。
 - 没有接诊权限的医生会先在场景鉴权阶段收到 `403 + 1003`。
 
+### 9.2 `GET /api/v1/encounters/{encounterId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态、接诊列表权限、`DOCTOR` 角色 |
+| 路径参数 | `encounterId` |
+| 响应字段 | `encounterId`、`registrationId`、`patientSummary.patientUserId`、`patientSummary.patientName`、`patientSummary.gender?`、`patientSummary.departmentId`、`patientSummary.departmentName`、`patientSummary.sessionDate`、`patientSummary.periodCode`、`patientSummary.encounterStatus`、`patientSummary.startedAt`、`patientSummary.endedAt?`、`patientSummary.age?` |
+| 真实语义 | 永远只查当前登录医生自己的单条接诊详情，不支持传任意 `doctorId` 查询 |
+
+补充说明：
+
+- `patientSummary.gender` 来自 `patient_profile.gender`，当前直接返回业务值 `MALE`、`FEMALE`、`OTHER`，未填写时允许为 `null`。
+- `patientSummary.age` 当前按接诊 `sessionDate` 与 `birthDate` 计算；任一字段缺失时返回 `null`。
+- `patientSummary.patientUserId`、`departmentId`、`encounterId`、`registrationId` 对外统一序列化为字符串。
+- `patientSummary.sessionDate` 统一返回 `yyyy-MM-dd` 字符串；`startedAt`、`endedAt` 统一返回带时区偏移的秒级 ISO-8601 字符串。
+- 接诊不存在返回 `404 + 4004`；接诊不属于当前医生返回 `403 + 4003`。
+
 ## 10. 当前已实现 AI 接口补充
 
 ### 10.1 `POST /api/v1/ai/chat`

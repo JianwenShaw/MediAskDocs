@@ -24,7 +24,7 @@
 | Task C：知识库与 RAG 底座 | 未完成 | 表结构与 Java AI client 骨架已在仓库中，知识导入与索引链路未开始 |
 | Task D：AI 问诊主链路 | 部分完成 | `chat/sessions/triage-result`、会话持久化、`triageStage`、5 回合强制收口、`triage_snapshot_json` 已落地；Python RAG 写库与联调仍待完成 |
 | Task E：AI 到挂号承接 | 部分完成 | `registration-handoff` 已改为只消费最近一次 finalized snapshot；完整联调与 AI 来源校验仍待补强 |
-| Task F：医生接诊、病历、处方 | 部分完成 | 接诊列表已完成；接诊详情、AI 摘要、病历、处方未完成 |
+| Task F：医生接诊、病历、处方 | 部分完成 | 接诊列表、接诊详情、AI 摘要已完成；病历、处方未完成 |
 | Task G：审计与敏感访问留痕 | 未完成 | 审计表已建，写入与查询完全未落地 |
 
 ## 3. 任务包拆分
