@@ -24,7 +24,7 @@
 | Task C：知识库与 RAG 底座 | 未完成 | 表结构与 Java AI client 骨架已在仓库中，知识导入与索引链路未开始 |
 | Task D：AI 问诊主链路 | 部分完成 | `chat/sessions/triage-result`、会话持久化、`triageStage`、5 回合强制收口、`triage_snapshot_json` 已落地；Python RAG 写库与联调仍待完成 |
 | Task E：AI 到挂号承接 | 部分完成 | `registration-handoff` 已改为只消费最近一次 finalized snapshot；完整联调与 AI 来源校验仍待补强 |
-| Task F：医生接诊、病历、处方 | 部分完成 | 接诊列表、接诊详情、AI 摘要已完成；病历、处方未完成 |
+| Task F：医生接诊、病历、处方 | 大体完成 | 接诊列表、接诊详情、AI 摘要、病历、处方已完成；剩余主要缺口是对象级授权与审计留痕 |
 | Task G：审计与敏感访问留痕 | 未完成 | 审计表已建，写入与查询完全未落地 |
 
 ## 3. 任务包拆分
@@ -187,10 +187,10 @@
 - [x] `GET /api/v1/encounters`
 - [x] `GET /api/v1/encounters/{encounterId}`
 - [x] `GET /api/v1/encounters/{encounterId}/ai-summary`
-- [ ] `POST /api/v1/emr`
-- [ ] `GET /api/v1/emr/{encounterId}`
-- [ ] `POST /api/v1/prescriptions`
-- [ ] `GET /api/v1/prescriptions/{encounterId}`
+- [x] `POST /api/v1/emr`
+- [x] `GET /api/v1/emr/{encounterId}`
+- [x] `POST /api/v1/prescriptions`
+- [x] `GET /api/v1/prescriptions/{encounterId}`
 
 ### 关键表
 
@@ -205,7 +205,7 @@
 
 - [x] 医生可查看本人接诊列表
 - [ ] 医生默认只看 AI 摘要，不直接看原文
-- [ ] 接诊后可形成病历、诊断、处方闭环
+- [x] 接诊后可形成病历、诊断、处方闭环
 
 ## 3.7 Task G：审计与敏感访问留痕
 
@@ -258,7 +258,7 @@
 
 ## 6. 一句话结论
 
-除了 `RAG` 本身，当前后端还缺的是：`Python 检索/索引写库联调`、`病历/处方闭环`、`对象级授权与审计留痕`、以及 `request_id` 可观测性验收。
+除了 `RAG` 本身，当前后端还缺的是：`Python 检索/索引写库联调`、`对象级授权与审计留痕`、以及 `request_id` 可观测性验收。
 
 ## 7. 进一步细化
 

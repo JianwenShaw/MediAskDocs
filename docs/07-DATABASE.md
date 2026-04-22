@@ -325,6 +325,7 @@ erDiagram
 | `emr_record` | `uk_emr_record_encounter` | `encounter_id` |
 | `emr_record_revision` | `uk_emr_record_revision_no` | `(record_id, revision_no)` |
 | `prescription_order` | `uk_prescription_order_no` | `prescription_no` |
+| `prescription_order` | `uk_prescription_order_encounter` | `encounter_id` |
 | `medication_dispense` | `uk_medication_dispense_prescription` | `prescription_id` |
 | `domain_event_stream` | `uk_domain_event_stream_key` | `event_key` |
 | `outbox_event` | `uk_outbox_event_key` | `event_key` |

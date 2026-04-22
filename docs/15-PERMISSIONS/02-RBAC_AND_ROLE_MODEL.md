@@ -49,7 +49,7 @@ RBAC 只解决“能不能做”，不解决“能看哪些数据”。
 | 角色 | 典型权限 |
 |------|----------|
 | `PATIENT` | `ai:chat`、`registration:create`、`registration:query:self` |
-| `DOCTOR` | `registration:query`、`encounter:query`、`encounter:update`、`emr:create`、`emr:update`、`prescription:create` |
+| `DOCTOR` | `registration:query`、`encounter:query`、`encounter:update`、`emr:create`、`emr:update`、`prescription:create`、`prescription:read` |
 | `ADMIN` | `user:query`、`authz:grant`、`audit:query` |
 
 说明：

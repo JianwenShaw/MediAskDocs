@@ -227,8 +227,8 @@
 | `PATCH /api/v1/encounters/{id}` | Path `encounterId` + Body `action` | `encounterId`、`encounterStatus`、`startedAt`、`endedAt` |
 | `POST /api/v1/emr` | `encounterId`、`chiefComplaint`、`historyOfPresentIllness`、`diagnoses[]` | `emrRecordId`、`encounterId` |
 | `GET /api/v1/emr/{encounterId}` | Path `encounterId` | `emrRecordId`、`content`、`diagnoses[]` |
-| `POST /api/v1/prescriptions` | `encounterId`、`items[]` | `prescriptionOrderId`、`status` |
-| `GET /api/v1/prescriptions/{encounterId}` | Path `encounterId` | `prescriptionOrderId`、`items[]` |
+| `POST /api/v1/prescriptions` | `encounterId`、`items[]` | `prescriptionOrderId`、`encounterId`、`status`、`items[]` |
+| `GET /api/v1/prescriptions/{encounterId}` | Path `encounterId` | `prescriptionOrderId`、`encounterId`、`status`、`items[]` |
 
 补充约定：
 
@@ -239,6 +239,11 @@
 - `COMPLETE` 成功后同步更新 `registration_order.order_status = COMPLETED`；当前不联动 `clinic_slot`。
 - `startedAt`、`endedAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
 - `sessionDate` 作为业务日期字段，统一返回 `yyyy-MM-dd` 字符串
+- `POST /api/v1/prescriptions` 的 `items[]` 最小字段固定为：`sortOrder`、`drugName`、`drugSpecification?`、`dosageText?`、`frequencyText?`、`durationText?`、`quantity`、`unit?`、`route?`
+- `GET /api/v1/prescriptions/{encounterId}` 返回单张处方而不是列表；P0 口径固定为“一个 `encounter` 最多一张有效处方”
+- 创建处方前必须已存在 `emr_record`；`prescription_order.record_id` 直接关联该接诊对应病历
+- P0 处方状态只实现 `DRAFT`；`ISSUED`、`CANCELLED` 保留给后续独立动作，不在本轮实现
+- P0 处方录入不依赖药品字典、库存、审方规则或配伍校验；处方项按人工录入文本字段持久化
 
 ## 4.5 审计
 

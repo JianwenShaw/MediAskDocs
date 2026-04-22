@@ -13,7 +13,7 @@
 - 现有文档还没有把“当前已实现接口”的参数约束、身份要求和真实业务语义讲到足够完整。
 - [../docs/01-OVERVIEW.md](../docs/01-OVERVIEW.md)、[../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md)、[../docs/03A-JAVA_CONFIG.md](../docs/03A-JAVA_CONFIG.md) 里包含大量目标设计或后续规划接口，不能直接当作当前仓库的对外契约。
 - [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md)、[00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md)、[00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md) 适合看完成度和实现顺序，但对当前已实现接口的细节覆盖仍不够。
-- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI 问诊、AI 会话回看、AI 导诊结果、门诊场次查询、挂号、接诊列表、接诊详情、医生侧 AI 摘要。EMR、处方、审计接口还没有对外落地。
+- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI 问诊、AI 会话回看、AI 导诊结果、门诊场次查询、挂号、接诊列表、接诊详情、医生侧 AI 摘要、EMR 创建与详情、处方创建与详情。审计接口还没有对外落地。
 
 ## 2. 通用协议
 
@@ -488,7 +488,7 @@
 补充说明：
 
 - 当前控制器会从登录态取 `doctorId`，再传给 UseCase。
-- 当前实现只做接诊列表，不包含接诊详情、AI 摘要、病历、处方。
+- 当前实现已覆盖接诊列表、接诊详情、AI 摘要、EMR、处方。
 - 没有接诊权限的医生会先在场景鉴权阶段收到 `403 + 1003`。
 
 ### 9.2 `GET /api/v1/encounters/{encounterId}`
@@ -633,17 +633,49 @@
 - 当前目录语义是“可导诊目录”，不是 `departments` 全量透出
 - 当前实现由 Java 基于活动中的临床科室做受控投影，不新增独立目录表
 
-## 11. 容易被文档误导的未实现接口
+## 11. 当前已实现处方接口
+
+### 11.1 `POST /api/v1/prescriptions`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 需要登录态、处方创建权限、`DOCTOR` 角色 |
+| 请求体 | `encounterId`、`items[]` |
+| `items[]` | `sortOrder`、`drugName`、`drugSpecification?`、`dosageText?`、`frequencyText?`、`durationText?`、`quantity`、`unit?`、`route?` |
+| 响应字段 | `prescriptionOrderId`、`encounterId`、`status`、`items[]` |
+| 真实语义 | 仅允许当前登录医生为自己的接诊记录创建处方；P0 固定为一个 `encounter` 最多一张 `DRAFT` 处方 |
+
+补充说明：
+
+- 创建前必须已存在对应 `emr_record`，否则返回 `404 + 4014`
+- 接诊不存在或不属于当前医生时返回 `404 + 4013`
+- 同一接诊重复创建处方返回 `409 + 4015`
+- 当前实现不依赖药品字典、库存、审方规则或配伍校验
+- `prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
+
+### 11.2 `GET /api/v1/prescriptions/{encounterId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 需要登录态、处方读取权限、`DOCTOR` 角色 |
+| 路径参数 | `encounterId` |
+| 响应字段 | `prescriptionOrderId`、`encounterId`、`status`、`items[]` |
+| 真实语义 | 当前只允许医生查看自己接诊范围内的处方详情，不返回列表 |
+
+补充说明：
+
+- 接诊不存在或不属于当前医生时返回 `404 + 4013`
+- 处方不存在返回 `404 + 4016`
+- 当前还没有处方对象级授权与访问留痕
+- `prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
+
+## 12. 容易被文档误导的未实现接口
 
 下面这些接口在设计文档里已经出现，但当前代码里还没有对应 controller，不应当被当成当前可调用契约：
 
-- `POST /api/v1/emr`
-- `GET /api/v1/emr/{encounterId}`
-- `POST /api/v1/prescriptions`
-- `GET /api/v1/prescriptions/{encounterId}`
 - `GET /api/v1/audit/events`
 - `GET /api/v1/audit/data-access`
 
-## 12. 一句话结论
+## 13. 一句话结论
 
 如果目的是“按当前代码联调或写前后端接口文档”，应以本文档为准；如果目的是“看目标架构或后续计划”，再看 `01-OVERVIEW`、`10A`、`00E` 等设计/排期文档。

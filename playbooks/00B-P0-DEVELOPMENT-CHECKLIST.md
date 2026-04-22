@@ -34,7 +34,7 @@
 | 公共协议与认证 | 完成 | `Result<T>`、错误处理、`requestId`、JWT 登录/刷新/登出/当前用户、结构化日志基线已完成；AI 外部链路已收口到普通 `JSON` 接口 |
 | 身份、组织、后台患者管理 | 大体完成 | 用户/角色/权限/组织表齐全；管理员患者管理、患者/医生本人资料接口已落地 |
 | 门诊挂号 | 大体完成 | 门诊场次查询、挂号创建、我的挂号、挂号后预创建 `visit_encounter` 已完成 |
-| 医生接诊 | 部分完成 | 医生接诊列表、接诊详情、AI 摘要已完成；病历、处方未完成 |
+| 医生接诊 | 大体完成 | 医生接诊列表、接诊详情、AI 摘要、病历、处方已完成；对象级授权与审计留痕仍待补齐 |
 | AI 问诊与 RAG | 部分完成 | Java `chat/sessions/triage-result/registration-handoff` 已落地，并已收口到 `triageStage + finalized snapshot` 模型；知识导入/索引与 Python RAG 写库仍未完成 |
 | 审计与敏感访问 | 未完成 | `audit_event`、`data_access_log` 只有 schema，没有写入与查询链路 |
 | 对象级授权 | 部分完成 | `ScenarioAuthorization`、`data_scope_rules` 装载已具备；资源解析和 `EMR/AI` 对象级校验未落地 |
@@ -214,10 +214,10 @@
 - [x] `GET /api/v1/encounters`
 - [x] `GET /api/v1/encounters/{encounterId}`
 - [x] `GET /api/v1/encounters/{encounterId}/ai-summary`
-- [ ] `POST /api/v1/emr`
-- [ ] `GET /api/v1/emr/{encounterId}`
-- [ ] `POST /api/v1/prescriptions`
-- [ ] `GET /api/v1/prescriptions/{encounterId}`
+- [x] `POST /api/v1/emr`
+- [x] `GET /api/v1/emr/{encounterId}`
+- [x] `POST /api/v1/prescriptions`
+- [x] `GET /api/v1/prescriptions/{encounterId}`
 
 ### 前端页面
 
@@ -231,7 +231,7 @@
 - [x] 医生可查看本人接诊列表
 - [x] 医生可查看接诊详情（当前 `patientSummary` 已返回 `gender`、`age`）
 - [x] 医生可看到 AI 摘要，不默认展示 AI 原文
-- [ ] 医生完成病历、诊断、处方闭环
+- [x] 医生完成病历、诊断、处方闭环
 - [ ] 病历正文与索引分层查询落地，列表不直接暴露正文
 
 ## 4.7 Phase G：权限、对象级授权、审计留痕
@@ -267,7 +267,7 @@
 | 挂号页 | `/api/v1/clinic-sessions`、`/api/v1/clinic-sessions/{id}/slots`、`/api/v1/registrations` | `clinic_session`、`clinic_slot`、`registration_order` | 查门诊、选号、创建挂号、查看我的挂号 | 已实现 |
 | AI 到挂号承接 | `/api/v1/ai/sessions/{id}/registration-handoff` | `ai_session`、`registration_order` | 把 AI 结果转为挂号入口 | 后端已实现，前端未开始 |
 | 医生接诊列表 | `/api/v1/encounters` | `visit_encounter`、`registration_order` | 医生查看本人待接诊记录 | 已实现 |
-| 接诊详情 / 病历 / 处方 | `/api/v1/encounters/{id}`、`/api/v1/emr/*`、`/api/v1/prescriptions/*` | `visit_encounter`、`emr_*`、`prescription_*` | 接诊详情、病历录入、处方录入 | 未开始 |
+| 接诊详情 / 病历 / 处方 | `/api/v1/encounters/{id}`、`/api/v1/emr/*`、`/api/v1/prescriptions/*` | `visit_encounter`、`emr_*`、`prescription_*` | 接诊详情、病历录入、处方录入 | 后端已完成，前端未完成 |
 | 审计页 | `/api/v1/audit/*` | `audit_event`、`data_access_log` | 审计查询与敏感访问追溯 | 未开始 |
 
 ## 6. 联调验收清单
@@ -283,7 +283,7 @@
 
 - [x] Java 对外 AI 主链接口与导诊结果页接口
 - [ ] AI -> 挂号承接接口
-- [ ] 接诊详情、AI 摘要、病历、处方接口与写库链路
+- [x] 接诊详情、AI 摘要、病历、处方接口与写库链路
 - [ ] 对象级授权真正落到 `EMR_RECORD` / `AI_SESSION`
 - [ ] `audit_event`、`data_access_log` 写入与查询
 - [ ] Java 结构化日志与 `request_id` 输出闭环
