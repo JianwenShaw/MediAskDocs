@@ -24,7 +24,10 @@ Java 只做三件事：
 
 - `ai_session`
 - `ai_turn`
-- `ai_turn_content`
+- `query_run`
+- `query_result_snapshot`
+- `query_result_follow_up_question`
+- `query_result_department`
 - `ai_model_run`
 - `ai_run_artifact`
 - `ai_guardrail_event`
@@ -35,7 +38,6 @@ Java 只做三件事：
 - `knowledge_index_version`
 - `ingest_job`
 - `knowledge_release`
-- `query_run`
 - `retrieval_hit`
 - `answer_citation`
 

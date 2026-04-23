@@ -2,66 +2,77 @@
 
 ## 1. 文档定位
 
-本文是 `docs/proposals/` 基线下的数据库冻结稿。
+本文冻结 Python RAG 服务的 P0 数据库设计。
 
-目标不是输出最终可执行 SQL，而是先冻结以下内容：
+目标不是给出最终 migration 细节，而是冻结以下内容：
 
-- `P0` 必做表的唯一清单
-- 每张表的字段职责
+- P0 必做表的唯一清单
+- 每张表的职责与主键策略
 - 主外键关系
-- 关键索引
+- 关键约束与索引
 - 状态枚举
 - 运行期写入 ownership
 
-后续 Alembic migration 和正式 DDL 必须以本文为准，不再回退到旧的 `docs/docs/*` 口径。
+后续 Alembic migration 和正式 SQL 必须以本文为准。
 
-## 2. 设计边界
+## 2. 这次明确推翻的旧设计
 
-本文只覆盖 Python RAG 服务自有数据，不覆盖 Java 业务主数据。
+这版不是在旧稿上微调，而是做了几处明确收口：
 
-明确不纳入 Python RAG 服务 ownership 的内容：
-
-- 科室主数据
-- 排班、挂号、接诊
-- 医生、患者、订单
-
-这些仍归 Java 业务系统。
-
-Python RAG 服务只消费一份由 Java 发布的导诊目录读模型，目录本体不落本服务 PostgreSQL。
+- 删除 `ai_turn_content`
+  - P0 每轮只有一条用户输入和一条最终助手输出，单独抽“内容分层表”是过度抽象
+- 删除“最终导诊结果存在 `ai_run_artifact` JSON 里”的做法
+  - 最终结果改为结构化表，不再让核心结果躲在 JSON 里
+- 删除 `query_run.final_*` 这类执行表里的业务结果列
+  - 执行事实和业务结果分表存储
+- 删除 `ai_model_run.session_id / turn_id`
+  - 这些都可由 `query_run_id` 推导，冗余列会制造不一致
+- 删除 `ai_guardrail_event.session_id / turn_id`
+  - 同上，保留 `query_run_id` 即可
+- 删除 `knowledge_chunk.kb_id`
+  - `chunk` 归属可由 `document_id -> knowledge_document.kb_id` 推导
+- `knowledge_chunk_index`、`retrieval_hit`、`answer_citation` 这类从属明细表改用复合主键
+  - 不再为纯明细行引入无意义的独立 `uuid`
 
 ## 3. 全局约定
 
-### 3.1 主键与时间字段
+### 3.1 主键策略
 
-- 所有服务自有主键统一使用 `uuid`
+- 根实体表主键统一使用 `uuid`
+- 纯从属明细表优先使用复合主键
+- 不为“只依附父实体存在”的明细行额外制造独立 id
+
+### 3.2 时间字段
+
 - 时间统一使用 `timestamptz`
-- 除明确例外外，表统一包含 `created_at`
+- 根实体表统一包含 `created_at`
 - 需要更新追踪的表额外包含 `updated_at`
 
-### 3.2 外部引用
+### 3.3 外部引用
 
-- `department_id` 使用 Java 业务系统主键，类型按 `bigint` 冻结
-- `catalog_version` 使用 Java 发布的字符串版本号，类型按 `varchar(64)` 冻结
-- `request_id` 使用字符串 trace id，类型按 `varchar(64)` 冻结
+- `department_id` 使用 Java 业务系统主键，类型固定为 `bigint`
+- `catalog_version` 使用 Java 发布的目录版本号，类型固定为 `varchar(64)`
+- `request_id` 使用链路 trace id，类型固定为 `varchar(64)`
 
-### 3.3 JSON 字段
+### 3.4 JSON 字段
 
-以下场景允许使用 `jsonb`：
+只允许在以下场景使用 `jsonb`：
 
-- 模型结构化产物
-- 护栏明细
+- LLM 原始响应
 - 调试 artifact
+- 护栏补充明细
 
-其余核心业务字段不使用大而全的 `jsonb` 代替结构化列。
+核心业务结果和核心关系事实不允许只存在于 JSON 中。
 
-### 3.4 向量与全文检索
+### 3.5 向量与全文检索
 
-- 向量字段使用 `vector`
+- 向量字段使用 `vector(1024)`
 - 稀疏检索字段使用 `tsvector`
+- P0 embedding 方案冻结为 `text-embedding-v4 @ 1024`
+- 若未来需要调整维度，必须通过新 migration 和新索引版本完成，不允许同一套 P0 DDL 混用多种维度
+- P0 ANN 索引默认使用 `HNSW + cosine distance`
 
 ## 4. 状态枚举
-
-P0 统一冻结以下枚举值。
 
 ### 4.1 会话与导诊
 
@@ -84,14 +95,23 @@ P0 统一冻结以下枚举值。
   - `RUNNING`
   - `SUCCEEDED`
   - `FAILED`
-- `query_run.final_triage_stage`
+- `query_result_snapshot.triage_stage`
   - `COLLECTING`
   - `READY`
   - `BLOCKED`
-- `query_run.final_completion_reason`
+- `query_result_snapshot.triage_completion_reason`
   - `SUFFICIENT_INFO`
   - `MAX_TURNS_REACHED`
   - `HIGH_RISK_BLOCKED`
+- `query_result_snapshot.next_action`
+  - `CONTINUE_TRIAGE`
+  - `VIEW_TRIAGE_RESULT`
+  - `MANUAL_SUPPORT`
+  - `EMERGENCY_OFFLINE`
+- `query_result_snapshot.risk_level`
+  - `low`
+  - `medium`
+  - `high`
 
 ### 4.2 模型运行与产物
 
@@ -107,9 +127,8 @@ P0 统一冻结以下枚举值。
   - `FAILED`
 - `ai_run_artifact.artifact_type`
   - `TRIAGE_MATERIALS`
-  - `FINAL_TRIAGE_RESULT`
   - `RETRIEVAL_CONTEXT`
-  - `RISK_SUMMARY`
+  - `LLM_RAW_RESPONSE`
   - `DEBUG_PAYLOAD`
 
 ### 4.3 护栏
@@ -194,12 +213,12 @@ P0 统一冻结以下枚举值。
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | `id` | `uuid` | PK | 会话 id |
-| `request_id` | `varchar(64)` | nullable | 创建会话时的首个 trace id |
+| `request_id` | `varchar(64)` | nullable | 创建会话时首个 request id |
 | `scene_code` | `varchar(32)` | not null | 固定为 `AI_TRIAGE` |
 | `hospital_scope` | `varchar(64)` | not null | 导诊目录作用域 |
 | `current_stage` | `varchar(32)` | not null | 当前导诊状态 |
 | `current_turn_no` | `integer` | not null | 当前已完成轮次 |
-| `current_triage_cycle_no` | `integer` | not null | 当前导诊 cycle 序号 |
+| `current_triage_cycle_no` | `integer` | not null | 当前导诊 cycle |
 | `closed_at` | `timestamptz` | nullable | 会话关闭时间 |
 | `created_at` | `timestamptz` | not null | 创建时间 |
 | `updated_at` | `timestamptz` | not null | 更新时间 |
@@ -214,7 +233,7 @@ P0 统一冻结以下枚举值。
 
 ## 5.2 `ai_turn`
 
-一轮问答事实，绑定一次用户输入和本轮系统输出。
+一轮问答事实。P0 直接在本表存一条用户输入和一条最终助手输出。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -222,10 +241,13 @@ P0 统一冻结以下枚举值。
 | `session_id` | `uuid` | FK -> `ai_session.id` | 所属会话 |
 | `turn_no` | `integer` | not null | 会话内轮次号，从 1 递增 |
 | `triage_cycle_no` | `integer` | not null | 所属导诊 cycle |
+| `user_message_text` | `text` | not null | 本轮用户原文 |
+| `assistant_message_text` | `text` | nullable | 本轮最终助手文本 |
 | `stage_before` | `varchar(32)` | not null | 本轮执行前状态 |
 | `stage_after` | `varchar(32)` | nullable | 本轮执行后状态 |
-| `is_finalized` | `boolean` | not null | 本轮是否收口到 `READY/BLOCKED` |
+| `is_finalized` | `boolean` | not null | 是否收口到 `READY/BLOCKED` |
 | `created_at` | `timestamptz` | not null | 创建时间 |
+| `updated_at` | `timestamptz` | not null | 更新时间 |
 
 唯一约束：
 
@@ -237,101 +259,164 @@ P0 统一冻结以下枚举值。
 
 写入 ownership：
 
-- Python query workflow 创建
-- Python 状态机收口后更新 `stage_after` 和 `is_finalized`
+- Python query workflow 创建和更新
 
-## 5.3 `ai_turn_content`
+## 5.3 `query_run`
 
-轮次内正文分层存储表。
-
-| 字段 | 类型 | 约束 | 说明 |
-|------|------|------|------|
-| `id` | `uuid` | PK | 内容 id |
-| `turn_id` | `uuid` | FK -> `ai_turn.id` | 所属轮次 |
-| `content_role` | `varchar(16)` | not null | `USER` / `ASSISTANT` / `SYSTEM` |
-| `content_type` | `varchar(32)` | not null | `RAW_TEXT` / `NORMALIZED_TEXT` / `FINAL_TEXT` |
-| `content_order` | `integer` | not null | 同轮内容顺序 |
-| `text_content` | `text` | not null | 文本内容 |
-| `created_at` | `timestamptz` | not null | 创建时间 |
-
-唯一约束：
-
-- (`turn_id`, `content_role`, `content_type`, `content_order`)
-
-关键索引：
-
-- `idx_ai_turn_content_turn` on (`turn_id`, `content_order`)
-
-写入 ownership：
-
-- Python query workflow 写用户原文和最终回复文本
-
-## 5.4 `ai_model_run`
-
-一次模型调用事实，面向 DeepSeek 文本生成调用。
+一次 query workflow 的执行根节点，是同步与流式共同的 trace 根。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
-| `id` | `uuid` | PK | 模型运行 id |
+| `id` | `uuid` | PK | query run id |
+| `request_id` | `varchar(64)` | not null | 本次请求 trace id |
 | `session_id` | `uuid` | FK -> `ai_session.id` | 所属会话 |
-| `turn_id` | `uuid` | FK -> `ai_turn.id` | 所属轮次 |
-| `query_run_id` | `uuid` | FK -> `query_run.id` | 所属 query run |
-| `provider` | `varchar(32)` | not null | 固定为 `DEEPSEEK` |
-| `model` | `varchar(64)` | not null | 固定为 `deepseek-chat` |
-| `run_type` | `varchar(32)` | not null | 本次调用用途 |
-| `stream_mode` | `varchar(16)` | not null | `SYNC` / `SSE` |
+| `turn_id` | `uuid` | unique FK -> `ai_turn.id` | 所属轮次 |
+| `kb_id` | `uuid` | nullable FK -> `knowledge_base.id` | 本次实际命中的知识库 |
+| `scene_code` | `varchar(32)` | not null | 固定为 `AI_TRIAGE` |
+| `request_text` | `text` | not null | 用户输入原文快照 |
+| `normalized_query_text` | `text` | nullable | 归一化查询文本 |
+| `hospital_scope` | `varchar(64)` | not null | 导诊目录作用域 |
+| `catalog_version` | `varchar(64)` | nullable | 本次运行实际使用的目录版本 |
+| `index_version_id` | `uuid` | nullable FK -> `knowledge_index_version.id` | 本次运行实际使用的索引版本 |
 | `status` | `varchar(16)` | not null | 运行状态 |
-| `input_tokens` | `integer` | nullable | 输入 token |
-| `output_tokens` | `integer` | nullable | 输出 token |
 | `started_at` | `timestamptz` | not null | 开始时间 |
 | `finished_at` | `timestamptz` | nullable | 结束时间 |
-| `error_code` | `varchar(64)` | nullable | 模型调用失败码 |
 | `created_at` | `timestamptz` | not null | 创建时间 |
 
 关键索引：
 
-- `idx_ai_model_run_turn` on (`turn_id`, `started_at desc`)
-- `idx_ai_model_run_query` on (`query_run_id`)
+- `idx_query_run_session` on (`session_id`, `created_at desc`)
+- `idx_query_run_request` on (`request_id`)
+- `idx_query_run_status` on (`status`, `created_at desc`)
 
 写入 ownership：
 
-- Python LLM integration 创建和完结
+- Python query workflow 创建和收口
 
-## 5.5 `ai_run_artifact`
+## 5.4 `query_result_snapshot`
 
-模型调用和 query workflow 的结构化产物快照。
+一次 query 的结构化业务结果快照。它是 `triage_result` 的数据库真相。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
-| `id` | `uuid` | PK | 产物 id |
-| `model_run_id` | `uuid` | FK -> `ai_model_run.id` | 所属模型运行 |
-| `query_run_id` | `uuid` | FK -> `query_run.id` | 所属 query run |
-| `artifact_type` | `varchar(32)` | not null | 产物类型 |
-| `artifact_json` | `jsonb` | not null | 结构化内容 |
+| `query_run_id` | `uuid` | PK FK -> `query_run.id` | 所属 query run |
+| `triage_stage` | `varchar(32)` | not null | `COLLECTING / READY / BLOCKED` |
+| `triage_completion_reason` | `varchar(32)` | nullable | 收口原因 |
+| `next_action` | `varchar(32)` | not null | 前端动作 |
+| `risk_level` | `varchar(16)` | nullable | 风险等级 |
+| `chief_complaint_summary` | `text` | not null | 主诉摘要 |
+| `care_advice` | `text` | nullable | 就医建议 |
+| `blocked_reason` | `varchar(64)` | nullable | 阻断原因 |
+| `created_at` | `timestamptz` | not null | 结果落库时间 |
+
+P0 约束：
+
+- `COLLECTING`
+  - `triage_completion_reason` 必须为 `null`
+  - `next_action` 必须为 `CONTINUE_TRIAGE`
+  - `risk_level` 必须为 `null`
+  - `blocked_reason` 必须为 `null`
+  - `care_advice` 必须为 `null`
+- `READY`
+  - `triage_completion_reason` 必须为 `SUFFICIENT_INFO / MAX_TURNS_REACHED`
+  - `next_action` 必须为 `VIEW_TRIAGE_RESULT`
+  - `risk_level` 必须非空
+  - `blocked_reason` 必须为 `null`
+  - `care_advice` 必须非空
+- `BLOCKED`
+  - `triage_completion_reason` 必须为 `HIGH_RISK_BLOCKED`
+  - `next_action` 必须为 `MANUAL_SUPPORT / EMERGENCY_OFFLINE`
+  - `risk_level` 必须为 `high`
+  - `blocked_reason` 必须非空
+  - `care_advice` 必须非空
+
+写入 ownership：
+
+- Python query workflow 在生成最终结构化结果后写入
+
+## 5.5 `query_result_follow_up_question`
+
+`COLLECTING` 状态下的追问问题明细表。
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `query_run_id` | `uuid` | PK FK -> `query_result_snapshot.query_run_id` | 所属 query run |
+| `question_order` | `integer` | PK | 顺序，P0 只允许 1..2 |
+| `question_text` | `text` | not null | 追问内容 |
 | `created_at` | `timestamptz` | not null | 创建时间 |
+
+P0 约束：
+
+- `question_order` 只允许 `1..2`
 
 关键索引：
 
-- `idx_ai_run_artifact_query_type` on (`query_run_id`, `artifact_type`)
+- `idx_qrfq_query` on (`query_run_id`, `question_order`)
 
 写入 ownership：
 
 - Python query workflow
 
-固定产物：
+## 5.6 `query_result_department`
 
-- `TRIAGE_MATERIALS`
-- `FINAL_TRIAGE_RESULT`
+`READY` 状态下的推荐科室明细表。
 
-## 5.6 `ai_guardrail_event`
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `query_run_id` | `uuid` | PK FK -> `query_result_snapshot.query_run_id` | 所属 query run |
+| `priority` | `integer` | PK | 推荐优先级，P0 只允许 1..3 |
+| `department_id` | `bigint` | not null | 科室 id |
+| `department_name` | `varchar(128)` | not null | 科室名称快照 |
+| `reason` | `text` | not null | 推荐理由 |
+| `created_at` | `timestamptz` | not null | 创建时间 |
+
+P0 约束：
+
+- `priority` 只允许 `1..3`
+
+关键索引：
+
+- `idx_qrd_department` on (`department_id`)
+
+写入 ownership：
+
+- Python query workflow
+
+## 5.7 `ai_model_run`
+
+一次模型调用事实。
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | `uuid` | PK | 模型运行 id |
+| `query_run_id` | `uuid` | FK -> `query_run.id` | 所属 query run |
+| `provider` | `varchar(32)` | not null | 固定为 `DEEPSEEK` |
+| `model` | `varchar(64)` | not null | 固定为 `deepseek-chat` |
+| `run_type` | `varchar(32)` | not null | 调用用途 |
+| `stream_mode` | `varchar(16)` | not null | `SYNC / SSE` |
+| `status` | `varchar(16)` | not null | 运行状态 |
+| `input_tokens` | `integer` | nullable | 输入 token |
+| `output_tokens` | `integer` | nullable | 输出 token |
+| `started_at` | `timestamptz` | not null | 开始时间 |
+| `finished_at` | `timestamptz` | nullable | 结束时间 |
+| `error_code` | `varchar(64)` | nullable | 失败码 |
+| `created_at` | `timestamptz` | not null | 创建时间 |
+
+关键索引：
+
+- `idx_ai_model_run_query` on (`query_run_id`, `started_at desc`)
+
+写入 ownership：
+
+- Python LLM integration
+
+## 5.8 `ai_guardrail_event`
 
 护栏留痕表。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | `id` | `uuid` | PK | 事件 id |
-| `session_id` | `uuid` | FK -> `ai_session.id` | 所属会话 |
-| `turn_id` | `uuid` | FK -> `ai_turn.id` | 所属轮次 |
 | `query_run_id` | `uuid` | FK -> `query_run.id` | 所属 query run |
 | `phase` | `varchar(16)` | not null | 输入或输出阶段 |
 | `risk_code` | `varchar(64)` | not null | 风险类型 |
@@ -341,16 +426,37 @@ P0 统一冻结以下枚举值。
 
 关键索引：
 
-- `idx_ai_guardrail_turn` on (`turn_id`, `created_at`)
+- `idx_ai_guardrail_query` on (`query_run_id`, `created_at`)
 - `idx_ai_guardrail_risk` on (`risk_code`, `created_at desc`)
 
 写入 ownership：
 
 - Python safety 模块
 
-## 5.7 `knowledge_base`
+## 5.9 `ai_run_artifact`
 
-知识库主表。
+LLM 原始响应和调试产物。它不再承载最终导诊结果真相。
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | `uuid` | PK | 产物 id |
+| `model_run_id` | `uuid` | nullable FK -> `ai_model_run.id` | 所属模型运行 |
+| `query_run_id` | `uuid` | FK -> `query_run.id` | 所属 query run |
+| `artifact_type` | `varchar(32)` | not null | 产物类型 |
+| `artifact_json` | `jsonb` | not null | 结构化或原始 JSON |
+| `created_at` | `timestamptz` | not null | 创建时间 |
+
+关键索引：
+
+- `idx_ai_run_artifact_query_type` on (`query_run_id`, `artifact_type`)
+
+写入 ownership：
+
+- Python query workflow / LLM integration
+
+## 5.10 `knowledge_base`
+
+知识库主表，保存治理配置的默认值。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -358,8 +464,9 @@ P0 统一冻结以下枚举值。
 | `code` | `varchar(64)` | unique not null | 稳定业务编码 |
 | `name` | `varchar(128)` | not null | 知识库名称 |
 | `description` | `text` | nullable | 描述 |
-| `embedding_model` | `varchar(64)` | not null | 当前 embedding 模型名 |
-| `retrieval_strategy` | `varchar(64)` | not null | 如 `HYBRID_RRF` |
+| `default_embedding_model` | `varchar(64)` | not null | 默认 embedding 模型 |
+| `default_embedding_dimension` | `integer` | not null | 默认 embedding 维度，P0 固定 1024 |
+| `retrieval_strategy` | `varchar(64)` | not null | 默认检索策略，如 `HYBRID_RRF` |
 | `status` | `varchar(16)` | not null | 可用状态 |
 | `created_at` | `timestamptz` | not null | 创建时间 |
 | `updated_at` | `timestamptz` | not null | 更新时间 |
@@ -368,7 +475,7 @@ P0 统一冻结以下枚举值。
 
 - Python KB admin / ingestion workflow
 
-## 5.8 `knowledge_document`
+## 5.11 `knowledge_document`
 
 文档源事实表，不承载发布语义。
 
@@ -399,14 +506,13 @@ P0 统一冻结以下枚举值。
 
 - Python ingest API / admin
 
-## 5.9 `knowledge_chunk`
+## 5.12 `knowledge_chunk`
 
-稳定证据单元。
+稳定证据单元。`chunk` 归属于文档，不再重复保存 `kb_id`。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | `id` | `uuid` | PK | chunk id |
-| `kb_id` | `uuid` | FK -> `knowledge_base.id` | 所属知识库 |
 | `document_id` | `uuid` | FK -> `knowledge_document.id` | 所属文档 |
 | `chunk_no` | `integer` | not null | 文档内序号 |
 | `content_text` | `text` | not null | chunk 正文 |
@@ -428,44 +534,17 @@ P0 统一冻结以下枚举值。
 
 - Python ingestion worker
 
-## 5.10 `knowledge_chunk_index`
+## 5.13 `knowledge_index_version`
 
-检索投影层，一条记录对应一个 chunk 在一个索引版本中的可检索状态。
-
-| 字段 | 类型 | 约束 | 说明 |
-|------|------|------|------|
-| `id` | `uuid` | PK | 索引记录 id |
-| `kb_id` | `uuid` | FK -> `knowledge_base.id` | 所属知识库 |
-| `chunk_id` | `uuid` | FK -> `knowledge_chunk.id` | 所属 chunk |
-| `index_version_id` | `uuid` | FK -> `knowledge_index_version.id` | 所属索引版本 |
-| `embedding` | `vector` | not null | 向量字段 |
-| `search_tsv` | `tsvector` | not null | 稀疏检索字段 |
-| `weight` | `numeric(6,3)` | not null | 检索权重 |
-| `created_at` | `timestamptz` | not null | 创建时间 |
-
-唯一约束：
-
-- (`chunk_id`, `index_version_id`)
-
-关键索引：
-
-- `idx_kci_index_version` on (`index_version_id`)
-- `idx_kci_search_tsv` gin (`search_tsv`)
-- `idx_kci_embedding` ivfflat (`embedding`)
-
-写入 ownership：
-
-- Python ingestion worker
-
-## 5.11 `knowledge_index_version`
-
-索引版本事实。
+索引版本事实。实际 embedding 配置在这里冻结，不依赖知识库默认值推断。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | `id` | `uuid` | PK | 索引版本 id |
 | `kb_id` | `uuid` | FK -> `knowledge_base.id` | 所属知识库 |
 | `version_code` | `varchar(64)` | unique not null | 版本号 |
+| `embedding_model` | `varchar(64)` | not null | 本版本实际 embedding 模型 |
+| `embedding_dimension` | `integer` | not null | 本版本实际向量维度，P0 固定 1024 |
 | `build_scope` | `varchar(16)` | not null | 全量或增量 |
 | `status` | `varchar(16)` | not null | 构建状态 |
 | `source_document_count` | `integer` | not null | 本次构建包含文档数 |
@@ -481,7 +560,30 @@ P0 统一冻结以下枚举值。
 
 - Python ingestion workflow
 
-## 5.12 `ingest_job`
+## 5.14 `knowledge_chunk_index`
+
+检索投影层，一条记录表示一个 chunk 在一个索引版本中的可检索投影。
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `chunk_id` | `uuid` | PK FK -> `knowledge_chunk.id` | 所属 chunk |
+| `index_version_id` | `uuid` | PK FK -> `knowledge_index_version.id` | 所属索引版本 |
+| `embedding` | `vector(1024)` | not null | dense retrieval 向量 |
+| `search_lexemes` | `text` | not null | Python 归一化分词结果 |
+| `search_tsv` | `tsvector` | not null | 由 `search_lexemes` 生成的稀疏检索字段 |
+| `indexed_at` | `timestamptz` | not null | 建索引时间 |
+
+关键索引：
+
+- `idx_kci_index_version` on (`index_version_id`)
+- `idx_kci_search_tsv` gin (`search_tsv`)
+- `idx_kci_embedding` hnsw (`embedding`) with cosine distance
+
+写入 ownership：
+
+- Python ingestion worker
+
+## 5.15 `ingest_job`
 
 文档处理任务表。
 
@@ -489,8 +591,8 @@ P0 统一冻结以下枚举值。
 |------|------|------|------|
 | `id` | `uuid` | PK | 作业 id |
 | `kb_id` | `uuid` | FK -> `knowledge_base.id` | 所属知识库 |
-| `document_id` | `uuid` | FK -> `knowledge_document.id` | 目标文档 |
-| `target_index_version_id` | `uuid` | FK -> `knowledge_index_version.id` | 目标索引版本 |
+| `document_id` | `uuid` | nullable FK -> `knowledge_document.id` | 目标文档 |
+| `target_index_version_id` | `uuid` | nullable FK -> `knowledge_index_version.id` | 目标索引版本 |
 | `job_type` | `varchar(32)` | not null | 作业类型 |
 | `status` | `varchar(16)` | not null | 任务状态 |
 | `current_stage` | `varchar(16)` | not null | 当前阶段 |
@@ -510,7 +612,7 @@ P0 统一冻结以下枚举值。
 - Python ingest API 创建
 - Python worker 更新状态
 
-## 5.13 `knowledge_release`
+## 5.16 `knowledge_release`
 
 显式发布表，只管理索引版本上线动作。
 
@@ -519,7 +621,7 @@ P0 统一冻结以下枚举值。
 | `id` | `uuid` | PK | 发布 id |
 | `kb_id` | `uuid` | FK -> `knowledge_base.id` | 所属知识库 |
 | `release_code` | `varchar(64)` | unique not null | 发布编号 |
-| `release_type` | `varchar(32)` | not null | 固定为索引激活 |
+| `release_type` | `varchar(32)` | not null | 固定为 `INDEX_ACTIVATION` |
 | `target_index_version_id` | `uuid` | FK -> `knowledge_index_version.id` | 发布目标版本 |
 | `status` | `varchar(16)` | not null | 发布状态 |
 | `published_by` | `varchar(128)` | nullable | 发布人 |
@@ -532,59 +634,24 @@ P0 统一冻结以下枚举值。
 - `idx_knowledge_release_kb_status` on (`kb_id`, `status`)
 - `idx_knowledge_release_target` on (`target_index_version_id`)
 
-写入 ownership：
-
-- Python admin / ingestion activation
-
 P0 约束：
 
 - 同一 `kb_id` 同时最多一条 `PUBLISHED` 记录
 
-## 5.14 `query_run`
-
-一次 query workflow 的顶层事实，是同步和流式的共同 trace 根节点。
-
-| 字段 | 类型 | 约束 | 说明 |
-|------|------|------|------|
-| `id` | `uuid` | PK | query run id |
-| `request_id` | `varchar(64)` | not null | 本次请求 trace id |
-| `session_id` | `uuid` | FK -> `ai_session.id` | 所属会话 |
-| `turn_id` | `uuid` | FK -> `ai_turn.id` | 所属轮次 |
-| `kb_id` | `uuid` | FK -> `knowledge_base.id` | 命中知识库 |
-| `scene_code` | `varchar(32)` | not null | 固定为 `AI_TRIAGE` |
-| `request_text` | `text` | not null | 用户输入原文 |
-| `normalized_query_text` | `text` | nullable | 归一化后的查询文本 |
-| `hospital_scope` | `varchar(64)` | not null | 导诊目录作用域 |
-| `catalog_version` | `varchar(64)` | nullable | 本次读取到的目录版本 |
-| `index_version_id` | `uuid` | FK -> `knowledge_index_version.id` | 本次使用的索引版本 |
-| `status` | `varchar(16)` | not null | 运行状态 |
-| `final_triage_stage` | `varchar(32)` | nullable | 最终导诊状态 |
-| `final_completion_reason` | `varchar(32)` | nullable | 最终收口原因 |
-| `started_at` | `timestamptz` | not null | 开始时间 |
-| `finished_at` | `timestamptz` | nullable | 结束时间 |
-| `created_at` | `timestamptz` | not null | 创建时间 |
-
-关键索引：
-
-- `idx_query_run_session` on (`session_id`, `created_at desc`)
-- `idx_query_run_request` on (`request_id`)
-- `idx_query_run_status` on (`status`, `created_at desc`)
-
 写入 ownership：
 
-- Python query workflow 创建和收口
+- Python admin / ingestion activation
 
-## 5.15 `retrieval_hit`
+## 5.17 `retrieval_hit`
 
 召回候选事实，不表示已被答案引用。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
-| `id` | `uuid` | PK | hit id |
-| `query_run_id` | `uuid` | FK -> `query_run.id` | 所属 query run |
+| `query_run_id` | `uuid` | PK FK -> `query_run.id` | 所属 query run |
+| `retriever_type` | `varchar(16)` | PK | 召回器类型 |
+| `rank_no` | `integer` | PK | 排名 |
 | `chunk_id` | `uuid` | FK -> `knowledge_chunk.id` | 命中 chunk |
-| `retriever_type` | `varchar(16)` | not null | 召回器类型 |
-| `rank_no` | `integer` | not null | 排名 |
 | `vector_score` | `double precision` | nullable | 向量分 |
 | `keyword_score` | `double precision` | nullable | 稀疏检索分 |
 | `fusion_score` | `double precision` | nullable | 融合分 |
@@ -594,33 +661,27 @@ P0 约束：
 
 关键索引：
 
-- `idx_retrieval_hit_query_rank` on (`query_run_id`, `rank_no`)
 - `idx_retrieval_hit_chunk` on (`chunk_id`)
 
 写入 ownership：
 
 - Python retrieval workflow
 
-## 5.16 `answer_citation`
+## 5.18 `answer_citation`
 
 最终答案真正使用的证据记录。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
-| `id` | `uuid` | PK | citation id |
-| `query_run_id` | `uuid` | FK -> `query_run.id` | 所属 query run |
+| `query_run_id` | `uuid` | PK FK -> `query_run.id` | 所属 query run |
+| `citation_order` | `integer` | PK | 引用顺序 |
 | `chunk_id` | `uuid` | FK -> `knowledge_chunk.id` | 被引用 chunk |
-| `citation_order` | `integer` | not null | 引用顺序 |
 | `snippet` | `text` | not null | 最终展示片段 |
 | `created_at` | `timestamptz` | not null | 创建时间 |
 
-唯一约束：
-
-- (`query_run_id`, `citation_order`)
-
 关键索引：
 
-- `idx_answer_citation_query` on (`query_run_id`, `citation_order`)
+- `idx_answer_citation_chunk` on (`chunk_id`)
 
 写入 ownership：
 
@@ -628,14 +689,14 @@ P0 约束：
 
 ## 6. 主外键关系
 
-核心关系固定为：
-
 - `ai_session 1 -> n ai_turn`
-- `ai_turn 1 -> n ai_turn_content`
 - `ai_turn 1 -> 1 query_run`
+- `query_run 1 -> 1 query_result_snapshot`
+- `query_result_snapshot 1 -> n query_result_follow_up_question`
+- `query_result_snapshot 1 -> n query_result_department`
 - `query_run 1 -> n ai_model_run`
-- `query_run 1 -> n ai_run_artifact`
 - `query_run 1 -> n ai_guardrail_event`
+- `query_run 1 -> n ai_run_artifact`
 - `knowledge_base 1 -> n knowledge_document`
 - `knowledge_document 1 -> n knowledge_chunk`
 - `knowledge_index_version 1 -> n knowledge_chunk_index`
@@ -644,23 +705,24 @@ P0 约束：
 
 ## 7. 运行期写入时序
 
-## 7.1 一次 query 请求
+### 7.1 一次 query 请求
 
 1. 创建或读取 `ai_session`
 2. 创建 `ai_turn`
 3. 创建 `query_run`
-4. 写入 `ai_turn_content` 用户原文
-5. 输入护栏命中时写 `ai_guardrail_event`
-6. 创建 `ai_model_run`
-7. 写 `ai_run_artifact(TRIAGE_MATERIALS)`
-8. 写 `retrieval_hit`
-9. 写 `answer_citation`
-10. 写 `ai_run_artifact(FINAL_TRIAGE_RESULT)`
-11. 更新 `query_run`
-12. 更新 `ai_turn.stage_after` 和 `is_finalized`
-13. 更新 `ai_session.current_stage`
+4. 输入护栏命中时写 `ai_guardrail_event`
+5. 需要模型调用时写 `ai_model_run`
+6. 需要调试或保留原始响应时写 `ai_run_artifact`
+7. 检索阶段写 `retrieval_hit`
+8. 生成最终结构化结果后写 `query_result_snapshot`
+9. `COLLECTING` 时写 `query_result_follow_up_question`
+10. `READY` 时写 `query_result_department`
+11. 有 grounding 证据时写 `answer_citation`
+12. 更新 `ai_turn.assistant_message_text / stage_after / is_finalized`
+13. 更新 `query_run.status`
+14. 更新 `ai_session.current_stage`
 
-## 7.2 一次 ingestion 请求
+### 7.2 一次 ingestion 请求
 
 1. 创建 `knowledge_document`
 2. 创建 `knowledge_index_version`
@@ -672,34 +734,26 @@ P0 约束：
 
 ## 8. 明确删除的旧设计
 
-以下设计在正式 DDL 中不得继续保留：
+正式 DDL 中不得继续保留：
 
+- `ai_turn_content`
+- “最终导诊结果只存在 `ai_run_artifact(FINAL_TRIAGE_RESULT)`”
+- `query_run.final_*` 混合执行事实和业务结果
+- `knowledge_chunk.kb_id`
+- `ai_model_run.session_id / turn_id`
+- `ai_guardrail_event.session_id / turn_id`
 - `ai_run_citation`
-- `knowledge_document.published_at`
-- `knowledge_document.ACTIVE` 兼具发布语义
 - “检索候选和最终引用混表”
 - “只有当前索引、没有索引版本”
 
-## 9. P1 暂缓项
+## 9. 一句话结论
 
-本文不展开以下 `P1` 表：
+这版把 Python RAG 服务的数据事实拆成了五层：
 
-- `eval_dataset`
-- `eval_case`
-- `eval_run`
-- `eval_case_result`
-- `ai_feedback_task`
-- `ai_feedback_review`
-
-P0 migration 完成后，再单独冻结评测和人工复核表。
-
-## 10. 一句话结论
-
-这份 DDL 草案把 Python RAG 服务的数据事实固定成了四层：
-
-- 会话与生成事实
+- 会话与轮次事实
+- 执行与审计事实
+- 结构化结果事实
 - 文档与索引事实
-- 发布与可见性事实
 - 检索与证据事实
 
-后续实现必须按这四层落库，不再回到旧的聊天驱动混合设计。
+后续实现必须按这五层落库，不再回到“聊天内容表泛化”和“最终结果塞 JSON”那套旧设计。

@@ -23,7 +23,6 @@
 | 配置 | [03C-INFRASTRUCTURE_CONFIG.md](./03C-INFRASTRUCTURE_CONFIG.md) | 基础设施与可观测性配置 |
 | 配置 | [03D-BASELINE_DEPLOYMENT_FILES.md](./03D-BASELINE_DEPLOYMENT_FILES.md) | 无 SkyWalking / 无 ES 的基线部署文件模板 |
 | 运维 | [04-DEVOPS.md](./04-DEVOPS.md) | Docker 与 CI/CD |
-| 测试 | [05-TESTING.md](./05-TESTING.md) | 测试策略与门禁 |
 | 设计 | [06-DDD_DESIGN.md](./06-DDD_DESIGN.md) | DDD 方法与边界 |
 | 数据库 | [07-DATABASE.md](./07-DATABASE.md) | V3 主数据库设计总览 |
 | 设计 | [07A-SCHEDULING-V3.md](./07A-SCHEDULING-V3.md) | 排班规划、发布门诊与挂号边界说明 |

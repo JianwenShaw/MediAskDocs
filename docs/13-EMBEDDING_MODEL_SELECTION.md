@@ -7,6 +7,7 @@
 - **唯一选型**：阿里云百炼 `text-embedding-v4`
 - **接入方式**：远程 Embedding API（OpenAI 兼容调用方式）
 - **应用范围**：知识库入库向量化 + 查询向量化
+- **P0 冻结维度**：`1024`
 
 ## 2. 选择理由（与论文口径一致）
 
@@ -36,4 +37,4 @@ EMBEDDING_BASE_URL=<阿里百炼兼容端点>
 EMBEDDING_API_KEY=<你的百炼API Key>
 ```
 
-> 说明：向量维度以实际 API 返回与 PostgreSQL `knowledge_chunk_index` 的 `VECTOR(1536)` 定义保持一致。
+> 说明：`text-embedding-v4` 支持多种输出维度；本项目 P0 为了兼顾检索效果、索引开销与 `pgvector` ANN 索引约束，冻结为 `1024` 维，并与 PostgreSQL `knowledge_chunk_index.embedding` 的 `VECTOR(1024)` 定义保持一致。

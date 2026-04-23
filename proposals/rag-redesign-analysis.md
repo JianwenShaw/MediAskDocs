@@ -535,9 +535,9 @@ app/
 |------|----------|------|
 | `ai_session` | 保留 | 会话头仍然有必要 |
 | `ai_turn` | 保留 | 多轮问答仍需轮次建模 |
-| `ai_turn_content` | 保留 | 原文与高敏内容应分层 |
+| `ai_turn_content` | 删除 | P0 每轮只有一条用户输入和一条最终助手输出，单独内容表是过度抽象 |
 | `ai_model_run` | 保留并增强 | 需要承载同步/流式两类生成运行信息 |
-| `ai_run_artifact` | 保留 | 用于存结构化产物与中间结果快照 |
+| `ai_run_artifact` | 保留但降级为调试表 | 只存原始响应和调试产物，不再承载最终结果真相 |
 | `ai_guardrail_event` | 保留 | 医疗场景需要独立护栏留痕 |
 | `knowledge_base` | 保留 | 知识库治理入口仍成立 |
 | `knowledge_document` | 保留但收缩职责 | 只保留文档源事实，不再混入发布语义 |
@@ -582,7 +582,7 @@ app/
 - `knowledge_release`
   - 只存发布动作与发布结果
 
-建议把新表清单收敛为 `P0 必做 16 张 + P1 建议 6 张`。
+建议把新表清单收敛为 `P0 必做 18 张 + P1 建议 6 张`。
 
 #### 7.4.1 P0 必做表
 
@@ -590,9 +590,12 @@ app/
 |------|------|----------|------|
 | `ai_session` | 会话 | 保留 | 会话头，表示一次问答会话 |
 | `ai_turn` | 会话 | 保留 | 多轮消息与轮次管理 |
-| `ai_turn_content` | 会话 | 保留 | 用户原文、附件文本、脱敏前内容等高敏正文 |
+| `query_run` | 查询链路 | 新增 | 一次 query workflow 的顶层事实，贯穿同步与流式 |
+| `query_result_snapshot` | 结果 | 新增 | 一次 query 的结构化结果真相 |
+| `query_result_follow_up_question` | 结果 | 新增 | `COLLECTING` 状态下的追问问题 |
+| `query_result_department` | 结果 | 新增 | `READY` 状态下的推荐科室 |
 | `ai_model_run` | 生成 | 保留并增强 | 记录一次模型调用，支持同步/流式、模型参数、耗时、状态 |
-| `ai_run_artifact` | 生成 | 保留 | 记录摘要、路由结果、结构化 JSON、调试产物 |
+| `ai_run_artifact` | 生成 | 保留但降级为调试表 | 记录摘要、原始响应、调试产物 |
 | `ai_guardrail_event` | 安全 | 保留 | 记录输入/输出护栏命中 |
 | `knowledge_base` | 知识治理 | 保留 | 知识库主表 |
 | `knowledge_document` | 知识治理 | 保留但收缩职责 | 文档元数据、来源信息、内容哈希、所有权，不再承载发布状态 |
@@ -601,7 +604,6 @@ app/
 | `knowledge_index_version` | 索引治理 | 新增 | 管理索引版本、激活版本、构建批次 |
 | `ingest_job` | ingestion | 新增 | 文档解析、切块、嵌入、建索引任务状态 |
 | `knowledge_release` | 发布治理 | 新增 | 显式发布某个索引版本，控制是否进入线上检索 |
-| `query_run` | 查询链路 | 新增 | 一次 query workflow 的顶层事实，贯穿同步与流式 |
 | `retrieval_hit` | 检索追溯 | 新增 | 记录召回候选、分数、rank、来源召回器 |
 | `answer_citation` | 回答追溯 | 新增 | 记录最终回答真正使用的证据 chunk |
 
@@ -628,15 +630,19 @@ app/
 - `ai_turn`
   - 一轮问答事实
   - 关联用户消息、系统回复、轮次序号
-- `ai_turn_content`
-  - 存原始文本、预处理文本、附件抽取文本
-  - 保留高敏内容分层
+- `query_result_snapshot`
+  - 一次 query 的结构化结果真相
+  - 固化 `triage_stage / next_action / risk_level / blocked_reason`
+- `query_result_follow_up_question`
+  - `COLLECTING` 时的追问明细
+- `query_result_department`
+  - `READY` 时的推荐科室明细
 - `ai_model_run`
   - 记录每次模型运行
   - 建议增加：`run_type`、`stream_mode`、`status`、`started_at`、`finished_at`
 - `ai_run_artifact`
-  - 记录结构化产物
-  - 如 query rewrite、路由判断、risk summary、final structured output
+  - 记录调试和原始响应产物
+  - 不再承担最终结构化结果真相
 
 #### 7.5.2 文档与索引
 
