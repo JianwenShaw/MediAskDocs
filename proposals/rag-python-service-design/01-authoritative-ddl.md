@@ -277,11 +277,16 @@
 | `normalized_query_text` | `text` | nullable | 归一化查询文本 |
 | `hospital_scope` | `varchar(64)` | not null | 导诊目录作用域 |
 | `catalog_version` | `varchar(64)` | nullable | 本次运行实际使用的目录版本 |
-| `index_version_id` | `uuid` | nullable FK -> `knowledge_index_version.id` | 本次运行实际使用的索引版本 |
+| `index_version_id` | `uuid` | nullable FK -> `knowledge_index_version(id, kb_id)` | 本次运行实际使用的索引版本，必须属于 `kb_id` |
 | `status` | `varchar(16)` | not null | 运行状态 |
 | `started_at` | `timestamptz` | not null | 开始时间 |
 | `finished_at` | `timestamptz` | nullable | 结束时间 |
 | `created_at` | `timestamptz` | not null | 创建时间 |
+
+P0 约束：
+
+- `index_version_id` 非空时 `kb_id` 必须非空
+- `index_version_id` 必须属于同一个 `kb_id`
 
 关键索引：
 
@@ -305,6 +310,7 @@
 | `next_action` | `varchar(32)` | not null | 前端动作 |
 | `risk_level` | `varchar(16)` | nullable | 风险等级 |
 | `chief_complaint_summary` | `text` | not null | 主诉摘要 |
+| `catalog_version` | `varchar(64)` | nullable | READY 结果使用的目录版本 |
 | `care_advice` | `text` | nullable | 就医建议 |
 | `blocked_reason` | `varchar(64)` | nullable | 阻断原因 |
 | `created_at` | `timestamptz` | not null | 结果落库时间 |
@@ -315,20 +321,27 @@ P0 约束：
   - `triage_completion_reason` 必须为 `null`
   - `next_action` 必须为 `CONTINUE_TRIAGE`
   - `risk_level` 必须为 `null`
+  - `catalog_version` 必须为 `null`
   - `blocked_reason` 必须为 `null`
   - `care_advice` 必须为 `null`
 - `READY`
   - `triage_completion_reason` 必须为 `SUFFICIENT_INFO / MAX_TURNS_REACHED`
   - `next_action` 必须为 `VIEW_TRIAGE_RESULT`
   - `risk_level` 必须非空
+  - `catalog_version` 必须非空
   - `blocked_reason` 必须为 `null`
   - `care_advice` 必须非空
 - `BLOCKED`
   - `triage_completion_reason` 必须为 `HIGH_RISK_BLOCKED`
   - `next_action` 必须为 `MANUAL_SUPPORT / EMERGENCY_OFFLINE`
   - `risk_level` 必须为 `high`
+  - `catalog_version` 必须为 `null`
   - `blocked_reason` 必须非空
   - `care_advice` 必须非空
+
+唯一约束：
+
+- (`query_run_id`, `triage_stage`)
 
 写入 ownership：
 
@@ -341,6 +354,7 @@ P0 约束：
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | `query_run_id` | `uuid` | PK FK -> `query_result_snapshot.query_run_id` | 所属 query run |
+| `triage_stage` | `varchar(32)` | FK -> `query_result_snapshot(query_run_id, triage_stage)` | 固定为 `COLLECTING`，防止写到 READY/BLOCKED 结果下 |
 | `question_order` | `integer` | PK | 顺序，P0 只允许 1..2 |
 | `question_text` | `text` | not null | 追问内容 |
 | `created_at` | `timestamptz` | not null | 创建时间 |
@@ -348,6 +362,7 @@ P0 约束：
 P0 约束：
 
 - `question_order` 只允许 `1..2`
+- `triage_stage` 固定为 `COLLECTING`
 
 关键索引：
 
@@ -364,6 +379,7 @@ P0 约束：
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | `query_run_id` | `uuid` | PK FK -> `query_result_snapshot.query_run_id` | 所属 query run |
+| `triage_stage` | `varchar(32)` | FK -> `query_result_snapshot(query_run_id, triage_stage)` | 固定为 `READY`，防止写到 COLLECTING/BLOCKED 结果下 |
 | `priority` | `integer` | PK | 推荐优先级，P0 只允许 1..3 |
 | `department_id` | `bigint` | not null | 科室 id |
 | `department_name` | `varchar(128)` | not null | 科室名称快照 |
@@ -373,6 +389,7 @@ P0 约束：
 P0 约束：
 
 - `priority` 只允许 `1..3`
+- `triage_stage` 固定为 `READY`
 
 关键索引：
 
@@ -461,7 +478,8 @@ LLM 原始响应和调试产物。它不再承载最终导诊结果真相。
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | `id` | `uuid` | PK | 知识库 id |
-| `code` | `varchar(64)` | unique not null | 稳定业务编码 |
+| `hospital_scope` | `varchar(64)` | not null | 知识库所属医院或院区作用域 |
+| `code` | `varchar(64)` | not null | 作用域内稳定业务编码 |
 | `name` | `varchar(128)` | not null | 知识库名称 |
 | `description` | `text` | nullable | 描述 |
 | `default_embedding_model` | `varchar(64)` | not null | 默认 embedding 模型 |
@@ -470,6 +488,14 @@ LLM 原始响应和调试产物。它不再承载最终导诊结果真相。
 | `status` | `varchar(16)` | not null | 可用状态 |
 | `created_at` | `timestamptz` | not null | 创建时间 |
 | `updated_at` | `timestamptz` | not null | 更新时间 |
+
+唯一约束：
+
+- (`hospital_scope`, `code`)
+
+关键索引：
+
+- `idx_knowledge_base_scope_status` on (`hospital_scope`, `status`)
 
 写入 ownership：
 
@@ -542,7 +568,7 @@ LLM 原始响应和调试产物。它不再承载最终导诊结果真相。
 |------|------|------|------|
 | `id` | `uuid` | PK | 索引版本 id |
 | `kb_id` | `uuid` | FK -> `knowledge_base.id` | 所属知识库 |
-| `version_code` | `varchar(64)` | unique not null | 版本号 |
+| `version_code` | `varchar(64)` | not null | 知识库内版本号 |
 | `embedding_model` | `varchar(64)` | not null | 本版本实际 embedding 模型 |
 | `embedding_dimension` | `integer` | not null | 本版本实际向量维度，P0 固定 1024 |
 | `build_scope` | `varchar(16)` | not null | 全量或增量 |
@@ -551,6 +577,11 @@ LLM 原始响应和调试产物。它不再承载最终导诊结果真相。
 | `started_at` | `timestamptz` | not null | 开始构建时间 |
 | `finished_at` | `timestamptz` | nullable | 结束时间 |
 | `created_at` | `timestamptz` | not null | 创建时间 |
+
+唯一约束：
+
+- (`kb_id`, `version_code`)
+- (`id`, `kb_id`) 用于约束发布与 query 使用的索引版本必须属于同一知识库
 
 关键索引：
 
@@ -592,7 +623,7 @@ LLM 原始响应和调试产物。它不再承载最终导诊结果真相。
 | `id` | `uuid` | PK | 作业 id |
 | `kb_id` | `uuid` | FK -> `knowledge_base.id` | 所属知识库 |
 | `document_id` | `uuid` | nullable FK -> `knowledge_document.id` | 目标文档 |
-| `target_index_version_id` | `uuid` | nullable FK -> `knowledge_index_version.id` | 目标索引版本 |
+| `target_index_version_id` | `uuid` | nullable FK -> `knowledge_index_version(id, kb_id)` | 目标索引版本，必须属于同一知识库 |
 | `job_type` | `varchar(32)` | not null | 作业类型 |
 | `status` | `varchar(16)` | not null | 任务状态 |
 | `current_stage` | `varchar(16)` | not null | 当前阶段 |
@@ -620,9 +651,9 @@ LLM 原始响应和调试产物。它不再承载最终导诊结果真相。
 |------|------|------|------|
 | `id` | `uuid` | PK | 发布 id |
 | `kb_id` | `uuid` | FK -> `knowledge_base.id` | 所属知识库 |
-| `release_code` | `varchar(64)` | unique not null | 发布编号 |
+| `release_code` | `varchar(64)` | not null | 知识库内发布编号 |
 | `release_type` | `varchar(32)` | not null | 固定为 `INDEX_ACTIVATION` |
-| `target_index_version_id` | `uuid` | FK -> `knowledge_index_version.id` | 发布目标版本 |
+| `target_index_version_id` | `uuid` | FK -> `knowledge_index_version(id, kb_id)` | 发布目标版本，必须属于同一知识库 |
 | `status` | `varchar(16)` | not null | 发布状态 |
 | `published_by` | `varchar(128)` | nullable | 发布人 |
 | `published_at` | `timestamptz` | nullable | 发布时间 |
@@ -637,6 +668,7 @@ LLM 原始响应和调试产物。它不再承载最终导诊结果真相。
 P0 约束：
 
 - 同一 `kb_id` 同时最多一条 `PUBLISHED` 记录
+- (`kb_id`, `release_code`) 唯一
 
 写入 ownership：
 
