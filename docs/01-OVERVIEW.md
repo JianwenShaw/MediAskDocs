@@ -383,35 +383,30 @@ sequenceDiagram
     participant PG as PostgreSQL
     participant LLM as DeepSeek API
 
-    Client->>API: POST /api/v1/ai/chat
-    API->>PG: 创建 ai_session / ai_turn
-    API->>PG: 预创建 ai_model_run(status=RUNNING)
-    API->>AI: POST /api/v1/chat<br/>X-Request-Id / X-API-Key / model_run_id
-    AI->>PG: 向量检索 knowledge_chunk_index<br/>(Python 直接读)
-    AI->>LLM: 带上下文的 Prompt
-    LLM-->>AI: 完整回答
-    AI->>PG: 写入 ai_run_citation(model_run_id=model_run_id)<br/>(Python 直接写)
-    AI-->>API: 完整回答 + 结构化结果
-    API->>PG: 更新 ai_model_run / 写入 ai_run_artifact / ai_guardrail_event
-    API-->>Client: SSE 转发
+    Client->>API: 发起 AI 导诊
+    API->>AI: POST /api/v1/query[/stream]<br/>X-Request-Id
+    AI->>PG: 创建 ai_session / ai_turn / query_run
+    AI->>AI: Redis 目录读取 / 护栏 / RAG / LLM / 状态机收口
+    AI-->>API: 返回 triage_result
+    API->>PG: 保存业务承接结果快照
+    API-->>Client: 返回 Result<T> 或 SSE
 ```
 
 ### 7.2 数据写入边界
 
 | 数据 | 写入方 | 原因 |
 |------|--------|------|
-| `ai_session`、`ai_turn`、`ai_turn_content` | **Java** | 会话生命周期由业务系统管理 |
-| `ai_model_run` | **Java 预创建并最终更新** | Java 生成稳定 `model_run_id`，Python 基于该 `model_run_id` 写引用记录，执行完成后由 Java 回填元数据 |
-| `ai_run_artifact`、`ai_guardrail_event` | **Java** | 从 Python 响应中提取，Java 负责持久化 |
+| `ai_session`、`ai_turn`、`query_run`、`query_result_*` | **Python** | Python query workflow 的内部执行事实 |
+| `ai_model_run`、`ai_run_artifact`、`ai_guardrail_event` | **Python** | 模型调用、护栏和调试留痕由 Python 主链路产生 |
 | `ai_feedback_task`、`ai_feedback_review` | **Java** | 人工审核流程完全在 Java 侧 |
-| `knowledge_base`、`knowledge_document`、`knowledge_chunk` | **Java** | 知识库元数据与 chunk 引用锚点属于业务事实层；chunk 持久化由 Java 收口 |
-| `knowledge_chunk_index` | **Python** | 向量化与分词在 Python 完成，直接写入检索投影层 |
-| `ai_run_citation` | **Python** | 检索命中记录在 Python 检索管道中产生，但必须引用 Java 预先分配的 `model_run_id` |
+| `knowledge_base`、`knowledge_document`、`knowledge_chunk`、`knowledge_chunk_index`、`knowledge_release` | **Python** | Python RAG 服务内部知识治理与检索投影 |
+| `retrieval_hit`、`answer_citation` | **Python** | 检索命中和引用追溯 |
+| Java 业务导诊结果快照 | **Java** | 结果页、历史和挂号承接的业务事实 |
 
 补充说明：
 
-- 原始文档解析、文本清洗、术语归一和 chunk 切分算法优先放在 Python AI 服务
-- Java 不负责底层解析算法，但负责接收 Python 返回的 chunk payload 并持久化为 `knowledge_chunk`
+- Java 通过 Redis 发布导诊目录，Python 只读 Redis，不在 query 主链路中调用 Java 内部目录 HTTP 接口。
+- Java 不读取 Python 内部 AI/RAG 表；运行时只消费 Python HTTP API 返回的最终结构化结果。
 
 ### 7.3 认证与追踪
 
@@ -419,9 +414,9 @@ sequenceDiagram
 |------|------|
 | 服务间认证 | `X-API-Key` 请求头（Java → Python） |
 | 请求上下文串联 | `X-Request-Id` 请求头透传，Python 侧注入日志和 DB 操作；`X-Trace-Id` 仅兼容旧口径 |
-| 降级策略 | 检索或 Embedding 不可用时返回保守辅助问诊响应，`ai_model_run.is_degraded = true` |
+| 失败策略 | 影响正确性的目录、模型、检索或结构化校验失败直接按 query 错误协议返回失败 |
 
-补充约束：Python AI 服务是 **内部服务**，浏览器与移动端不直接访问；所有 AI 问诊入口统一经由 `mediask-api` 暴露、鉴权、审计；如需流式观感，由上层基于完整回答做伪流式展示。
+补充约束：Python AI 服务是 **内部服务**，浏览器与移动端不直接访问；所有 AI 问诊入口统一经由 `mediask-api` 暴露、鉴权、审计；流式接口只以 `final.triage_result` 作为业务真相，不能从 `delta` 文本反解析状态。
 
 ---
 
@@ -447,7 +442,7 @@ PostgreSQL 17+ 单实例，58 张表分布在 7 个 SQL 文件中。详见 [docs
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  第一层：业务事实层（Java 管理）                           │
+│  第一层：知识事实层（Python 管理）                         │
 │  knowledge_base → knowledge_document → knowledge_chunk    │
 │  回答：谁拥有知识、有哪些文档、切了哪些块                   │
 └──────────────────────┬───────────────────────────────────┘
@@ -459,17 +454,17 @@ PostgreSQL 17+ 单实例，58 张表分布在 7 个 SQL 文件中。详见 [docs
 │  VECTOR(1536) + TSVECTOR + authority_score + freshness    │
 │  回答：每个块如何被检索（向量 + 关键词 + 排序权重）         │
 └──────────────────────┬───────────────────────────────────┘
-                       │ chunk_id + model_run_id
+                       │ query_run_id + chunk_id
                        ▼
 ┌──────────────────────────────────────────────────────────┐
 │  第三层：引用溯源层（Python 管理）                         │
-│  ai_run_citation                                          │
-│  model_run_id + chunk_id + retrieval_rank + fusion_score  │
+│  answer_citation / retrieval_hit                          │
+│  query_run_id + chunk_id + citation_order / rank_no       │
 │  回答：AI 回答引用了哪些块、排序如何、是否实际使用         │
 └──────────────────────────────────────────────────────────┘
 ```
 
-详见 [docs/20-RAG_DATABASE_PGVECTOR_DESIGN.md](./20-RAG_DATABASE_PGVECTOR_DESIGN.md)。
+最新表结构详见 `docs/proposals/rag-python-service-design/01-authoritative-ddl.md` 与 `04-postgresql-ddl-v1.sql`；[docs/20-RAG_DATABASE_PGVECTOR_DESIGN.md](./20-RAG_DATABASE_PGVECTOR_DESIGN.md) 仅作旧设计参考。
 
 ### 8.3 敏感数据架构
 
@@ -669,7 +664,7 @@ flowchart LR
 
 - `code = 0` 表示成功，非 0 表示失败
 - 对外统一协议以 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) 为准
-- AI 结果以完整 `JSON` 响应为准；如需伪流式展示，其页面口径以 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md) 为准
+- AI 结果以 `triage_result` 为准；流式场景只以 `final` 事件驱动业务动作，其页面口径以 [10A-JAVA_AI_API_CONTRACT.md](./10A-JAVA_AI_API_CONTRACT.md) 为准
 
 ### 12.3 AI 对外契约（P0）
 

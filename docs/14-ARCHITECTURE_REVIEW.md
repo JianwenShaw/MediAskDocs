@@ -1,8 +1,10 @@
 # 重写前架构评审与收敛结论
 
-> 状态：Authoritative Baseline
+> 状态：Legacy Reference
 >
 > 适用阶段：2026-03 重写启动前
+>
+> 当前口径：RAG Python 服务已迁移到 `docs/proposals/rag-python-service-design/` 冻结方案。本文关于 AI `chat`、`model_run_id`、Java 预创建 `ai_model_run`、`ai_run_citation` 和旧知识入库接口的结论仅保留为历史参考。
 >
 > 目的：把已有文档中最容易导致重写返工的口径先冻结，形成一套可直接指导实现的基线。
 

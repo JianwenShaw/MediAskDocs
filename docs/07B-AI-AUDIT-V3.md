@@ -3,7 +3,7 @@
 > 本文聚焦 V3 中的 AI 域、审计域、数据访问监管域，以及它们在“Java 主业务系统 + Python AI 服务”架构下的职责划分。
 > 核心目标不是把所有 AI 细节都塞进业务库，而是在保证可追溯、可审计、可复核的前提下，让 Java 与 Python 各自承担最合适的持久化职责。
 >
-> 读法说明：本文主要描述 Java/Python/DB 的职责分层；浏览器最终拿到的 AI 对外协议与业务承接，统一以 `docs/10A-JAVA_AI_API_CONTRACT.md` 为准。
+> 读法说明：本文是旧 V3 设计参考。RAG Python 服务的最新 Java/Python 边界以 `docs/proposals/rag-python-service-design/03-java-boundary-and-owned-data.md` 为准；浏览器最终拿到的 AI 对外协议与业务承接，统一以 `docs/10A-JAVA_AI_API_CONTRACT.md` 为准。
 
 ## 1. 设计目标
 

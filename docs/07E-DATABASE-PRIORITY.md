@@ -5,6 +5,8 @@
 >
 > 核心原则只有一句话：
 > **AI + RAG 做深，权限 + 审计做准，排班做轻。**
+>
+> 当前口径：RAG Python 服务最新表与写库边界以 `docs/proposals/rag-python-service-design/` 为准。本文若出现 `ai_run_citation`、Java 预创建 `ai_model_run` 等旧口径，仅作历史优先级参考。
 
 ## 1. 重排背景
 

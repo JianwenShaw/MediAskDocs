@@ -2,6 +2,8 @@
 
 > 本文档详述 MediAsk Python AI 服务（`mediask-ai`）的所有配置项。
 >
+> 当前口径：RAG Python 服务的最新接口与边界以 `docs/proposals/rag-python-service-design/` 为准。本文保留旧配置设计参考；涉及 `/health/ready`、`ai_run_citation`、`model_run_id`、降级返回等内容不再作为新的实现依据。
+>
 > **总纲**请参阅 [03-CONFIGURATION.md](./03-CONFIGURATION.md)。
 
 ---

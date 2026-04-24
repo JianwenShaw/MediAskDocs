@@ -20,12 +20,12 @@
 |------|------|
 | 系统形态 | `Java 模块化单体 + Python 独立 AI 服务` |
 | 浏览器入口 | 浏览器只访问 `mediask-api`，**不直连** Python AI 服务 |
-| Python 定位 | `mediask-ai` 是 Java 的内部 AI 执行服务，不持有业务主事实 |
+| Python 定位 | `mediask-rag` 是 Java 的内部 AI 执行服务，不持有 Java 业务主事实；Python 自有 AI/RAG 执行事实由 Python 维护 |
 | Java 分层 | `API/Worker -> Application -> Domain`；`Infrastructure -> Domain`；`Application` **不依赖** `Infrastructure` |
 | 统一响应 | Java 对外统一使用 `Result<T>`：`{code, msg, data, requestId, timestamp}` |
 | 成功语义 | `code = 0` 表示成功，非 0 表示失败 |
 | 请求串联主线 | `X-Request-Id` / `request_id` 是跨网关、Java、Python、审计的统一串联主键 |
-| AI 写库边界 | Python 只写 `knowledge_chunk_index` 与 `ai_run_citation`；其余 AI 业务事实由 Java 维护 |
+| AI 写库边界 | Python 维护 `ai_session/ai_turn/query_run/query_result_*`、模型/护栏/引用留痕和 `knowledge_*` RAG 内部事实；Java 只保存业务承接结果快照 |
 | AI 输出边界 | 只做症状整理、风险提示、建议就医、推荐科室、引用展示；**不做诊断结论和处方建议** |
 | 排班定位 | 排班是亮点能力，但当前阶段必须做轻，不抢主线 |
 | 审计定位 | `audit_event + data_access_log` 是 P0 必需；更重的事件投递与归档属于后续增强 |
@@ -51,18 +51,18 @@
 | 能力域 | P0 说明 |
 |------|---------|
 | 用户与身份 | 患者/医生/管理员最小角色模型，支持登录与身份区分 |
-| AI 会话 | `ai_session`、`ai_turn`、`ai_turn_content`、`ai_model_run`、`ai_guardrail_event` |
-| RAG | `knowledge_base`、`knowledge_document`、`knowledge_chunk`、`knowledge_chunk_index`、`ai_run_citation` |
+| AI 会话 | Python 内部 `ai_session`、`ai_turn`、`query_run`、`query_result_*`；Java 业务侧保存导诊结果快照 |
+| RAG | `knowledge_base`、`knowledge_document`、`knowledge_chunk`、`knowledge_chunk_index`、`knowledge_release`、`retrieval_hit`、`answer_citation` |
 | 医疗闭环 | `clinic_session`、`clinic_slot`、`registration_order`、`visit_encounter`、`emr_record`、`emr_record_content`、`emr_diagnosis`、`prescription_order`、`prescription_item` |
 | 权限与审计 | `roles`、`permissions`、`user_roles`、`role_permissions`、`data_scope_rules`、`audit_event`、`data_access_log` |
 | 前端页面 | 患者 H5：登录、AI 问诊、导诊结果、挂号；医生 Web：工作台、接诊、病历、处方；管理员：最小审计查询 |
 
 ### 3.3 P0 必须明确的实现规则
 
-- Java 先创建 `ai_model_run`，Python 使用该 `model_run_id` 写 `ai_run_citation`
-- Java 先持久化 `knowledge_document`；Python 负责原始文档解析与分块算法，返回 chunk payload 后由 Java 持久化 `knowledge_chunk`，再调用 Python 建索引
-- AI 流式输出由客户端请求 Java，Java 再调用 Python 并转发 SSE
-- 所有对外错误响应遵循统一错误码与 `requestId` 口径
+- Java 调用 Python `POST /api/v1/query` 或 `POST /api/v1/query/stream`，并透传 `X-Request-Id`
+- Java 通过 Redis 发布导诊目录，Python 只读 `triage_catalog:*`
+- AI 流式输出由客户端请求 Java，Java 再调用 Python 并转发 SSE；业务真相只来自 `final.triage_result`
+- Java 对外错误响应遵循统一错误码与 `requestId` 口径；Python query 接口错误响应遵循 `{request_id,error:{code,message}}`
 - 医疗敏感正文采用“索引/密文分离”或最小等价实现，禁止在列表查询中直接暴露原文
 
 ## 4. P1：推荐增强，但不阻塞主链路

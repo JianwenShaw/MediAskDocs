@@ -3,6 +3,8 @@
 > 目标：为“智能医疗辅助问诊”提供最小可用、可答辩、可落地的安全边界。
 >
 > 原则：先做确定性的规则护栏与留痕，不把 P0 做成内容安全平台。
+>
+> 当前口径：RAG Python 服务的输入护栏按 `docs/proposals/rag-python-service-design/05-execution-plan.md` 第二批实现，命中高风险时写入 Python 自有 `ai_guardrail_event`，并通过 `BLOCKED` 的 `triage_result` 返回。
 
 ## 1. 输出边界先冻结
 

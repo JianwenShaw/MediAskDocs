@@ -1,123 +1,134 @@
-# AI/RAG 核心模块实现计划（P0 基线版）
+# RAG Python 服务 P0 实施计划
 
-> 目标：按重写基线补齐“Java 预创建运行记录 -> Python 检索与生成 -> citations 留痕 -> Java 回填业务落库”的端到端链路。
+> 当前口径：本文件同步 `docs/proposals/rag-python-service-design/05-execution-plan.md`。后续实现以 `01-authoritative-ddl.md`、`02-integration-contract.md`、`03-java-boundary-and-owned-data.md`、`04-postgresql-ddl-v1.sql` 为准。
 
 ## 1. 背景与边界
 
-- `mediask-ai` 只负责 AI 执行，不维护业务主事实
-- Java 负责 `ai_session/ai_turn/ai_model_run/knowledge_document/knowledge_chunk`
-- Python 负责 `knowledge_chunk_index/ai_run_citation`
-- 输出定位为辅助问诊、风险提示、建议就医/推荐科室，不输出诊断与处方
+- Python 负责 DeepSeek 调用、护栏、状态机收口、生成 `triage_result`、RAG 检索和内部执行事实落库。
+- Java 负责业务主数据、Redis 导诊目录发布、调用 Python API、保存业务承接结果。
+- Frontend 只根据同步响应或 SSE `final` 事件里的 `triage_result` 驱动跳页。
 
-## 2. 本轮 P0 聚焦三类能力
+不再作为 P0 实现依据：
 
-- **入库索引能力**：Python 解析原始文档并生成 chunk payload -> Java 持久化 chunk -> Python 生成 embedding -> 写 `knowledge_chunk_index`
-- **检索生成能力**：`model_run_id` 预分配 -> 检索 -> 写 `ai_run_citation` -> LLM 生成
-- **协议与收口能力**：统一 `request_id`、错误响应、Java 回填与知识入库状态流转
+- 旧 `/api/v1/chat`。
+- 旧 `/api/v1/knowledge/prepare`、`/api/v1/knowledge/index`、`/api/v1/knowledge/search`。
+- Java 读取 Python 内部 AI/RAG 表。
+- 伪流式文本驱动业务状态。
+- 从自然语言回答反解析推荐科室或风险状态。
 
-## 3. 验收口径
+## 2. 当前仓库基线
 
-### 3.1 功能验收
+已有：
 
-- `/api/v1/knowledge/prepare`：支持原始文档解析、清洗和分块，返回可持久化的 chunk payload
-- `/api/v1/knowledge/index`：支持对 Java 已持久化的 chunk 批量建立索引
-- `/api/v1/knowledge/search`：作为内部 retrieval 接口，能返回 top_k chunks（含 `chunk_id/score/metadata`），并在提供 `model_run_id` 时写入 `ai_run_citation`
-- `/api/v1/chat`：`use_rag=true` 时返回 `answer + citations + risk_level`，并由 Java 回填 `ai_model_run/ai_turn_content/ai_guardrail_event`
-- 当前代码阶段：`knowledge/search` 已可独立验证；`chat` 的真实 retrieval 接线保留到下一轮实现
-- 索引成功后，只有 Java 显式确认后才能把 `knowledge_document` 更新为可用状态；索引失败必须保留重试入口
+- FastAPI 应用入口。
+- `RequestContextMiddleware`。
+- `POST /api/v1/query` 路由骨架。
+- `POST /api/v1/query/stream` 路由骨架。
+- `app/schemas/query.py` 冻结 DTO。
+- query 专用错误响应结构。
+- `app/db.py` psycopg 连接、事务上下文、`/ready` DB ping。
+- `app/repositories/query.py`、`app/repositories/knowledge.py` 薄 SQL 仓储函数。
+- `docs/sql/20-rag-postgresql-ddl-v1.sql`。
 
-### 3.2 质量验收
+仍缺：
 
-- `model_run_id` 全链路透传
-- `request_id` 通过 `X-Request-Id` 全链路透传；`X-Trace-Id` 仅兼容，不再作为新协议字段
-- Python 失败响应统一为 `code/msg/requestId/timestamp`，Java Client 完成稳定映射
-- `ai_run_citation` 可外键到 `ai_model_run`
-- `ai_run_citation` 写入具备幂等性，避免流式重试产生重复引用
-- 引入 `RAG_SCORE_THRESHOLD`，避免硬塞无关上下文
-- 检索失败时可降级为无 RAG 的保守辅助回答
-- 日志必须包含 `request_id/model_run_id/turn_id/latency_ms/is_degraded`，且不记录未脱敏原文
+- Redis 导诊目录读取。
+- Query workflow。
+- DeepSeek 调用。
+- 护栏与状态机收口。
+- RAG 检索。
+- 结构化结果落库主流程。
+- 真实 SSE 流式事件。
+- 覆盖新协议的端到端测试。
 
-### 3.3 P0 联调验收
+## 3. 实施原则
 
-- 按同一 `request_id` 能在 Java、Python、审计记录中串起一次完整请求
-- AI 原文、病历正文等高敏读取路径经过对象级授权，并写入 `data_access_log`
-- AI 输出摘要/建议可进入挂号、接诊链路，不要求在本计划内扩展更多 AI 工作台功能
+- 只实现冻结文档明确要求的能力。
+- 不恢复旧 `/api/v1/chat` 口径。
+- 不恢复旧 `knowledge/*` 口径。
+- 不新增依赖。
+- 不让 Java 读取 Python 内部表。
+- 不从自然语言文本反解析业务状态。
+- 不把最终导诊结果塞进 JSON artifact 作为业务真相。
+- 不用模型直接决定最终业务状态，Python 必须本地校验并收口。
+- 失败时直接返回错误，不向 Java 提交脏结果。
 
-## 4. 分阶段实施
+## 4. 分批实施
 
-### 阶段 0：冻结协议（0.5-1 天）
+### 第一批：契约与基础设施收口
 
-- 确认 `chat` 请求体字段：`model_run_id/turn_id/session_uuid`，并通过 Header 透传 `X-Request-Id`
-- 确认 `ai_run_citation` 字段：`model_run_id/chunk_id/retrieval_rank/*score`
-- 冻结 Python 失败响应：`code/msg/requestId/timestamp`
-- 明确知识入库 ownership：Java 维护 `knowledge_document/chunk`，Python 只维护 `knowledge_chunk_index/ai_run_citation`
-- 明确解析边界：Python 负责解析与切块算法，Java 负责 chunk 业务落库
-- 明确输出边界：不诊断、不处方
+已完成：
 
-### 阶段 1：预处理与索引 MVP（1-2 天）
+- `QueryRequest` 固定为 `scene/session_id/hospital_scope/user_message`，必填字段按冻结协议校验。
+- `triage_result` 收口为 `COLLECTING/READY/BLOCKED` 三态判别联合。
+- `/api/v1/query` 与 `/api/v1/query/stream` validation/AppError 使用 query 错误结构：
 
-- 实现 `KnowledgePrepareService`
-- 输入：`document_id + knowledge_base_id + source_uri/source_type`
-- 输出：稳定 chunk payload
-- Java 基于 payload 持久化 `knowledge_chunk`
-- 实现 `KnowledgeIndexer`
-- 输入：`document_id + knowledge_base_id`
-- 输出：`knowledge_chunk_index` upsert
-- 幂等键：`chunk_id`
-- Python 根据 `document_id` 自行读取已持久化的 `knowledge_chunk`
-- Java 在索引成功后更新 `knowledge_document` 可用状态；解析或索引失败均禁止误标为可用
-- 预留失败重试与重建索引入口
-
-### 阶段 2：检索 MVP（1-2 天）
-
-- 实现 `Retriever`
-- pgvector 向量召回 + tsvector 关键词召回
-- RRF 融合
-- 写入 `ai_run_citation(model_run_id, chunk_id, retrieval_rank, ...)`
-- 加入阈值过滤与无结果降级路径
-
-### 阶段 3：生成与护栏（1-2 天）
-
-- 实现 `RagPipeline`
-- 接入 LLM
-- 接入基础护栏与免责声明
-- 返回 `answer/summary/citations/risk_level/guardrail_action`
-- Java 回填 `ai_model_run`、`ai_turn_content`、`ai_guardrail_event`
-- 明确超时、模型不可用、检索失败三类降级分支
-
-### 阶段 4：治理与可观测性（1-2 天）
-
-- SSE `meta/end/error`
-- Java -> Python `X-Request-Id` 透传与响应头回写
-- 检索/生成耗时拆分日志
-- Java Client 错误映射（成功/超时/异常/降级）
-- AI 原文访问审计与对象级授权用例
-
-### 阶段 5：质量与演示收口（1-2 天）
-
-- mock embedding / mock PostgreSQL 测试
-- 黄金问答集回归
-- 随机抽样验证 `request_id` 跨服务串联
-- 与 P0 主链路联调：AI 导诊/摘要结果可进入挂号与接诊演示
-
-## 5. 配置建议
-
-```bash
-EMBEDDING_PROVIDER=openai_compatible
-EMBEDDING_MODEL=text-embedding-v4
-EMBEDDING_BASE_URL=<阿里百炼兼容端点>
-EMBEDDING_API_KEY=<阿里百炼 API Key>
-
-RAG_TOP_K=5
-RAG_VECTOR_TOP_K=30
-RAG_KEYWORD_TOP_K=30
-RAG_SCORE_THRESHOLD=0.20
+```json
+{
+  "request_id": "req_01",
+  "error": {
+    "code": "TRIAGE_REQUEST_INVALID",
+    "message": "Invalid request: body.user_message"
+  }
+}
 ```
 
-## 6. 交付顺序
+- `/ready` 使用 PostgreSQL `SELECT 1` 验证连接。
+- 新增最小 DB 层和薄 SQL 仓储函数。
 
-1. `knowledge/prepare` + `knowledge/index` + 文档状态流转
-2. `knowledge/search` + `ai_run_citation`
-3. `chat` + Java 回填
-4. `chat/stream` + 错误契约 + `request_id`
-5. 审计/观测补齐 + 黄金集与回归脚本
+### 第二批：Redis 目录与状态机
+
+- 读取 `triage_catalog:active:{hospital_scope}`。
+- 读取 `triage_catalog:{hospital_scope}:{catalog_version}`。
+- 实现输入护栏，命中高风险时写 `ai_guardrail_event`。
+- 实现本地状态机收口：护栏、目录、模型材料、JSON/schema 校验、目录内科室校验、高风险后处理、最大回合数收口、映射三态结果。
+- 第 5 个患者回合不得继续返回 `COLLECTING`。
+
+### 第三批：DeepSeek 调用与模型留痕
+
+- 使用现有 OpenAI 兼容客户端调用 DeepSeek。
+- 配置来自 `LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY`。
+- 缺少 `LLM_API_KEY` 时显式失败。
+- DeepSeek 只生成 `triage_materials`；Python 负责业务状态收口。
+- 写入 `ai_model_run`、`ai_run_artifact`。
+
+### 第四批：RAG 检索与 citations
+
+- 读取当前 hospital scope 下可用知识库和发布索引版本。
+- 执行向量/关键词/融合检索。
+- 写入 `retrieval_hit` 与 `answer_citation`。
+- `triage_result.citations` 来自 `answer_citation`。
+
+### 第五批：结构化结果落库与同步接口
+
+- `/api/v1/query` 完整执行一次 workflow。
+- 创建或读取 `ai_session`。
+- 创建 `ai_turn` 与 `query_run`。
+- 根据最终三态写 `query_result_snapshot`。
+- `COLLECTING` 写 `query_result_follow_up_question`。
+- `READY` 写 `query_result_department`。
+- 更新 `ai_turn`、`ai_session`、`query_run.status`。
+
+### 第六批：真实 SSE
+
+- `/api/v1/query/stream` 输出真实 `text/event-stream`。
+- 事件固定为 `start/progress/delta/final/error/done`。
+- `final` 中的 `triage_result` 是唯一业务真相。
+- `delta` 只用于展示自然语言，不驱动业务状态。
+
+### 第七批：端到端测试与联调
+
+- DTO 与错误协议测试。
+- Redis 目录缺失、版本缺失、非目录科室测试。
+- 第 5 轮强制收口测试。
+- 高风险 `BLOCKED` 测试。
+- 同步与 SSE 主链路测试。
+
+## 5. 当前验证命令
+
+```bash
+uv run python3 -m pytest
+uv run ruff check
+```
+
+说明：在部分沙箱环境中，直接 `uv run pytest` 可能因为 import path 或 uv cache 权限失败；以本仓库当前验证命令为准。

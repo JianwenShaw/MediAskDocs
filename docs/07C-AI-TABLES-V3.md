@@ -2,7 +2,7 @@
 
 > 本文对 V3 AI 相关表做逐表、逐重点字段说明。
 >
-> 读法说明：本文保留 V3 的完整目标设计；当前实现优先级以 `docs/00A-P0-BASELINE.md` 与 `docs/07E-DATABASE-PRIORITY.md` 为准。`P0` 必做的是 AI 会话、模型运行、知识库、检索投影和引用追溯，`ai_feedback_*` 与部分通用产物展示属于 `P1`。
+> 读法说明：本文保留 V3 旧目标设计；RAG Python 服务最新 AI/RAG 表结构以 `docs/proposals/rag-python-service-design/01-authoritative-ddl.md` 与 `04-postgresql-ddl-v1.sql` 为准。本文中关于 Java 维护 `ai_session/ai_model_run`、Python 只写 `knowledge_chunk_index/ai_run_citation` 的内容不再作为新的实现依据。
 
 ## 1. 设计总原则
 

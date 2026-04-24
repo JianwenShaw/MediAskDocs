@@ -1,8 +1,10 @@
-# PostgreSQL + pgvector RAG 数据库设计（Baseline）
+# PostgreSQL + pgvector RAG 数据库设计（Legacy Baseline）
 
-> 状态：Authoritative Baseline
+> 状态：Legacy Reference
 >
 > 适用阶段：毕业设计 `P0 / P1`
+>
+> 当前口径：RAG Python 服务的最新数据库真相已迁移到 `docs/proposals/rag-python-service-design/01-authoritative-ddl.md` 与 `04-postgresql-ddl-v1.sql`。本文保留为旧设计参考；涉及 `ai_run_citation`、Java 预创建 `ai_model_run`、旧 `knowledge/*` 接口、Java/Python 写库边界的内容不再作为新的实现依据。
 >
 > 核心前提：本项目当前允许破坏式更新、无历史数据迁移负担，AI / RAG 是第一核心，数据库设计优先服务于“可检索、可引用、可审计、可复核”的智能医疗辅助问诊主链路。
 

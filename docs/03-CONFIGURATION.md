@@ -201,7 +201,7 @@ deploy/
 
 | 依赖项 | 不可用时的行为 | 标记 |
 |--------|---------------|------|
-| **Embedding API** | Python 返回无 RAG 的纯 LLM 响应 | `ai_model_run.is_degraded = true` |
+| **Embedding API** | 影响 RAG 正确性时 Python query 直接失败，不提交脏结果 | query 错误协议 |
 | **Redis** | Java 后端启动失败（Redis 为必需依赖） | 启动检查失败，拒绝启动 |
 | **PostgreSQL** | 所有服务启动失败 | 启动检查失败，拒绝启动 |
 | **Python AI 服务** | Java 后端返回 AI 服务不可用错误（ErrorCode 6001） | 业务降级，非 AI 功能正常 |
@@ -223,13 +223,13 @@ deploy/
 | **Redis 连接** | `spring.data.redis.*` | `REDIS_HOST/PORT/PASSWORD` | 指向同一 Redis 实例 |
 | **Request ID Header** | `X-Request-Id`（硬编码） | `X-Request-Id`（硬编码） | 协议约定，不可配置化；`X-Trace-Id` 仅兼容旧口径 |
 | **Java 对外响应** | `Result<T>` | 前端只依赖 Java 对外协议：`{code, msg, data, requestId, timestamp}` | 协议约定，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) |
-| **Python 失败响应** | Java 按统一错误结构解析 | Python 失败体固定为 `{code, msg, requestId, timestamp}`；成功体保持端点 DTO | 协议约定，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) |
+| **Python 失败响应** | Java 按端点错误结构解析 | 新 query 接口失败体固定为 `{request_id,error:{code,message}}`；旧非 query 接口可继续使用 `{code,msg,requestId,timestamp}` | 协议约定，详见 [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) |
 
 ### 6.2 数据库写入边界
 
 详见 [01-OVERVIEW.md §7.2](./01-OVERVIEW.md)。配置层面需确保：
 - Java 侧 DB 用户拥有业务表的完整读写权限
-- Python 侧 DB 用户**仅**拥有 `knowledge_chunk_index` 和 `ai_run_citation` 的写权限 + 所有表的读权限
+- Python 侧 DB 用户需要 Python 自有 `ai_*`、`query_*`、`knowledge_*`、`retrieval_hit`、`answer_citation` 表的读写权限
 
 ---
 

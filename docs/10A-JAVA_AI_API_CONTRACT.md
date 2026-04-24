@@ -12,14 +12,14 @@
 - Java 对外 `JSON` 接口统一使用 `Result<T>`：`{code, msg, data, requestId, timestamp}`
 - Java 对外 `JSON` 中涉及业务主键的 `Long/long` 字段统一按字符串返回，前端按字符串处理 `sessionId`、`turnId`、`encounterId`、`chunkId` 等 ID
 - 对外响应中的业务 ID 字符串化、业务日期格式、业务日期时间格式必须在响应 DTO 上显式声明；不要依赖全局 Jackson 配置隐式兜底
-- Python 内部返回 `risk_level`、`guardrail_action`、`citations` 等执行结果；Java 负责整理成前端可直接消费的业务结果
+- Python 内部返回 `request_id/session_id/turn_id/query_run_id/triage_result`；Java 负责整理成前端可直接消费的业务结果
 - AI 结果必须能承接到挂号和医生接诊，而不是停留在一段聊天文本
 - 导诊结构化结果采用单真相模型：`chat`、`triage-result`、`registration-handoff` 共享同一份已持久化 run 结果
 
 ## 2. P0 必须打通的用户链路
 
 1. 患者发起 AI 问诊
-2. 前端接收回答、引用和风险结果；如需流式观感，由上层基于完整回答做伪流式展示
+2. 前端接收聊天展示内容和 `triageResult`；流式场景只以 Python `final` 事件中的结构化结果驱动跳页
 3. 患者查看导诊结果与推荐科室
 4. 患者从 AI 结果跳转挂号
 5. 医生在接诊页查看 AI 摘要
@@ -33,7 +33,6 @@
 | `GET /api/v1/ai/sessions/{sessionId}` | 会话详情与轮次列表 | 患者 H5 |
 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 导诊结果、风险结果、引用与推荐科室 | 患者 H5 |
 | `POST /api/v1/ai/sessions/{sessionId}/registration-handoff` | 从 AI 结果生成挂号承接参数 | 患者 H5 |
-| `GET /api/v1/internal/triage-department-catalogs/{hospitalScope}` | 仅供 Python 拉取可导诊目录 | Python 内部 |
 | `GET /api/v1/encounters/{encounterId}/ai-summary` | 医生查看接诊前 AI 摘要 | 医生 Web |
 
 ## 4. 问诊请求
@@ -93,11 +92,12 @@
 - `followUpQuestions` 只出现在 `POST /api/v1/ai/chat` 的 `COLLECTING` 场景，不出现在 `GET /triage-result`
 - `followUpQuestions` 最多返回 2 个
 
-## 5. 伪流式展示
+## 5. 流式展示
 
-- Python 内部服务收口为 `POST /api/v1/chat`
-- Java 或前端如需“边打字边显示”的体验，只允许基于完整 `answer` 做展示层伪流式切片
-- 结构化真相仍只来自完整 `triageResult`，不从伪流式文本中反解析推荐科室、风险状态或跳转动作
+- Python 内部服务收口为 `POST /api/v1/query` 与 `POST /api/v1/query/stream`
+- Java 透传或聚合 SSE 时，只能以 Python `final` 事件中的 `triage_result` 作为业务真相
+- `delta` 只用于聊天展示，不得用于推荐科室、风险状态或页面跳转判断
+- 结构化真相仍只来自完整 `triageResult`，不从自然语言文本中反解析推荐科室、风险状态或跳转动作
 
 ## 6. 导诊结果与挂号承接
 

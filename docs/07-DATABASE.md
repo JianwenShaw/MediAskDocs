@@ -3,7 +3,7 @@
 > 本文档为 V3 全量目标数据库设计说明；SQL 落地应与本文档保持同步。
 > 当前仓库仍处于本地开发阶段，V3 设计按"无历史数据、允许破坏式更新"原则整体重建。
 > 本文描述的是 V3 全量目标架构；毕业设计当前落地范围与实现优先级，以 `docs/07E-DATABASE-PRIORITY.md` 中的 `P0 / P1 / P2` 划分为准。
-> RAG 数据库设计（检索投影层、引用追溯层）的完整方案，详见 `docs/20-RAG_DATABASE_PGVECTOR_DESIGN.md`。
+> RAG Python 服务最新数据库方案以 `docs/proposals/rag-python-service-design/01-authoritative-ddl.md` 与 `04-postgresql-ddl-v1.sql` 为准；本文中旧 `ai_run_citation`、Java 预创建模型运行等描述仅作历史参考。
 
 ## 0. 当前阶段怎么读本文
 
