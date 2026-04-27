@@ -9,3 +9,6 @@
 
 \echo '[mediask] seed emr and prescription fixtures'
 \ir 99-seed-05-medical.sql
+
+\echo '[mediask] seed rag fixtures'
+\ir 99-seed-06-rag.sql
