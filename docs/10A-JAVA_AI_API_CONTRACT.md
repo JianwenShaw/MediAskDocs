@@ -253,15 +253,16 @@
 - 默认返回未来 7 天的挂号查询窗口：`dateFrom = 今天`，`dateTo = 今天 + 6 天`
 - 如果 `riskLevel = high`，则返回 `blockedReason = EMERGENCY_OFFLINE`，不生成普通挂号承接参数；此时 `suggestedVisitType`、`registrationQuery`、推荐挂号科室字段返回 `null`
 
-### 6.4 `GET /api/v1/internal/triage-department-catalogs/{hospitalScope}`
+### 6.4 `POST /api/v1/admin/triage-catalog/publish`
 
-用途：供 Python 拉取当前医院范围下的可导诊目录。
+用途：由 Java 管理端显式发布当前医院范围下的可导诊目录到 Redis，供 Python 只读消费。
 
 规则：
 
-- 该接口仅供内部调用，需携带 `X-API-Key`
-- 该接口直接返回 raw JSON，不包 `Result<T>`
-- 字段名固定为 snake_case
+- 该接口需要登录态和 `admin:triage-catalog:publish` 权限
+- 该接口返回 `Result<T>`，`data` 至少包含 `catalogVersion`、`candidateCount`、`publishedAt`
+- Python 不再通过 HTTP 拉取目录，只读取 Redis key：`triage_catalog:active:{hospital_scope}` 和 `triage_catalog:{hospital_scope}:{catalog_version}`
+- Redis content JSON 字段名固定为 snake_case，字段结构以 `docs/proposals/03-redis-catalog-contract.md` 为准
 - 对外暴露的是“可导诊目录”语义，不等于 `departments` 全量
 - 本轮目录由 Java 基于现有 `departments` 做受控投影生成，不新增独立目录表
 

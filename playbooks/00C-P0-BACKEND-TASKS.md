@@ -147,7 +147,7 @@
 - [ ] Python 负责检索、生成、护栏、引用写入
 - [x] Java 负责会话主事实、对外协议、审计串联
 - [x] `ai_model_run.triage_snapshot_json` 作为 finalized 导诊真相
-- [x] `GET /api/v1/internal/triage-department-catalogs/{hospitalScope}` 内部目录接口
+- [x] Java 通过 `POST /api/v1/admin/triage-catalog/publish` 发布 Redis 导诊目录，Python 只读 `triage_catalog:*`
 
 ### 验收标准
 

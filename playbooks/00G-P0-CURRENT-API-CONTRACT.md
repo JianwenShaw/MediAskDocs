@@ -618,20 +618,25 @@
 
 - 当前只消费最近一次 finalized snapshot，不再从聊天文本或收集中轮次临时反组装
 
-### 10.7 `GET /api/v1/internal/triage-department-catalogs/{hospitalScope}`
+### 10.7 `POST /api/v1/admin/triage-catalog/publish`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
-| 认证 | 需要 `X-API-Key`，仅供 Python 内部调用 |
-| 路径参数 | `hospitalScope` |
-| 响应结构 | 直接返回原始 JSON；不包 `Result<T>` |
-| 响应字段 | `hospital_scope`、`department_catalog_version`、`department_candidates[]` |
+| 认证/身份 | 已登录 + `ADMIN` 权限 `admin:triage-catalog:publish` |
+| 查询参数 | `hospitalScope?`，默认 `default` |
+| 响应结构 | `Result<T>` |
+| 响应字段 | `catalogVersion`、`candidateCount`、`publishedAt` |
+| Redis active key | `triage_catalog:active:{hospital_scope}` |
+| Redis content key | `triage_catalog:{hospital_scope}:{catalog_version}` |
+| Redis content 字段 | `hospital_scope`、`catalog_version`、`published_at`、`department_candidates[]` |
 | `department_candidates[]` | `department_id`、`department_name`、`routing_hint`、`aliases[]`、`sort_order` |
 
 补充说明：
 
-- 当前目录语义是“可导诊目录”，不是 `departments` 全量透出
-- 当前实现由 Java 基于活动中的临床科室做受控投影，不新增独立目录表
+- 当前目录语义是“可导诊目录”，不是 `departments` 全量透出。
+- 当前实现由 Java 基于活动中的临床科室做受控投影，不新增独立目录表。
+- Python 不调用 Java 内部 HTTP 目录接口，只按 `docs/proposals/03-redis-catalog-contract.md` 读取 Redis。
+- `publishedAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
 
 ## 11. 当前已实现处方接口
 
