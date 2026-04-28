@@ -19,6 +19,7 @@
 | `01-python-api-contract.md` | Java → Python HTTP API、triage_result、状态机、失败契约 |
 | `02-gateway-api-contract.md` | Frontend → Java Gateway API、前端行为冻结 |
 | `03-redis-catalog-contract.md` | Redis 导诊目录合同 |
+| `04-knowledge-admin-api-contract.md` | 知识库后台管理的 Java 网关职责与 Python API 合同 |
 
 ---
 
@@ -28,8 +29,8 @@
 
 | 参与方 | 职责 |
 |--------|------|
-| **Python** | DeepSeek 调用、护栏、状态机收口、生成最终 `triage_result`、读取 Redis 导诊目录 |
-| **Java** | 业务主数据、发布 Redis 导诊目录、唯一对外网关（JWT / CORS）、接收并持久化 finalized 结果、导诊结果页与挂号承接 |
+| **Python** | DeepSeek 调用、护栏、状态机收口、生成最终 `triage_result`、读取 Redis 导诊目录、拥有知识库治理与 RAG 内部事实 |
+| **Java** | 业务主数据、发布 Redis 导诊目录、唯一对外网关（JWT / CORS / RBAC / 审计）、接收并持久化 finalized 结果、导诊结果页与挂号承接 |
 | **Frontend** | 展示聊天流和结果页，只根据 `final` 事件或同步响应里的 `triage_result` 跳页 |
 
 ### 2.2 通信架构
@@ -60,6 +61,15 @@ Frontend (port 3000/5173)
 
 **前端只与 Java (8989) 通信，不直连 Python。**
 
+对 Python 自有领域，Java 作为有职责的网关/BFF：
+
+- 校验登录态、角色、权限和院区范围
+- 生成并透传 `X-Request-Id`
+- 向 Python 透传可信用户上下文
+- 记录后台操作审计
+- 调用 Python API，不直接读取 Python 数据库
+- 不重新实现 Python 的知识库、ingestion、索引版本和发布状态机
+
 ### 2.3 明确禁止
 
 - Frontend 从流式 `delta` 文本推断业务状态或推荐科室
@@ -67,6 +77,7 @@ Frontend (port 3000/5173)
 - Java 根据 `department_name` 模糊匹配科室 ID
 - Java 根据流式文本判断是否进入结果页
 - Python 在 query 主链路中实时拉取 Java 内部 HTTP 目录接口（目录从 Redis 读取）
+- Java 直接查询 Python 的 `knowledge_*`、`ingest_job`、`retrieval_hit`、`answer_citation` 表
 
 ---
 

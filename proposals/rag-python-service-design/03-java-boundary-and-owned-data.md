@@ -10,11 +10,21 @@
 
 **Java 不再读取 Python RAG 服务内部 AI 表。**
 
-Java 只做三件事：
+Java 在导诊业务链路只做三件事：
 
 - 维护业务主数据
 - 发布 Redis 导诊目录
 - 调用 Python API 并消费最终结构化 `triage_result`
+
+在知识库后台管理链路，Java 作为有职责的网关/BFF：
+
+- 校验 JWT、RBAC 和院区范围
+- 生成并透传 `X-Request-Id`
+- 向 Python 传递可信用户上下文
+- 记录后台操作审计
+- 调用 Python 知识库管理 API
+
+Java 不拥有 Python 的知识库、入库任务、索引版本和发布事实。
 
 ## 2. Python 与 Java 的数据边界
 
@@ -96,6 +106,8 @@ Java 调用：
 
 - `POST /api/v1/query`
 - `POST /api/v1/query/stream`
+- `/api/v1/admin/knowledge-*`
+- `/api/v1/admin/ingest-jobs/*`
 
 Java 只消费 Python 返回的：
 
@@ -104,8 +116,26 @@ Java 只消费 Python 返回的：
 - `turn_id`
 - `query_run_id`
 - `triage_result`
+- 知识库后台 API DTO
 
 运行时不再需要数据库直连读取 Python 内部事实。
+
+### 4.3 知识库后台网关规则
+
+知识库后台页面仍然走 Java：
+
+```text
+Frontend -> Java /api/v1/admin/knowledge-* -> Python /api/v1/admin/knowledge-*
+```
+
+Java 在这条链路上只做入口职责，不做 Python 知识库领域逻辑：
+
+- 可以做认证、授权、审计、错误映射、响应包装
+- 不直接查 `knowledge_base`、`knowledge_document`、`knowledge_chunk`
+- 不直接查 `ingest_job`、`knowledge_index_version`、`knowledge_release`
+- 不重新实现文档入库、索引构建、发布切换
+
+具体接口合同见 `docs/proposals/04-knowledge-admin-api-contract.md`。
 
 ## 5. Java 应该保留的 AI 结果数据
 
