@@ -23,7 +23,19 @@ VALUES
     (1116, 'admin:patient:delete', '后台删除患者', 'API', 'ACTIVE', 160),
     (1124, 'encounter:update', '更新接诊状态', 'API', 'ACTIVE', 240),
     (1125, 'prescription:create', '创建处方', 'API', 'ACTIVE', 250),
-    (1126, 'prescription:read', '查看处方', 'API', 'ACTIVE', 260)
+    (1126, 'prescription:read', '查看处方', 'API', 'ACTIVE', 260),
+    (1127, 'admin:triage-catalog:publish', '发布导诊目录', 'API', 'ACTIVE', 270),
+    (1128, 'admin:knowledge-base:list', '知识库列表', 'API', 'ACTIVE', 280),
+    (1129, 'admin:knowledge-base:create', '创建知识库', 'API', 'ACTIVE', 290),
+    (1130, 'admin:knowledge-base:update', '更新知识库', 'API', 'ACTIVE', 300),
+    (1131, 'admin:knowledge-base:delete', '删除知识库', 'API', 'ACTIVE', 310),
+    (1132, 'admin:knowledge-document:import', '导入知识文档', 'API', 'ACTIVE', 320),
+    (1133, 'admin:knowledge-document:list', '知识文档列表', 'API', 'ACTIVE', 330),
+    (1134, 'admin:knowledge-document:delete', '删除知识文档', 'API', 'ACTIVE', 340),
+    (1135, 'admin:knowledge-ingest-job:view', '查看知识入库任务', 'API', 'ACTIVE', 350),
+    (1136, 'admin:knowledge-index-version:list', '知识索引版本列表', 'API', 'ACTIVE', 360),
+    (1137, 'admin:knowledge-release:list', '知识发布记录列表', 'API', 'ACTIVE', 370),
+    (1138, 'admin:knowledge-release:publish', '发布知识库版本', 'API', 'ACTIVE', 380)
 ON CONFLICT (permission_code) DO NOTHING;
 
 INSERT INTO role_permissions (id, role_id, permission_id)
@@ -47,7 +59,19 @@ VALUES
     (1227, 1001, 1105),
     (1228, 1002, 1124),
     (1229, 1002, 1125),
-    (1230, 1002, 1126)
+    (1230, 1002, 1126),
+    (1231, 1003, 1127),
+    (1232, 1003, 1128),
+    (1233, 1003, 1129),
+    (1234, 1003, 1130),
+    (1235, 1003, 1131),
+    (1236, 1003, 1132),
+    (1237, 1003, 1133),
+    (1238, 1003, 1134),
+    (1239, 1003, 1135),
+    (1240, 1003, 1136),
+    (1241, 1003, 1137),
+    (1242, 1003, 1138)
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- admin / admin123

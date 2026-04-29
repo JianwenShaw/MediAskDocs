@@ -21,7 +21,7 @@
 |------|----------|------|
 | Task A：公共协议与请求上下文 | 完成 | `Result<T>`、错误处理、`requestId`、JWT、健康检查、结构化日志基线已完成；AI 浏览器外部协议已收口为普通 `JSON` 接口 |
 | Task B：认证、角色、数据范围基线 | 部分完成 | 登录/刷新/登出/当前用户、本人资料、管理员患者管理已完成；对象级授权仍缺资源解析实现 |
-| Task C：知识库与 RAG 底座 | 未完成 | 表结构与 Java AI client 骨架已在仓库中，知识导入与索引链路未开始 |
+| Task C：知识库与 RAG 底座 | 部分完成 | Java 已按最新边界收口为知识库后台网关；知识库事实、入库任务、索引版本和发布状态由 Python 拥有 |
 | Task D：AI 问诊主链路 | 部分完成 | `chat/sessions/triage-result`、会话持久化、`triageStage`、5 回合强制收口、`triage_snapshot_json` 已落地；Python RAG 写库与联调仍待完成 |
 | Task E：AI 到挂号承接 | 部分完成 | `registration-handoff` 已改为只消费最近一次 finalized snapshot；完整联调与 AI 来源校验仍待补强 |
 | Task F：医生接诊、病历、处方 | 大体完成 | 接诊列表、接诊详情、AI 摘要、病历、处方已完成；剩余主要缺口是对象级授权与审计留痕 |
@@ -89,28 +89,31 @@
 
 ### 交付物
 
-- [x] 知识库后台管理接口：`GET /api/v1/admin/knowledge-bases`
-- [x] 知识库后台管理接口：`POST /api/v1/admin/knowledge-bases`
-- [x] 知识库后台管理接口：`PATCH /api/v1/admin/knowledge-bases/{id}`
-- [x] 知识库后台管理接口：`DELETE /api/v1/admin/knowledge-bases/{id}`
-- [x] Java 侧 AI client / DTO / 错误映射骨架
-- [x] 知识文档入库最小后台接口：`POST /api/v1/admin/knowledge-documents/import`（`multipart/form-data` 文件上传）
-- [x] 知识文档后台管理接口：`GET /api/v1/admin/knowledge-documents`
-- [x] 知识文档后台管理接口：`DELETE /api/v1/admin/knowledge-documents/{id}`
-- [x] Java 调 Python 解析原始文档并接收 chunk payload
-- [x] `knowledge_document` / `knowledge_chunk` 持久化
-- [x] Java 调 Python 建立索引
+- [x] Java 知识库后台网关接口：`GET /api/v1/admin/knowledge-bases`
+- [x] Java 知识库后台网关接口：`POST /api/v1/admin/knowledge-bases`
+- [x] Java 知识库后台网关接口：`PATCH /api/v1/admin/knowledge-bases/{id}`
+- [x] Java 知识库后台网关接口：`DELETE /api/v1/admin/knowledge-bases/{id}`
+- [x] Java 知识文档后台网关接口：`POST /api/v1/admin/knowledge-documents/import`（`multipart/form-data` 文件上传）
+- [x] Java 知识文档后台网关接口：`GET /api/v1/admin/knowledge-documents`
+- [x] Java 知识文档后台网关接口：`DELETE /api/v1/admin/knowledge-documents/{id}`
+- [x] Java 入库任务/索引版本/发布记录网关接口：`ingest-jobs`、`knowledge-index-versions`、`knowledge-releases`
+- [x] Java 转发 `X-Request-Id`、`X-Actor-Id`、`X-Hospital-Scope`
+- [ ] Python 实现知识库治理、文档入库、索引构建和发布状态机
 - [ ] Python 写 `knowledge_chunk_index`
 
 ### 关键接口
 
-- [x] Java：`GET /api/v1/admin/knowledge-bases`
-- [x] Java：`POST /api/v1/admin/knowledge-bases`
-- [x] Java：`PATCH /api/v1/admin/knowledge-bases/{id}`
-- [x] Java：`DELETE /api/v1/admin/knowledge-bases/{id}`
-- [x] Java：`POST /api/v1/admin/knowledge-documents/import`
-- [x] Java：`GET /api/v1/admin/knowledge-documents`
-- [x] Java：`DELETE /api/v1/admin/knowledge-documents/{id}`
+- [x] Java 网关：`GET /api/v1/admin/knowledge-bases`
+- [x] Java 网关：`POST /api/v1/admin/knowledge-bases`
+- [x] Java 网关：`PATCH /api/v1/admin/knowledge-bases/{id}`
+- [x] Java 网关：`DELETE /api/v1/admin/knowledge-bases/{id}`
+- [x] Java 网关：`POST /api/v1/admin/knowledge-documents/import`
+- [x] Java 网关：`GET /api/v1/admin/knowledge-documents`
+- [x] Java 网关：`DELETE /api/v1/admin/knowledge-documents/{id}`
+- [x] Java 网关：`GET /api/v1/admin/ingest-jobs/{job_id}`
+- [x] Java 网关：`GET /api/v1/admin/knowledge-index-versions`
+- [x] Java 网关：`GET /api/v1/admin/knowledge-releases`
+- [x] Java 网关：`POST /api/v1/admin/knowledge-releases`
 - [ ] Python：`/api/v1/knowledge/prepare`
 - [ ] Python：`/api/v1/knowledge/index`
 - [ ] Python：`/api/v1/knowledge/search`
@@ -118,7 +121,7 @@
 ### 验收标准
 
 - [ ] 至少一套知识文档可被检索命中
-- [ ] `knowledge_chunk_index` 由 Python 写入
+- [ ] 知识库事实、文档入库任务、索引版本和发布记录由 Python 写入并查询
 
 ## 3.4 Task D：AI 问诊主链路
 

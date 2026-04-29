@@ -209,6 +209,19 @@ mediask:
     algorithm: AES/GCM/NoPadding                           # 加密算法
 ```
 
+#### Java 调 Python 的 HTTP 协议约束
+
+Java 侧通过 Spring `RestClient` 调用本地 Python FastAPI / Uvicorn 服务时，必须固定使用 HTTP/1.1。
+
+原因：
+
+- Spring `RestClient` 在未显式指定 `ClientHttpRequestFactory`，且类路径中没有 Apache HttpClient / Jetty / Reactor Netty 客户端时，会退到 JDK `java.net.http.HttpClient`
+- JDK HttpClient 默认可能对明文 `http://localhost:8000` 发起 HTTP/2 h2c upgrade
+- Uvicorn 只支持普通 HTTP/1.1 和 WebSocket upgrade，不支持 h2c upgrade
+- 当 Python 日志出现 `WARNING: Unsupported upgrade request.`、`WARNING: Invalid HTTP request received.`，并且后台 POST 接口记录 `content_type=application/json` 但 `request_body_length=0` 时，应优先排查 Java HTTP 客户端是否发出了 h2c upgrade
+
+当前 Java 知识库后台网关使用 `JdkClientHttpRequestFactory` 包装显式配置为 `HttpClient.Version.HTTP_1_1` 的 JDK HttpClient。不要改回未指定版本的默认 `RestClient.Builder.build()`，否则本地 Java -> Python 调用可能再次出现 Uvicorn upgrade warning 和空 body 校验失败。
+
 ### 3.4 API 文档
 
 ```yaml

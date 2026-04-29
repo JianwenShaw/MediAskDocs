@@ -61,13 +61,17 @@
 | 管理员患者管理 | `POST /api/v1/admin/patients` | 已登录 + 管理员患者创建权限 | 后台创建患者账户和患者档案 |
 | 管理员患者管理 | `PUT /api/v1/admin/patients/{patientId}` | 已登录 + 管理员患者更新权限 | 后台更新指定患者档案 |
 | 管理员患者管理 | `DELETE /api/v1/admin/patients/{patientId}` | 已登录 + 管理员患者删除权限 | 后台软删除指定患者 |
-| 知识库后台管理 | `GET /api/v1/admin/knowledge-bases` | 已登录 + 知识库列表权限 | 后台分页查询知识库，并返回每个知识库的 `docCount` |
-| 知识库后台管理 | `POST /api/v1/admin/knowledge-bases` | 已登录 + 知识库创建权限 | 后台创建知识库 |
-| 知识库后台管理 | `PATCH /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库更新权限 | 后台更新知识库治理字段或启停状态 |
-| 知识库后台管理 | `DELETE /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库删除权限 | 后台物理删除知识库及其下游文档/chunk |
-| 知识文档后台管理 | `POST /api/v1/admin/knowledge-documents/import` | 已登录 + 知识文档导入权限 + 依赖 AI service 配置 | 后台上传文档并触发 prepare/index 链路 |
-| 知识文档后台管理 | `GET /api/v1/admin/knowledge-documents` | 已登录 + 知识文档列表权限 | 后台按知识库分页查询文档及处理状态 |
-| 知识文档后台管理 | `DELETE /api/v1/admin/knowledge-documents/{documentId}` | 已登录 + 知识文档删除权限 | 后台物理删除文档及其下游 chunk |
+| 知识库后台管理 | `GET /api/v1/admin/knowledge-bases` | 已登录 + 知识库列表权限 | Java 网关转发到 Python 知识库列表接口 |
+| 知识库后台管理 | `POST /api/v1/admin/knowledge-bases` | 已登录 + 知识库创建权限 | Java 网关转发到 Python 知识库创建接口 |
+| 知识库后台管理 | `PATCH /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库更新权限 | Java 网关转发到 Python 知识库更新接口 |
+| 知识库后台管理 | `DELETE /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库删除权限 | Java 网关转发到 Python 知识库归档接口 |
+| 知识文档后台管理 | `POST /api/v1/admin/knowledge-documents/import` | 已登录 + 知识文档导入权限 + 依赖 `mediask.ai.base-url` | Java 网关转发上传文件到 Python 入库接口 |
+| 知识文档后台管理 | `GET /api/v1/admin/knowledge-documents` | 已登录 + 知识文档列表权限 | Java 网关转发到 Python 文档列表接口 |
+| 知识文档后台管理 | `DELETE /api/v1/admin/knowledge-documents/{documentId}` | 已登录 + 知识文档删除权限 | Java 网关转发到 Python 文档删除接口 |
+| 知识库后台管理 | `GET /api/v1/admin/ingest-jobs/{jobId}` | 已登录 + 入库任务查看权限 | Java 网关转发到 Python 入库任务详情接口 |
+| 知识库后台管理 | `GET /api/v1/admin/knowledge-index-versions` | 已登录 + 索引版本列表权限 | Java 网关转发到 Python 索引版本列表接口 |
+| 知识库后台管理 | `GET /api/v1/admin/knowledge-releases` | 已登录 + 发布记录列表权限 | Java 网关转发到 Python 发布记录列表接口 |
+| 知识库后台管理 | `POST /api/v1/admin/knowledge-releases` | 已登录 + 发布权限 | Java 网关转发到 Python 发布接口 |
 | AI 问诊 | `POST /api/v1/ai/chat` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起非流式问诊，返回 `answer + triageResult` |
 | AI 会话列表 | `GET /api/v1/ai/sessions` | 已登录 + `PATIENT` 角色 + 仅患者本人 + 依赖 AI service 配置 | 返回当前患者的 AI 会话最小摘要列表 |
 | AI 会话回看 | `GET /api/v1/ai/sessions/{sessionId}` | 已登录 + `PATIENT` 角色 + 仅患者本人 + 依赖 AI service 配置 | 返回指定会话的基础信息、轮次和消息内容 |
@@ -374,62 +378,51 @@
 - 当前仅 `CONFIRMED` 状态允许取消；其他状态会触发 `409 + 3006`。
 - 取消时要求 slot 当前为 `BOOKED`，成功后回退为 `AVAILABLE`。
 
-## 8. 知识库与知识文档后台管理
+## 8. 知识库后台管理网关
 
 ### 8.1 `GET /api/v1/admin/knowledge-bases`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
 | 认证 | 需要登录态和知识库列表权限 |
-| 查询参数 | `keyword?`、`pageNum?`、`pageSize?` |
-| `keyword` 规则 | 透传到仓储层，按 `name` 或 `kbCode` 模糊搜索 |
-| `pageNum` 规则 | 默认 `1`；必须大于 `0`；最大 `10000` |
-| `pageSize` 规则 | 默认 `20`；必须大于 `0`；最大 `100` |
-| 响应结构 | `PageData`，包含 `items`、`pageNum`、`pageSize`、`total`、`totalPages`、`hasNext` |
-| 列表项字段 | `id`、`kbCode`、`name`、`ownerType`、`ownerDeptId`、`visibility`、`status`、`docCount` |
-| 真实语义 | 面向后台治理使用；`docCount` 为该知识库下文档总数 |
+| 前端查询参数 | `keyword?`、`pageNum?`、`pageSize?` |
+| Java 转 Python 查询参数 | `keyword?`、`page_num?`、`page_size?` |
+| 响应结构 | Python 返回的分页 DTO，Java 将 `data` 字段递归转为 camelCase 后外层包装 `Result<T>` |
+| 真实语义 | Java 只做认证、鉴权、请求头透传和错误映射，不查询 Java 本地 `knowledge_*` 表 |
 
 ### 8.2 `POST /api/v1/admin/knowledge-bases`
 
 | 字段 | 要求 |
 |------|------|
-| `name` | 必填；非空 |
-| `kbCode` | 必填；非空；创建后作为稳定编码，不支持后续修改 |
-| `ownerType` | 必填；当前按枚举名解析 |
-| `ownerDeptId` | 可空；当 `ownerType=DEPARTMENT` 时必填 |
-| `visibility` | 必填；当前按枚举名解析 |
+| 前端请求体 | camelCase 字段，如 `code`、`name`、`description`、`defaultEmbeddingModel`、`defaultEmbeddingDimension`、`retrievalStrategy` |
+| Java 转 Python 请求体 | 递归转为 snake_case，如 `default_embedding_model`、`default_embedding_dimension`、`retrieval_strategy` |
 
 业务语义：
 
-- 创建成功后状态固定为 `ENABLED`。
-- `ownerType`、`visibility` 在当前实现里使用 `Enum.valueOf(...)` 解析，非法值返回 `400 + 1002`。
-- `kbCode` 唯一冲突时返回业务异常。
+- Java 不解析知识库治理字段，不生成知识库 ID，不维护状态机。
+- Java 转发 `X-Request-Id`、`X-Actor-Id`、`X-Hospital-Scope`，其中 P0 `X-Hospital-Scope` 固定为 `default`。
+- Python 响应作为 `data` 转为 camelCase 后返回给前端。
 
 ### 8.3 `PATCH /api/v1/admin/knowledge-bases/{knowledgeBaseId}`
 
 | 字段 | 要求 |
 |------|------|
-| Path `knowledgeBaseId` | 必填；必须大于 `0` |
-| `name` | 可空；非空时按新名称更新 |
-| `ownerType` | 可空；非空时按枚举名解析 |
-| `ownerDeptId` | 可空；仅在请求里传 `ownerType=DEPARTMENT` 时必填 |
-| `visibility` | 可空；非空时按枚举名解析 |
-| `status` | 可空；非空时按枚举名解析 |
+| Path `knowledgeBaseId` | 必填；按字符串透传给 Python |
+| 前端请求体 | camelCase 字段；当前字段如 `name?`、`description?`、`status?` |
+| Java 转 Python 请求体 | 递归转为 snake_case 后转发 |
 
 业务语义：
 
-- 当前实现为真正的部分更新；请求体里未传的字段保持原值。
-- `kbCode` 不在更新 DTO 中，因此当前接口不支持改编码。
-- 不存在的知识库返回 `404 + 6005`。
+- Java 不判断字段是否可更新；字段约束以 Python 合同为准。
 
 ### 8.4 `DELETE /api/v1/admin/knowledge-bases/{knowledgeBaseId}`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
 | 认证 | 需要登录态和知识库删除权限 |
-| 路径参数 | `knowledgeBaseId`，必须大于 `0` |
+| 路径参数 | `knowledgeBaseId`，按字符串透传给 Python |
 | 成功响应 | `Result<Void>` |
-| 真实语义 | 后台软删除知识库；当前实现会级联软删除下游 `knowledge_document` 与 `knowledge_chunk` |
+| 真实语义 | Java 转发删除请求；归档、索引重建或发布撤销由 Python 决定 |
 
 ### 8.5 `POST /api/v1/admin/knowledge-documents/import`
 
@@ -437,40 +430,51 @@
 |------|--------------|
 | 认证 | 需要登录态和知识文档导入权限 |
 | 请求格式 | `multipart/form-data` |
-| 表单字段 | `knowledgeBaseId`、`file` |
-| 响应字段 | `documentId`、`documentUuid`、`chunkCount`、`documentStatus` |
-| 真实语义 | Java 接收上传文件，先创建 `knowledge_document` 并落存储，再调用 Python prepare/index，最后返回当前导入结果 |
+| 前端表单字段 | `knowledgeBaseId`、`file` |
+| Java 转 Python 表单字段 | `knowledge_base_id`、`file` |
+| 响应字段 | 前端收到 `documentId`、`jobId`、`lifecycleStatus`、`jobStatus` 等 camelCase 字段 |
+| 真实语义 | Java 接收上传文件后直接转发给 Python；Python 保存文件、创建文档和入库任务 |
 
 补充说明：
 
-- 该 controller 本身带 `mediask.ai.service.base-url` 和 `mediask.ai.service.api-key` 条件开关；未配置时，该接口不会暴露。
-- 当前支持的 `sourceType` 由 Java 根据文件名推断。
+- 该网关依赖 `mediask.ai.base-url`；未配置时请求失败并返回 `6001`。
+- Java 不推断 `sourceType`，不生成 `sourceUri`，不持久化 chunk。
 
 ### 8.6 `GET /api/v1/admin/knowledge-documents`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
 | 认证 | 需要登录态和知识文档列表权限 |
-| 查询参数 | `knowledgeBaseId`、`pageNum?`、`pageSize?` |
-| `knowledgeBaseId` 规则 | 必填；作为知识库过滤条件 |
-| `pageNum` 规则 | 默认 `1`；必须大于 `0`；最大 `10000` |
-| `pageSize` 规则 | 默认 `20`；必须大于 `0`；最大 `100` |
-| 响应结构 | `PageData`，包含 `items`、`pageNum`、`pageSize`、`total`、`totalPages`、`hasNext` |
-| 列表项字段 | `id`、`documentUuid`、`title`、`sourceType`、`documentStatus`、`chunkCount` |
-| 真实语义 | 只按知识库分页查文档；`chunkCount` 为该文档下 chunk 总数 |
-
-补充说明：
-
-- 当前接口不返回失败原因文本；真实表结构里没有 `last_error_message` 字段。
+| 前端查询参数 | `knowledgeBaseId`、`pageNum?`、`pageSize?` |
+| Java 转 Python 查询参数 | `knowledge_base_id`、`page_num?`、`page_size?` |
+| 响应结构 | Python 返回的分页 DTO，Java 将 `data` 字段递归转为 camelCase 后外层包装 `Result<T>` |
+| 真实语义 | Java 不查询 `knowledge_document`；列表字段以 Python API 为准 |
 
 ### 8.7 `DELETE /api/v1/admin/knowledge-documents/{documentId}`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
 | 认证 | 需要登录态和知识文档删除权限 |
-| 路径参数 | `documentId`，必须大于 `0` |
+| 路径参数 | `documentId`，按字符串透传给 Python |
 | 成功响应 | `Result<Void>` |
-| 真实语义 | 后台软删除文档；当前实现会级联软删除下游 `knowledge_chunk` |
+| 真实语义 | Java 转发删除请求；文档删除、索引重建或发布撤销由 Python 决定 |
+
+### 8.8 入库任务、索引版本与发布
+
+| 接口 | 当前代码口径 |
+|------|--------------|
+| `GET /api/v1/admin/ingest-jobs/{jobId}` | 需要入库任务查看权限；Path `jobId` 按字符串透传 |
+| `GET /api/v1/admin/knowledge-index-versions` | 需要索引版本列表权限；前端查询参数 `knowledgeBaseId`，Java 转 Python 为 `knowledge_base_id`，响应 `data` 转 camelCase |
+| `GET /api/v1/admin/knowledge-releases` | 需要发布记录列表权限；前端查询参数 `knowledgeBaseId`，Java 转 Python 为 `knowledge_base_id`，响应 `data` 转 camelCase |
+| `POST /api/v1/admin/knowledge-releases` | 需要发布权限；前端请求体 `knowledgeBaseId`、`targetIndexVersionId`，Java 转 Python 为 `knowledge_base_id`、`target_index_version_id`，响应 `data` 转 camelCase |
+
+补充说明：
+
+- Java 不读取 Python 的 `ingest_job`、`knowledge_index_version`、`knowledge_release` 表。
+- Java 当前实现用 typed request/query/payload 对象承接前端入参，再在 Python 适配器内统一转为 snake_case；不要在 Controller 中拼 Python 协议细节。
+- Java 调 Python 时按 operation 记录结构化日志，至少包含 `operation`、`requestId`、`actorId`、`hospitalScope`、`resourceId`、`durationMs`，但不记录上传文件内容。
+- Python 4xx 响应映射为 Java 侧统一 4xx 错误；其中 404 映射为 `1004`，其他 4xx 映射为 `1002`。
+- Python 5xx 或网络不可用映射为 `6001`，响应解析异常映射为 `6003`。
 
 ## 9. 医生接诊列表
 

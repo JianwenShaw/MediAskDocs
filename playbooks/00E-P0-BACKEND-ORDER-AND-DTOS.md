@@ -112,36 +112,38 @@
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
 |------|------------------|----------------------|
-| `POST /api/v1/admin/knowledge-documents/import` | `multipart/form-data`：`knowledgeBaseId`、`file` | `documentId`、`documentUuid`、`chunkCount`、`documentStatus` |
+| `POST /api/v1/admin/knowledge-documents/import` | 前端传 `multipart/form-data`：`knowledgeBaseId`、`file`；Java 转 Python 为 `knowledge_base_id`、`file` | 前端收到 `documentId`、`jobId`、`lifecycleStatus`、`jobStatus` |
 
 补充约定：
 
 - 该接口是 Java 对外的最小后台知识导入入口，浏览器不直连 Python
-- Java 根据上传文件推断 `title` 与 `sourceType`；当前支持 `MARKDOWN / DOCX / PDF`
-- 前端不传 `sourceUri`；Java 接收文件后先写入对象存储/文件存储，再内部生成 `sourceUri`
-- `dev` 环境下 `sourceUri` 为本地共享目录可读的 `file://...`，默认目录可放在项目根目录下的 `var/knowledge-storage`；`prod` 环境下目标口径为 OSS URI
-- Java 不负责解析原始文档格式，只负责创建 `knowledge_document`、调用 Python `prepare`、持久化 `knowledge_chunk`、再调用 Python `index`
+- Java 只做认证、授权、审计入口、统一响应包装和网关转发。
+- Java 不创建 `knowledge_document`，不持久化 `knowledge_chunk`，不解析文件，不建立索引。
+- Python 保存原始文件，创建 `knowledge_document` 和 `ingest_job`，并异步执行解析、切块、embedding 和索引写入。
 
 ## 4.1B 知识库与文档治理
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
 |------|------------------|----------------------|
-| `GET /api/v1/admin/knowledge-bases` | `pageNum?`、`pageSize?`、`keyword?` | `items[].id`、`kbCode`、`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status`、`docCount` |
-| `POST /api/v1/admin/knowledge-bases` | `name`、`kbCode`、`ownerType`、`ownerDeptId?`、`visibility` | `id`、`kbCode`、`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status`、`docCount` |
-| `PATCH /api/v1/admin/knowledge-bases/{id}` | Path `id`；Body：`name?`、`ownerType?`、`ownerDeptId?`、`visibility?`、`status?` | `id`、`kbCode`、`name`、`ownerType`、`ownerDeptId?`、`visibility`、`status`、`docCount` |
+| `GET /api/v1/admin/knowledge-bases` | 前端传 `pageNum?`、`pageSize?`、`keyword?`；Java 转 Python 为 `page_num?`、`page_size?`、`keyword?` | 前端收到 camelCase 知识库分页 DTO |
+| `POST /api/v1/admin/knowledge-bases` | 前端传 `code`、`name`、`description?`、`defaultEmbeddingModel`、`defaultEmbeddingDimension`、`retrievalStrategy`；Java 转 Python 为 snake_case | 前端收到 camelCase 知识库 DTO |
+| `PATCH /api/v1/admin/knowledge-bases/{id}` | Path `id`；前端 Body：`name?`、`description?`、`status?`；Java 转 Python 为 snake_case | 前端收到 camelCase 知识库 DTO |
 | `DELETE /api/v1/admin/knowledge-bases/{id}` | Path `id` | 无 |
-| `GET /api/v1/admin/knowledge-documents` | `knowledgeBaseId`、`pageNum?`、`pageSize?` | `items[].id`、`documentUuid`、`title`、`sourceType`、`documentStatus`、`chunkCount` |
+| `GET /api/v1/admin/knowledge-documents` | 前端传 `knowledgeBaseId`、`pageNum?`、`pageSize?`；Java 转 Python 为 `knowledge_base_id`、`page_num?`、`page_size?` | 前端收到 camelCase 文档分页 DTO |
 | `DELETE /api/v1/admin/knowledge-documents/{id}` | Path `id` | 无 |
+| `GET /api/v1/admin/ingest-jobs/{id}` | Path `id` | 前端收到 camelCase 入库任务 DTO |
+| `GET /api/v1/admin/knowledge-index-versions` | 前端传 `knowledgeBaseId`；Java 转 Python 为 `knowledge_base_id` | 前端收到 camelCase 索引版本列表 DTO |
+| `GET /api/v1/admin/knowledge-releases` | 前端传 `knowledgeBaseId`；Java 转 Python 为 `knowledge_base_id` | 前端收到 camelCase 发布记录列表 DTO |
+| `POST /api/v1/admin/knowledge-releases` | 前端传 `knowledgeBaseId`、`targetIndexVersionId`；Java 转 Python 为 `knowledge_base_id`、`target_index_version_id` | 前端收到 camelCase 发布结果 DTO |
 
 补充约定：
 
-- `GET /api/v1/admin/knowledge-bases` 的 `keyword` 同时搜索 `name` 与 `kbCode`
-- 知识库列表与详情响应中的 `docCount` 为该知识库下文档总数
-- `POST /api/v1/admin/knowledge-bases` 创建后状态固定为 `ENABLED`
-- `PATCH /api/v1/admin/knowledge-bases/{id}` 支持部分更新，不支持修改 `kbCode`
-- `ownerType=DEPARTMENT` 时必须传 `ownerDeptId`
-- `GET /api/v1/admin/knowledge-documents` 当前只返回真实已落库字段，不包含失败原因文本
-- 知识库删除与知识文档删除当前按软删除实现，并级联标记下游 `knowledge_document` / `knowledge_chunk`
+- 前端只调用 Java 同名接口，不直连 Python。
+- 前端和 Java 之间的请求/响应字段使用 camelCase；Java 和 Python 之间使用 Python 合同里的 snake_case。
+- Python 返回 4xx 时 Java 保持前端可理解的 4xx 语义：404 映射为 `1004`，其他 4xx 映射为 `1002`；Python 5xx 或网络不可用才映射为 `6001`。
+- Java 转发 `X-Request-Id`、`X-Actor-Id`、`X-Hospital-Scope`；当前 P0 `X-Hospital-Scope` 固定为 `default`。
+- Java 不读取或拼接 Python 的 `knowledge_*`、`ingest_job`、`knowledge_index_version`、`knowledge_release` 表。
+- 字段、状态机和删除/发布语义以 `docs/proposals/04-knowledge-admin-api-contract.md` 的 Python 合同为准。
 
 ## 4.2 AI 问诊
 
@@ -272,17 +274,18 @@
 
 - `department_id` 由 Python 内部映射规则直接产出，不要求 Java 再根据聊天文本或科室名反推
 
-## 5.1A Java 调 Python Knowledge Prepare
+## 5.1A Java 调 Python 知识库后台 API
 
 | 方向 | 最小字段 |
 |------|----------|
-| Java -> Python | `documentId`、`documentUuid`、`knowledgeBaseId`、`title`、`sourceType`、`sourceUri` |
-| Python -> Java | `chunks[].chunkIndex`、`chunks[].content`、`chunks[].sectionTitle?`、`chunks[].pageNo?`、`chunks[].charStart?`、`chunks[].charEnd?`、`chunks[].tokenCount?`、`chunks[].contentPreview?`、`chunks[].citationLabel?` |
+| Java -> Python | 后台知识库同名接口请求；统一携带 `X-Request-Id`、`X-Actor-Id`、`X-Hospital-Scope` |
+| Python -> Java | 知识库、文档、入库任务、索引版本、发布记录的端点专属 DTO |
 
 说明：
 
-- Java 对上传文件做来源编排，内部生成 `sourceType/sourceUri`，不负责格式解析
-- Python 负责根据 `sourceType/sourceUri` 解析原始文档、清洗与切块
+- Java 不再调用旧 `knowledge/prepare` 协议，也不传 `documentId/documentUuid/sourceUri` 让 Python 解析。
+- 文档导入通过 `POST /api/v1/admin/knowledge-documents/import` 接收前端 `knowledgeBaseId + file`，并转为 `knowledge_base_id + file` 发给 Python。
+- Python 负责保存文件、创建 `knowledge_document` / `ingest_job`、解析、清洗、切块、embedding、索引和发布。
 
 ## 5.2 Python 失败响应
 
