@@ -13,7 +13,7 @@
 - 现有文档还没有把“当前已实现接口”的参数约束、身份要求和真实业务语义讲到足够完整。
 - [../docs/01-OVERVIEW.md](../docs/01-OVERVIEW.md)、[../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md)、[../docs/03A-JAVA_CONFIG.md](../docs/03A-JAVA_CONFIG.md) 里包含大量目标设计或后续规划接口，不能直接当作当前仓库的对外契约。
 - [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md)、[00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md)、[00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md) 适合看完成度和实现顺序，但对当前已实现接口的细节覆盖仍不够。
-- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、门诊场次查询、挂号、接诊列表、接诊详情、EMR 创建与详情、处方创建与详情。审计接口还没有对外落地。
+- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、AI 会话列表 / 明细 / finalized 结果读取、门诊场次查询、挂号、接诊列表、接诊详情、EMR 创建与详情、处方创建与详情。审计接口还没有对外落地。
 
 ## 2. 通用协议
 
@@ -74,6 +74,9 @@
 | 知识库后台管理 | `POST /api/v1/admin/knowledge-releases` | 已登录 + 发布权限 | Java 网关转发到 Python 发布接口 |
 | AI Triage Query | `POST /api/v1/ai/triage/query` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起同步 triage query，返回结构化 `triageResult` |
 | AI Triage SSE | `POST /api/v1/ai/triage/query/stream` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起流式 triage query，Java 代理 Python SSE，并只在 `final` 前校验和落库 |
+| AI Sessions | `GET /api/v1/ai/sessions` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 查询当前患者 AI 会话摘要列表 |
+| AI Session Detail | `GET /api/v1/ai/sessions/{sessionId}` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 查询当前患者单个 AI 会话详情 |
+| AI Session Result | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 查询当前患者最近一次 finalized 导诊结果视图 |
 | 门诊挂号 | `GET /api/v1/clinic-sessions` | 已登录 | 查询当前可挂号的开放门诊场次 |
 | 门诊挂号 | `POST /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 当前患者创建挂号，同时预创建接诊记录 |
 | 门诊挂号 | `GET /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 查询当前患者自己的挂号列表 |
@@ -543,6 +546,7 @@
 补充说明：
 
 - Java 对 Python 固定发送 `/api/v1/query` 和 `scene=AI_TRIAGE`
+- Java 对 Python query 和 sessions 接口都会透传 `X-Patient-User-Id`
 - 当前响应不再包含旧 `answer`
 - `COLLECTING` 不落库
 - `READY` / `BLOCKED` 会在 Java 侧校验后写入 `ai_triage_result`
@@ -571,7 +575,51 @@
 - Java 只在 `final` 事件校验通过后才承认该次 finalized 结果
 - 如果 `final` 解析失败、目录校验失败或落库失败，Java 会返回 `error` 事件而不是继续输出成功 `final`
 
-### 10.3 `POST /api/v1/admin/triage-catalog/publish`
+### 10.3 `GET /api/v1/ai/sessions`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `PATIENT` 角色 |
+| 请求参数 | 无 |
+| 响应字段 | `items[].sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?` |
+| 真实语义 | Java 直接转发 Python `/api/v1/sessions`，返回当前患者会话摘要列表 |
+
+补充说明：
+
+- 浏览器看到的是 `camelCase`
+- `departmentId` 对外按字符串返回
+- 当前不读本地 `ai_triage_result` 回填会话列表
+
+### 10.4 `GET /api/v1/ai/sessions/{sessionId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `PATIENT` 角色 |
+| 路径参数 | `sessionId` |
+| 响应字段 | 顶层摘要字段 + `turns[].turnId`、`turnNo`、`turnStatus`、`startedAt`、`completedAt`、`errorCode`、`errorMessage`、`messages[]` |
+| 真实语义 | Java 直接转发 Python `/api/v1/sessions/{session_id}`，返回当前患者单个会话详情 |
+
+补充说明：
+
+- `messages[]` 直接反映 Python 已持久化历史消息
+- Python `404` 会映射为 Java `404 + 1004`
+
+### 10.5 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `PATIENT` 角色 |
+| 路径参数 | `sessionId` |
+| 响应字段 | `sessionId`、`resultStatus`、`triageStage`、`riskLevel`、`guardrailAction`、`nextAction`、`finalizedTurnId`、`finalizedAt`、`hasActiveCycle`、`activeCycleTurnNo?`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]`、`blockedReason?`、`catalogVersion?` |
+| 真实语义 | Java 直接转发 Python `/api/v1/sessions/{session_id}/triage-result`，返回当前患者最近一次 finalized 结果视图 |
+
+补充说明：
+
+- 这个接口不读本地 `ai_triage_result`
+- Python `404` 会映射为 Java `404 + 1004`
+- Python “结果未就绪” 的 `409` 会映射为 Java `409 + 6101`
+
+### 10.6 `POST /api/v1/admin/triage-catalog/publish`
 
 | 项目 | 当前代码口径 |
 |------|--------------|

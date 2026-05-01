@@ -155,6 +155,9 @@
 |------|------------------|-----------------------------|
 | `POST /api/v1/ai/triage/query` | `sessionId?`、`hospitalScope?`、`userMessage` | `requestId`、`sessionId`、`turnId`、`queryRunId`、`triageResult` |
 | `POST /api/v1/ai/triage/query/stream` | `sessionId?`、`hospitalScope?`、`userMessage` | `text/event-stream`：`start/progress/delta/final/error/done`，事件 `data` 对前端统一为 `camelCase` |
+| `GET /api/v1/ai/sessions` | 无 | `items[].sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?` |
+| `GET /api/v1/ai/sessions/{sessionId}` | Path `sessionId` | `sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?`、`turns[]` |
+| `GET /api/v1/ai/sessions/{sessionId}/triage-result` | Path `sessionId` | `sessionId`、`resultStatus`、`triageStage`、`riskLevel`、`guardrailAction`、`nextAction`、`finalizedTurnId`、`finalizedAt`、`hasActiveCycle`、`activeCycleTurnNo?`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]`、`blockedReason?`、`catalogVersion?` |
 
 ### `triageResult` 最小字段
 
@@ -175,7 +178,8 @@
 补充约定：
 
 - Java 固定向 Python 发送 `scene=AI_TRIAGE`
-- Java 当前不维护 `/api/v1/ai/sessions*` 会话历史读取接口
+- Java 会通过 Python `/api/v1/sessions*` 对外提供会话历史读取接口
+- Java 调 Python query 和 sessions 接口时统一透传 `X-Request-Id`、`X-API-Key`、`X-Patient-User-Id`
 - Java 当前只保存 finalized 快照表 `ai_triage_result`
 - `COLLECTING` 不落库；`READY / BLOCKED` 才落库
 - `READY` 结果会校验 `catalogVersion + departmentId + departmentName`
