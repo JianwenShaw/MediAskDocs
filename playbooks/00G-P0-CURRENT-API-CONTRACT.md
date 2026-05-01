@@ -13,7 +13,7 @@
 - 现有文档还没有把“当前已实现接口”的参数约束、身份要求和真实业务语义讲到足够完整。
 - [../docs/01-OVERVIEW.md](../docs/01-OVERVIEW.md)、[../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md)、[../docs/03A-JAVA_CONFIG.md](../docs/03A-JAVA_CONFIG.md) 里包含大量目标设计或后续规划接口，不能直接当作当前仓库的对外契约。
 - [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md)、[00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md)、[00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md) 适合看完成度和实现顺序，但对当前已实现接口的细节覆盖仍不够。
-- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI 问诊、AI 会话回看、AI 导诊结果、门诊场次查询、挂号、接诊列表、接诊详情、医生侧 AI 摘要、EMR 创建与详情、处方创建与详情。审计接口还没有对外落地。
+- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、门诊场次查询、挂号、接诊列表、接诊详情、EMR 创建与详情、处方创建与详情。审计接口还没有对外落地。
 
 ## 2. 通用协议
 
@@ -36,7 +36,7 @@
 补充说明：
 
 - 带 `@AuthorizeScenario` 的接口，会先做场景权限判断；如果权限不满足，会直接返回 `403 + 1003`，不一定进入后续的角色校验逻辑。
-- 当前 Python AI 服务已收口为同步 `/api/v1/chat`；如上层需要“流式”观感，应基于完整回答做伪流式展示，而不是依赖 Python SSE。
+- 当前 Python AI 服务联调口径是 `/api/v1/query` 与 `/api/v1/query/stream`；Java 对外暴露 `/api/v1/ai/triage/query` 与 `/api/v1/ai/triage/query/stream`。
 - 因为浏览器 `Number` 无法安全表示雪花 ID，诸如 `userId`、`patientId`、`doctorId`、`knowledgeBaseId`、`documentId`、`sessionId` 这类字段在响应 JSON 中都应按字符串解析。
 - 前端不要再按“某些接口返回时间字符串、某些接口返回时间数组”的思路适配；当前已实现 JSON API 中，业务日期时间统一是字符串，业务日期统一也是字符串。
 - 具体区分规则：
@@ -72,11 +72,8 @@
 | 知识库后台管理 | `GET /api/v1/admin/knowledge-index-versions` | 已登录 + 索引版本列表权限 | Java 网关转发到 Python 索引版本列表接口 |
 | 知识库后台管理 | `GET /api/v1/admin/knowledge-releases` | 已登录 + 发布记录列表权限 | Java 网关转发到 Python 发布记录列表接口 |
 | 知识库后台管理 | `POST /api/v1/admin/knowledge-releases` | 已登录 + 发布权限 | Java 网关转发到 Python 发布接口 |
-| AI 问诊 | `POST /api/v1/ai/chat` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起非流式问诊，返回 `answer + triageResult` |
-| AI 会话列表 | `GET /api/v1/ai/sessions` | 已登录 + `PATIENT` 角色 + 仅患者本人 + 依赖 AI service 配置 | 返回当前患者的 AI 会话最小摘要列表 |
-| AI 会话回看 | `GET /api/v1/ai/sessions/{sessionId}` | 已登录 + `PATIENT` 角色 + 仅患者本人 + 依赖 AI service 配置 | 返回指定会话的基础信息、轮次和消息内容 |
-| AI 导诊结果 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 已登录 + `PATIENT` 角色 + 仅患者本人 + 依赖 AI service 配置 | 返回指定会话最新成功问诊的结构化导诊结果 |
-| AI 挂号承接 | `POST /api/v1/ai/sessions/{sessionId}/registration-handoff` | 已登录 + `PATIENT` 角色 + 仅患者本人 + 依赖 AI service 配置 | 返回指定会话的挂号承接参数或阻断原因 |
+| AI Triage Query | `POST /api/v1/ai/triage/query` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起同步 triage query，返回结构化 `triageResult` |
+| AI Triage SSE | `POST /api/v1/ai/triage/query/stream` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起流式 triage query，Java 代理 Python SSE，并只在 `final` 前校验和落库 |
 | 门诊挂号 | `GET /api/v1/clinic-sessions` | 已登录 | 查询当前可挂号的开放门诊场次 |
 | 门诊挂号 | `POST /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 当前患者创建挂号，同时预创建接诊记录 |
 | 门诊挂号 | `GET /api/v1/registrations` | 已登录 + `PATIENT` 角色 | 查询当前患者自己的挂号列表 |
@@ -533,96 +530,48 @@
 
 ## 10. 当前已实现 AI 接口补充
 
-### 10.1 `POST /api/v1/ai/chat`
+### 10.1 `POST /api/v1/ai/triage/query`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
 | 认证/身份 | 已登录 + `PATIENT` 角色 |
-| 请求体 | `sessionId?`、`message`、`departmentId?`、`sceneType`、`useStream` |
-| 额外约束 | `useStream` 必须是 `false`；否则返回 `400 + 1002` |
-| 响应字段 | `sessionId`、`turnId`、`answer`、`triageResult` |
-| `triageResult` | `triageStage`、`riskLevel`、`guardrailAction`、`nextAction`、`followUpQuestions[]`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
+| 请求体 | `sessionId?`、`hospitalScope?`、`userMessage` |
+| 默认值 | `hospitalScope` 为空时固定使用 `default` |
+| 响应字段 | `requestId`、`sessionId`、`turnId`、`queryRunId`、`triageResult` |
+| `triageResult` | `triageStage`、`triageCompletionReason`、`nextAction`、`riskLevel?`、`chiefComplaintSummary?`、`followUpQuestions[]`、`recommendedDepartments[]`、`careAdvice?`、`blockedReason?`、`catalogVersion?`、`citations[]` |
 
 补充说明：
 
-- 当前实现已经收口到 `triageStage = COLLECTING / READY / BLOCKED`
-- `COLLECTING` 时返回 `followUpQuestions`，`nextAction = CONTINUE_TRIAGE`
-- 聊天态已移除 `GO_REGISTRATION`；`READY` 统一先进入结果页，`nextAction = VIEW_TRIAGE_RESULT`
+- Java 对 Python 固定发送 `/api/v1/query` 和 `scene=AI_TRIAGE`
+- 当前响应不再包含旧 `answer`
+- `COLLECTING` 不落库
+- `READY` / `BLOCKED` 会在 Java 侧校验后写入 `ai_triage_result`
+- `READY` 场景会校验 `catalogVersion + departmentId + departmentName`
 
-### 10.2 伪流式展示口径
-
-| 项目 | 当前代码口径 |
-|------|--------------|
-| Python 能力 | 仅提供同步 `/api/v1/chat` |
-| 上层表现 | Java 或前端可基于完整 `answer` 做伪流式展示 |
-| 结构化真相 | 只消费完整 `triageResult`，不从展示文本反解析 |
-
-### 10.3 `GET /api/v1/ai/sessions`
+### 10.2 `POST /api/v1/ai/triage/query/stream`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
 | 认证/身份 | 已登录 + `PATIENT` 角色 |
-| 访问范围 | 当前仅患者本人可查看自己的 AI 会话列表 |
-| 查询参数 | 当前无 |
-| 排序 | `startedAt DESC`，同一时间按 `sessionId DESC` |
-| 响应字段 | `items[].sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?` |
-| 返回范围 | 仅最小摘要，不返回 `turns[]`、消息原文或导诊结构化结果 |
+| 请求体 | 与同步 query 相同 |
+| Content-Type | `text/event-stream` |
+| Java 行为 | 调 Python `/api/v1/query/stream`，再把 `start/progress/delta/final/error/done` 重组后输出给前端 |
+| 结构化真相 | 只认 `final` 事件里的完整 `triage_result` |
 
 补充说明：
 
-- `startedAt`、`endedAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
-- 本接口如果未来补充纯日期字段，仍应统一返回 `yyyy-MM-dd` 字符串，而不是数组结构。
+- `delta` 只用于展示，不可驱动业务状态
+- Java 到 Python 仍用 `snake_case`，但浏览器侧收到的 SSE `data` 统一是 `camelCase`
+- `start`：`requestId`、`sessionId`、`turnId`、`queryRunId`
+- `progress`：`step`
+- `delta`：`textDelta`
+- `final`：与同步 query `data` 相同的 `camelCase` 结构
+- `error`：`code`、`message`
+- `done`：`{}`
+- Java 只在 `final` 事件校验通过后才承认该次 finalized 结果
+- 如果 `final` 解析失败、目录校验失败或落库失败，Java 会返回 `error` 事件而不是继续输出成功 `final`
 
-### 10.4 `GET /api/v1/ai/sessions/{sessionId}`
-
-| 项目 | 当前代码口径 |
-|------|--------------|
-| 认证/身份 | 已登录 + `PATIENT` 角色 |
-| 访问范围 | 当前仅患者本人可查看自己的 AI 会话 |
-| 响应字段 | `sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?`、`turns[]` |
-| `turns[]` | `turnId`、`turnNo`、`turnStatus`、`startedAt`、`completedAt?`、`errorCode?`、`errorMessage?`、`messages[]` |
-| `messages[]` | `role`、`content`、`createdAt` |
-
-补充说明：
-
-- `startedAt`、`endedAt`、`turns[].startedAt`、`turns[].completedAt`、`messages[].createdAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
-- 本接口内若未来出现纯日期字段，统一返回 `yyyy-MM-dd` 字符串。
-
-### 10.5 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
-
-| 项目 | 当前代码口径 |
-|------|--------------|
-| 认证/身份 | 已登录 + `PATIENT` 角色 |
-| 访问范围 | 当前仅患者本人可查看自己的导诊结果 |
-| 响应字段 | `sessionId`、`resultStatus`、`triageStage`、`riskLevel`、`guardrailAction`、`nextAction`、`finalizedTurnId`、`finalizedAt`、`hasActiveCycle`、`activeCycleTurnNo`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]` |
-| 数据来源 | 当前读取最近一次 finalized `ai_model_run.triage_snapshot_json`，并结合 guardrail 与 citations 组装 |
-
-补充说明：
-
-- 如果历史上已有 finalized 结果，而当前新一轮仍在 `COLLECTING`，接口返回旧结果并标记 `resultStatus = UPDATING`
-- 如果从未产出过 finalized snapshot 且当前仍 `COLLECTING`，接口返回 `409 + 6021`
-- 成功返回时 `triageStage` 只允许 `READY` 或 `BLOCKED`
-- `finalizedAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
-- `finalizedAt` 是业务日期时间字段，不是时间戳数字。
-
-### 10.6 `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
-
-| 项目 | 当前代码口径 |
-|------|--------------|
-| 认证/身份 | 已登录 + `PATIENT` 角色 |
-| 访问范围 | 当前仅患者本人可查看自己的挂号承接结果 |
-| 请求体 | 无 |
-| 响应字段 | `sessionId`、`recommendedDepartmentId?`、`recommendedDepartmentName?`、`chiefComplaintSummary?`、`suggestedVisitType?`、`blockedReason?`、`registrationQuery?` |
-| `registrationQuery` | `departmentId`、`dateFrom`、`dateTo` |
-| 普通分支 | 当前固定返回 `suggestedVisitType=OUTPATIENT`，并生成“今天起未来 7 天”的挂号查询窗口 |
-| 高风险分支 | `blockedReason=EMERGENCY_OFFLINE`，不返回普通挂号查询参数 |
-| 缺少推荐科室 | 非高风险但没有推荐科室时，返回 `409 + 6020` |
-
-补充说明：
-
-- 当前只消费最近一次 finalized snapshot，不再从聊天文本或收集中轮次临时反组装
-
-### 10.7 `POST /api/v1/admin/triage-catalog/publish`
+### 10.3 `POST /api/v1/admin/triage-catalog/publish`
 
 | 项目 | 当前代码口径 |
 |------|--------------|

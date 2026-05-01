@@ -16,6 +16,7 @@ DROP TABLE IF EXISTS knowledge_index_version CASCADE;
 DROP TABLE IF EXISTS knowledge_document CASCADE;
 DROP TABLE IF EXISTS knowledge_base CASCADE;
 DROP TABLE IF EXISTS ai_session CASCADE;
+DROP TABLE IF EXISTS ai_triage_result CASCADE;
 
 DROP TABLE IF EXISTS audit.data_access_log CASCADE;
 DROP TABLE IF EXISTS audit.audit_event CASCADE;

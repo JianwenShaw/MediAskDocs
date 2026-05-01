@@ -71,10 +71,8 @@
 | 顺序 | 接口 | 说明 | 依赖批次 |
 |------|------|------|----------|
 | `A1` | `/api/v1/auth/login`、`/api/v1/auth/me` | 先解决身份入口 | `M1` |
-| `A2` | `/api/v1/ai/chat` | 先打通非流式 AI 主链 | `M1-M5` |
-| `A3` | `/api/v1/ai/sessions/{id}` | 会话详情与回看 | `M5` |
-| `A4` | `/api/v1/ai/sessions/{id}/triage-result` | 导诊结果页 | `M5` |
-| `A5` | `/api/v1/ai/sessions/{id}/registration-handoff` | AI 到挂号承接 | `M5-M6` |
+| `A2` | `/api/v1/ai/triage/query` | 先打通同步 AI triage 主链 | `M1 + Java ai_triage_result` |
+| `A3` | `/api/v1/ai/triage/query/stream` | 打通 SSE 代理与 finalized 承接 | `M1 + Java ai_triage_result` |
 | `A6` | `/api/v1/clinic-sessions` | 挂号页门诊查询 | `M6` |
 | `A7` | `/api/v1/registrations` | 创建和查看挂号 | `M6` |
 | `A8` | `/api/v1/encounters`、`/api/v1/encounters/{id}`、`PATCH /api/v1/encounters/{id}` | 医生接诊入口 | `M6-M7` |
@@ -145,7 +143,7 @@
 - Java 不读取或拼接 Python 的 `knowledge_*`、`ingest_job`、`knowledge_index_version`、`knowledge_release` 表。
 - 字段、状态机和删除/发布语义以 `docs/proposals/04-knowledge-admin-api-contract.md` 的 Python 合同为准。
 
-## 4.2 AI 问诊
+## 4.2 AI Triage
 
 时间字段总规则：
 
@@ -155,49 +153,37 @@
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` / 事件最小字段 |
 |------|------------------|-----------------------------|
-| `POST /api/v1/ai/chat` | `sessionId?`、`message`、`departmentId?`、`sceneType`、`useStream` | `sessionId`、`turnId`、`answer`、`triageResult` |
-| `GET /api/v1/ai/sessions` | 无 | `items[].sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?` |
-| `GET /api/v1/ai/sessions/{id}` | Path `sessionId` | `sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?`、`turns[]` |
-| `GET /api/v1/ai/sessions/{id}/triage-result` | Path `sessionId` | `sessionId`、`resultStatus`、`triageStage`、`riskLevel`、`guardrailAction`、`nextAction`、`recommendedDepartments`、`careAdvice`、`citations` |
+| `POST /api/v1/ai/triage/query` | `sessionId?`、`hospitalScope?`、`userMessage` | `requestId`、`sessionId`、`turnId`、`queryRunId`、`triageResult` |
+| `POST /api/v1/ai/triage/query/stream` | `sessionId?`、`hospitalScope?`、`userMessage` | `text/event-stream`：`start/progress/delta/final/error/done`，事件 `data` 对前端统一为 `camelCase` |
 
 ### `triageResult` 最小字段
 
 | 字段 | 说明 |
 |------|------|
-| `resultStatus` | `CURRENT / UPDATING` |
 | `triageStage` | `COLLECTING / READY / BLOCKED` |
+| `triageCompletionReason` | `SUFFICIENT_INFO / MAX_TURNS_REACHED / HIGH_RISK_BLOCKED / null` |
 | `riskLevel` | `low / medium / high` |
-| `guardrailAction` | `allow / caution / refuse` |
 | `nextAction` | `CONTINUE_TRIAGE / VIEW_TRIAGE_RESULT / EMERGENCY_OFFLINE / MANUAL_SUPPORT` |
-| `finalizedTurnId` | 当前结果对应的 finalized turn |
-| `finalizedAt` | 当前结果完成时间 |
-| `hasActiveCycle` | 当前是否存在新的 active cycle 在收集 |
-| `activeCycleTurnNo` | 若有进行中 active cycle，其患者轮次 |
 | `chiefComplaintSummary` | 症状摘要 |
-| `followUpQuestions` | 仅在 chat / stream 的 `COLLECTING` 场景出现，最多 2 个 |
+| `followUpQuestions` | 仅在 `COLLECTING` 场景出现，最多 2 个 |
 | `recommendedDepartments` | 推荐科室列表 |
 | `careAdvice` | 保守建议或就医提示 |
+| `blockedReason` | 高风险阻断原因 |
+| `catalogVersion` | READY 结果对应目录版本 |
 | `citations` | 引用片段列表 |
 
-`GET /api/v1/ai/sessions` 补充约定：
+补充约定：
 
-- 当前实现仅允许患者本人查看自己的会话列表
-- 当前版本不分页、不筛选，按 `startedAt DESC` 返回
-- 只返回最小摘要字段，不携带 `turns[]` 或导诊结构化结果
-- `startedAt`、`endedAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
-
-`GET /api/v1/ai/sessions/{id}` 补充约定：
-
-- 当前实现仅允许患者本人回看自己的 AI 会话
-- `turns[]` 至少返回 `turnId`、`turnNo`、`turnStatus`、`startedAt`、`completedAt?`、`errorCode?`、`errorMessage?`、`messages[]`
-- `messages[]` 至少返回 `role`、`content`、`createdAt`
-- `startedAt`、`endedAt`、`turns[].startedAt`、`turns[].completedAt`、`messages[].createdAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
+- Java 固定向 Python 发送 `scene=AI_TRIAGE`
+- Java 当前不维护 `/api/v1/ai/sessions*` 会话历史读取接口
+- Java 当前只保存 finalized 快照表 `ai_triage_result`
+- `COLLECTING` 不落库；`READY / BLOCKED` 才落库
+- `READY` 结果会校验 `catalogVersion + departmentId + departmentName`
 
 ## 4.3 挂号承接
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
 |------|------------------|----------------------|
-| `POST /api/v1/ai/sessions/{id}/registration-handoff` | Path `sessionId` | `sessionId`、`recommendedDepartmentId?`、`recommendedDepartmentName?`、`chiefComplaintSummary?`、`suggestedVisitType?`、`blockedReason?`、`registrationQuery?` |
 | `GET /api/v1/clinic-sessions` | `departmentId?`、`dateFrom?`、`dateTo?` | `items[]` |
 | `GET /api/v1/clinic-sessions/{id}/slots` | Path `clinicSessionId` | `items[].clinicSlotId`、`slotSeq`、`slotStartTime`、`slotEndTime` |
 | `POST /api/v1/registrations` | `clinicSessionId`、`clinicSlotId`、`sourceAiSessionId?` | `registrationId`、`orderNo`、`status` |
@@ -209,6 +195,7 @@
 
 补充约定：
 
+- `POST /api/v1/ai/sessions/{id}/registration-handoff` 当前未实现，不应视为现有契约
 - `suggestedVisitType` 当前固定为 `OUTPATIENT`，仅表达普通门诊承接类型，不映射现有 `clinicType`
 - `registrationQuery` 最小字段为 `departmentId`、`dateFrom`、`dateTo`
 - 默认查询窗口为今天起未来 7 天

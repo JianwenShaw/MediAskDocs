@@ -15,6 +15,9 @@
 \echo '[mediask] create appointment tables'
 \ir 04-appointment.sql
 
+\echo '[mediask] create java ai triage tables'
+\ir 05-ai-triage.sql
+
 \echo '[mediask] create medical tables'
 \ir 06-medical.sql
 

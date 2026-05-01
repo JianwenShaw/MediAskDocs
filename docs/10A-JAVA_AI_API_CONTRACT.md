@@ -1,319 +1,219 @@
-# AI 对外契约与业务承接（Java）
+# AI Triage Gateway Contract
 
 > 状态：Authoritative Browser-Facing Contract
 >
-> 适用范围：患者 H5、医生 Web、`mediask-api`
+> 适用范围：患者 H5、`mediask-api`
 >
-> 目标：冻结浏览器经 Java 访问 AI 能力时的接口、结构化结果和后续业务承接口径，避免前端直接绑定 Python 内部 DTO。
+> 本文件只描述当前 Java 已实现的最小 AI triage 网关契约。更高层的三方边界与 Python 合同以 `docs/proposals/` 为准。
 
-## 1. 设计原则
+## 1. 固定原则
 
-- 浏览器只访问 `mediask-api`，不直连 `mediask-ai`
-- Java 对外 `JSON` 接口统一使用 `Result<T>`：`{code, msg, data, requestId, timestamp}`
-- Java 对外 `JSON` 中涉及业务主键的 `Long/long` 字段统一按字符串返回，前端按字符串处理 `sessionId`、`turnId`、`encounterId`、`chunkId` 等 ID
-- 对外响应中的业务 ID 字符串化、业务日期格式、业务日期时间格式必须在响应 DTO 上显式声明；不要依赖全局 Jackson 配置隐式兜底
-- Python 内部返回 `request_id/session_id/turn_id/query_run_id/triage_result`；Java 负责整理成前端可直接消费的业务结果
-- AI 结果必须能承接到挂号和医生接诊，而不是停留在一段聊天文本
-- 导诊结构化结果采用单真相模型：`chat`、`triage-result`、`registration-handoff` 共享同一份已持久化 run 结果
+- 浏览器只访问 `mediask-api`，不直连 Python。
+- Java 对外同步接口统一返回 `Result<T>`。
+- Java 对外 chat 入口固定为：
+  - `POST /api/v1/ai/triage/query`
+  - `POST /api/v1/ai/triage/query/stream`
+- Java 固定向 Python 发送 `scene=AI_TRIAGE`，前端不传 `scene`。
+- Java 调 Python 使用：
+  - `POST /api/v1/query`
+  - `POST /api/v1/query/stream`
+- 业务真相只来自完整 `triage_result`。
+- SSE 场景下，只有 `final` 事件可驱动业务状态；`delta` 只用于展示。
+- Java 当前只保存 finalized 业务快照 `ai_triage_result`，不维护完整聊天历史主事实。
 
-## 2. P0 必须打通的用户链路
+## 2. 当前已实现接口
 
-1. 患者发起 AI 问诊
-2. 前端接收聊天展示内容和 `triageResult`；流式场景只以 Python `final` 事件中的结构化结果驱动跳页
-3. 患者查看导诊结果与推荐科室
-4. 患者从 AI 结果跳转挂号
-5. 医生在接诊页查看 AI 摘要
+| 接口 | 说明 | 认证 |
+|------|------|------|
+| `POST /api/v1/ai/triage/query` | 同步 triage query | 已登录 + `PATIENT` |
+| `POST /api/v1/ai/triage/query/stream` | SSE 代理 | 已登录 + `PATIENT` |
 
-## 3. 接口清单
+当前未实现：
 
-| 接口 | 说明 | 调用方 |
-|------|------|--------|
-| `POST /api/v1/ai/chat` | 非流式问诊 | 患者 H5 / 调试 |
-| `GET /api/v1/ai/sessions` | 当前患者 AI 会话列表 | 患者 H5 |
-| `GET /api/v1/ai/sessions/{sessionId}` | 会话详情与轮次列表 | 患者 H5 |
-| `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 导诊结果、风险结果、引用与推荐科室 | 患者 H5 |
-| `POST /api/v1/ai/sessions/{sessionId}/registration-handoff` | 从 AI 结果生成挂号承接参数 | 患者 H5 |
-| `GET /api/v1/encounters/{encounterId}/ai-summary` | 医生查看接诊前 AI 摘要 | 医生 Web |
+- `POST /api/v1/ai/chat`
+- `GET /api/v1/ai/sessions`
+- `GET /api/v1/ai/sessions/{sessionId}`
+- `GET /api/v1/ai/sessions/{sessionId}/triage-result`
+- `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
+- `GET /api/v1/encounters/{encounterId}/ai-summary`
 
-## 4. 问诊请求
+说明：
 
-### 4.1 `POST /api/v1/ai/chat`
+- Python 侧当前已经提供 `/api/v1/sessions*` 读取接口
+- Java 网关后续可直接基于这些 Python 会话接口补齐浏览器侧 `/api/v1/ai/sessions*`
+- 在 Java 网关补齐之前，本文件仍以当前 Java 已实现接口为准
 
-请求体示例：
+## 3. 同步 Query
+
+### 3.1 请求
+
+`POST /api/v1/ai/triage/query`
+
+请求体：
 
 ```json
 {
   "sessionId": null,
-  "message": "头痛三天，伴有低烧，应该先看什么科？",
-  "departmentId": 101,
-  "sceneType": "PRE_CONSULTATION",
-  "useStream": false
+  "hospitalScope": "default",
+  "userMessage": "我这两天一直头痛，还想吐"
 }
 ```
 
-返回体 `data` 示例：
+规则：
+
+- `userMessage` 必填，空白时返回 `400 + 1002`
+- `hospitalScope` 为空时，Java 默认使用 `"default"`
+- `sessionId` 首轮传 `null`，后续透传上一轮返回的 `sessionId`
+
+### 3.2 响应
+
+响应包裹仍是 `Result<T>`，其中 `data` 为：
 
 ```json
 {
-  "sessionId": "90001",
-  "turnId": "90011",
-  "answer": "建议尽快线下就医，优先考虑神经内科或发热门诊分诊。",
+  "requestId": "req_01",
+  "sessionId": "82f7a4c2-7784-4d31-9c6e-6c8fbbe8c2cd",
+  "turnId": "4b1eaf1f-3e28-479f-9fb5-f259db73507a",
+  "queryRunId": "9e86fc63-15f1-44db-9c07-ef2e5911d69c",
   "triageResult": {
     "triageStage": "READY",
-    "riskLevel": "medium",
-    "guardrailAction": "caution",
+    "triageCompletionReason": "SUFFICIENT_INFO",
     "nextAction": "VIEW_TRIAGE_RESULT",
+    "riskLevel": "low",
+    "chiefComplaintSummary": "近两天持续头痛，伴恶心",
     "recommendedDepartments": [
       {
-        "departmentId": "101",
+        "departmentId": "3101",
         "departmentName": "神经内科",
         "priority": 1,
-        "reason": "头痛伴发热，建议优先神经内科评估"
+        "reason": "头痛伴恶心，优先考虑神经系统相关问题"
       }
     ],
-    "chiefComplaintSummary": "头痛三天伴低烧",
-    "careAdvice": "建议尽快线下就医，避免继续自行判断。",
+    "careAdvice": "建议尽快门诊就诊",
+    "catalogVersion": "deptcat-v20260501-01",
     "citations": [
       {
-        "chunkId": "7003001",
-        "retrievalRank": 1,
-        "fusionScore": 0.82,
-        "snippet": "持续头痛伴发热应结合感染风险进行线下评估。"
+        "citationOrder": 1,
+        "chunkId": "0aa7d1af-b4f9-4409-920d-31e81b1bb6ce",
+        "snippet": "头痛伴恶心时应先排查神经系统相关疾病。"
       }
     ]
   }
 }
 ```
 
-补充说明：
+说明：
 
-- `READY` 后聊天链路统一先进入结果页，不再从聊天页直接跳挂号页
-- `COLLECTING` 阶段的 `triageResult` 需要额外返回 `followUpQuestions`
-- `followUpQuestions` 只出现在 `POST /api/v1/ai/chat` 的 `COLLECTING` 场景，不出现在 `GET /triage-result`
-- `followUpQuestions` 最多返回 2 个
+- `requestId` 在 `Result` 包裹层和 `data.requestId` 中都会出现，二者一致
+- `sessionId`、`turnId`、`queryRunId`、`departmentId`、`chunkId` 都按字符串返回
+- 当前响应 DTO 不包含旧 `answer` 字段
 
-## 5. 流式展示
+## 4. `triageResult` 三态
 
-- Python 内部服务收口为 `POST /api/v1/query` 与 `POST /api/v1/query/stream`
-- Java 透传或聚合 SSE 时，只能以 Python `final` 事件中的 `triage_result` 作为业务真相
-- `delta` 只用于聊天展示，不得用于推荐科室、风险状态或页面跳转判断
-- 结构化真相仍只来自完整 `triageResult`，不从自然语言文本中反解析推荐科室、风险状态或跳转动作
-
-## 6. 导诊结果与挂号承接
-
-时间字段统一约定：
-
-- 业务日期时间字段统一返回秒级 ISO-8601 字符串，并带时区偏移，例如 `2026-04-19T10:34:54+08:00`
-- 业务日期字段统一返回 `yyyy-MM-dd` 字符串，例如 `2026-04-19`
-- `Result.timestamp` 固定为毫秒时间戳；它是统一响应包裹层字段，不属于业务字段时间格式规则
-- 上述格式规则由响应 DTO 注解固定，不由全局 `ObjectMapper` 或 Spring Boot Jackson 定制器单独保障
-
-### 6.0 `GET /api/v1/ai/sessions`
-
-用途：返回当前患者的 AI 会话历史列表，用于结果页或历史页选择具体会话后继续查看详情和导诊结果。
-
-当前版本无查询参数，不分页。
-
-`data.items[]` 至少包含：
-
-- `sessionId`
-- `sceneType`
-- `status`
-- `departmentId`
-- `chiefComplaintSummary`
-- `summary`
-- `startedAt`
-- `endedAt`
-
-规则：
-
-- 当前实现仅返回当前患者本人的会话
-- 列表按 `startedAt DESC` 排序；同一时间按 `sessionId DESC`
-- 该接口只返回最小摘要，不返回 `turns`、消息原文或导诊结构化结果
-- 详情仍走 `GET /api/v1/ai/sessions/{sessionId}`，导诊结果仍走 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
-- `startedAt`、`endedAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
-
-### 6.1 `GET /api/v1/ai/sessions/{sessionId}`
-
-`data` 至少包含：
-
-- `sessionId`
-- `sceneType`
-- `status`
-- `departmentId`
-- `chiefComplaintSummary`
-- `summary`
-- `startedAt`
-- `endedAt`
-- `turns`
-
-`turns[]` 至少包含：
-
-- `turnId`
-- `turnNo`
-- `turnStatus`
-- `startedAt`
-- `completedAt`
-- `errorCode`
-- `errorMessage`
-- `messages`
-
-`messages[]` 至少包含：
-
-- `role`
-- `content`
-- `createdAt`
-
-规则：
-
-- 当前实现仅支持患者本人回看自己的 AI 会话
-- 医生侧查看 AI 内容仍走后续 `GET /api/v1/encounters/{encounterId}/ai-summary`
-- 当前历史消息直接读取 Python 已持久化的会话消息事实
-- assistant 历史消息口径：
-  - `COLLECTING`：展示本轮追问文本
-  - `READY`：展示推荐结果提示与 `careAdvice`
-  - `BLOCKED`：展示阻断提示与 `careAdvice`
-- `startedAt`、`endedAt`、`turns[].startedAt`、`turns[].completedAt`、`messages[].createdAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
-
-### 6.2 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
-
-`data` 至少包含：
-
-- `sessionId`
-- `resultStatus`
-- `triageStage`
-- `riskLevel`
-- `guardrailAction`
-- `nextAction`
-- `finalizedTurnId`
-- `finalizedAt`
-- `hasActiveCycle`
-- `activeCycleTurnNo`
-- `chiefComplaintSummary`
-- `recommendedDepartments`
-- `careAdvice`
-- `citations`
-
-补充说明：
-
-- 当前目标设计中，`triage-result` 读取的是 session 最近一次 finalized `ai_model_run.triage_snapshot_json`，再结合 guardrail 与 citations 组装结果
-- 如果历史上已有 finalized 结果，而当前新一轮仍处于 `COLLECTING`，`GET /triage-result` 继续返回旧结果
-- 此时返回 `resultStatus = UPDATING`，明确表示“当前展示的是上一版 finalized 结果，而不是当前聊天中的最新状态”
-- `GET /triage-result` 仅在“从未产出过 finalized snapshot 且当前仍处于 `COLLECTING`”时返回 `409`
-- 历史老会话如果对应 run 尚未持久化 `triage_snapshot_json`，可能不存在 `triage-result`
-- 前端应以该接口返回的结构化字段作为导诊结果真相，不从聊天文本中自行解析
-- Python 内部用于判定 `triageStage` 的 `risk_blockers`、`missing_critical_info`、`follow_up_questions`、`department_recommendation_confidence` 不对浏览器暴露，前端不消费这些内部判定材料
-- `finalizedAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
-
-`resultStatus` 固定值：
-
-- `CURRENT`
-- `UPDATING`
-
-含义：
-
-- `CURRENT`：当前展示的是最新 finalized 结果，当前没有新的 active cycle 在收集
-- `UPDATING`：当前展示的是上一版 finalized 结果，但当前有新的 active cycle 仍在 `COLLECTING`
-- `GET /api/v1/ai/sessions` 与 `GET /api/v1/ai/sessions/{sessionId}` 的摘要字段应与该 finalized 优先口径一致；不能因为新一轮进入 `COLLECTING` 就把上一版 finalized 摘要冲掉
-
-结果页行为约束：
-
-- `CURRENT`：正常展示 finalized 结果
-- `UPDATING`：必须展示“正在重新评估”的提示文案
-- `UPDATING` 场景仍允许展示结果页 CTA，但应明确这是“按上一版结果继续”
-- `GET /triage-result` 成功返回时，`triageStage` 只允许 `READY` 或 `BLOCKED`
-
-### 6.3 `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
-
-用途：把 AI 结果转换成挂号页可直接消费的查询条件与展示摘要。
-
-`data` 示例：
+### 4.1 `COLLECTING`
 
 ```json
 {
-  "sessionId": "90001",
-  "recommendedDepartmentId": "101",
-  "recommendedDepartmentName": "神经内科",
-  "chiefComplaintSummary": "头痛三天伴低烧",
-  "suggestedVisitType": "OUTPATIENT",
-  "blockedReason": null,
-  "registrationQuery": {
-    "departmentId": "101",
-    "dateFrom": "2026-03-15",
-    "dateTo": "2026-03-21"
-  }
+  "triageStage": "COLLECTING",
+  "triageCompletionReason": null,
+  "nextAction": "CONTINUE_TRIAGE",
+  "chiefComplaintSummary": "近两天持续头痛，伴恶心",
+  "followUpQuestions": ["请问是否有肢体无力或说话含糊？"]
 }
 ```
 
-补充说明：
+规则：
 
-- `registrationQuery.dateFrom`、`registrationQuery.dateTo` 属于业务日期字段，统一返回 `yyyy-MM-dd` 字符串
-- 该接口里的 `sessionId`、`recommendedDepartmentId`、`departmentId` 仍按 Long 字符串返回，不与日期字段混淆
+- `followUpQuestions` 最多 2 条
+- 不返回 `recommendedDepartments`
+- 不返回 `blockedReason`
+- 不落 Java finalized 快照
+
+### 4.2 `READY`
 
 规则：
 
-- 该接口只做承接信息生成，不直接创建 `registration_order`
-- 该接口只消费已持久化的 run 结果，不依赖聊天文本，也不依赖单独 finalize 结果
-- 该接口只从结果页触发，不再作为聊天页 `nextAction` 的直接跳转目标
-- `suggestedVisitType` 当前固定为 `OUTPATIENT`，仅表达普通门诊承接类型，不等同于线下场次里的 `clinicType`
-- 默认返回未来 7 天的挂号查询窗口：`dateFrom = 今天`，`dateTo = 今天 + 6 天`
-- 如果 `riskLevel = high`，则返回 `blockedReason = EMERGENCY_OFFLINE`，不生成普通挂号承接参数；此时 `suggestedVisitType`、`registrationQuery`、推荐挂号科室字段返回 `null`
+- `nextAction = VIEW_TRIAGE_RESULT`
+- 必须有 `recommendedDepartments`
+- 必须有 `catalogVersion`
+- Java 会用已发布目录校验 `catalogVersion + departmentId + departmentName`
+- 校验通过后写入 `ai_triage_result`
 
-### 6.4 `POST /api/v1/admin/triage-catalog/publish`
-
-用途：由 Java 管理端显式发布当前医院范围下的可导诊目录到 Redis，供 Python 只读消费。
+### 4.3 `BLOCKED`
 
 规则：
 
-- 该接口需要登录态和 `admin:triage-catalog:publish` 权限
-- 该接口返回 `Result<T>`，`data` 至少包含 `catalogVersion`、`candidateCount`、`publishedAt`
-- Python 不再通过 HTTP 拉取目录，只读取 Redis key：`triage_catalog:active:{hospital_scope}` 和 `triage_catalog:{hospital_scope}:{catalog_version}`
-- Redis content JSON 字段名固定为 snake_case，字段结构以 `docs/proposals/03-redis-catalog-contract.md` 为准
-- 对外暴露的是“可导诊目录”语义，不等于 `departments` 全量
-- 本轮目录由 Java 基于现有 `departments` 做受控投影生成，不新增独立目录表
+- `riskLevel = high`
+- 必须有 `blockedReason`
+- `recommendedDepartments = []`
+- Java 校验通过后写入 `ai_triage_result`
 
-## 7. 医生接诊摘要承接
+## 5. SSE Query
 
-### 7.1 `GET /api/v1/encounters/{encounterId}/ai-summary`
+### 5.1 接口
 
-用途：医生在接诊页快速看到患者 AI 预问诊摘要，而不是查看全部聊天原文。
+`POST /api/v1/ai/triage/query/stream`
 
-`data` 至少包含：
+请求体与同步接口一致。
 
-- `encounterId`
-- `sessionId`
-- `chiefComplaintSummary`
-- `structuredSummary`
-- `riskLevel`
-- `recommendedDepartments`
-- `latestCitations`
+### 5.2 事件
 
-规则：
+Java 当前对外输出这些事件名：
 
-- 默认只返回摘要与引用，不默认返回 `ai_turn_content` 原文
-- 若医生查看原文，必须触发对象级授权与 `data_access_log`
+- `start`
+- `progress`
+- `delta`
+- `final`
+- `error`
+- `done`
 
-## 8. 高风险分支
+### 5.3 Java 行为
 
-| 内部结果 | Java 对外 `nextAction` | 前端表现 |
-|----------|------------------------|----------|
-| `collecting` | `CONTINUE_TRIAGE` | 继续问诊，不进入结果页 |
-| `ready` | `VIEW_TRIAGE_RESULT` | 统一进入结果页，由结果页决定是否展示挂号 CTA |
-| `high + refuse` | `EMERGENCY_OFFLINE` 或 `MANUAL_SUPPORT` | 不继续普通问诊，展示紧急就医/人工求助提示 |
+- Java 从 Python 接收 `snake_case` 事件数据，但对前端统一输出 `camelCase`
+- `start` 输出：`requestId`、`sessionId`、`turnId`、`queryRunId`
+- `progress` 输出：`step`
+- `delta` 输出：`textDelta`
+- `final` 输出：与同步 query 的 `data` 结构一致，字段全部为 `camelCase`
+- `error` 输出：`code`、`message`
+- `done` 输出：`{}`
+- 只有 `final` 事件可驱动业务状态；`delta` 只用于展示
+- `final`：Java 先解析、校验、必要时落库，再向前端输出
+- 如果 `final` 解析失败、目录校验失败或落库失败，Java 发出 `error` 事件并结束当前流
 
-约束：
+## 6. 持久化边界
 
-- 高风险场景不输出会被误解为诊断结论的文本
-- 高风险场景由 Java 负责把内部护栏结果映射成明确的下一步动作
-- 前端只依据 `nextAction` 做聊天结束后的跳转和交互，不自行解释规则命中细节
-- 是否出现挂号入口由结果页根据 finalized snapshot 决定，而不是由聊天态 `nextAction` 直接决定
+Java 当前只保存 finalized 业务快照表 `ai_triage_result`，字段包括：
 
-## 9. 与内部 Python 契约的关系
+- `request_id`
+- `session_id`
+- `turn_id`
+- `query_run_id`
+- `hospital_scope`
+- `triage_stage`
+- `triage_completion_reason`
+- `next_action`
+- `risk_level`
+- `chief_complaint_summary`
+- `care_advice`
+- `blocked_reason`
+- `catalog_version`
+- `recommended_departments_json`
+- `citations_json`
 
-- Python 内部契约见 [10-PYTHON_AI_SERVICE.md](./10-PYTHON_AI_SERVICE.md)
-- Python 负责执行、检索和引用；Java 负责鉴权、审计、会话主事实和前端对外协议
-- 前端不直接依赖 Python 的 `model_run_id`、`provider_run_id`、`risk_level` 原始字段组合
+当前不保存：
 
-## 10. 一句话结论
+- 完整聊天消息历史
+- Python 内部 `ai_session` / `ai_turn` / `query_run` 明细
 
-AI 文档不能只定义 Java 和 Python 怎么通，还必须定义浏览器最终拿到什么、下一步怎么走；否则主链路会停在“能聊天”，而不是“能导诊并承接到挂号和接诊”。
+## 7. 错误语义
+
+- 未登录：`401 + 1001`
+- 非患者角色：`403 + 2008`
+- 请求参数非法：`400 + 1002`
+- Python 不可用或本地缺少 `mediask.ai.base-url` / `mediask.ai.api-key`：`6001`
+- Python 超时：`6002`
+- Python 返回体、`final` 事件或目录校验不合法：`6003`
+
+## 8. 一句话结论
+
+当前 Java 已实现的是最小 AI triage 网关：同步 query + SSE proxy + finalized 快照承接，严格跟随 `docs/proposals` 的 `/query` 口径，不再走旧 `/api/v1/ai/chat` 模型。 
