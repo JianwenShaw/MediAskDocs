@@ -2,6 +2,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE ai_session (
     id uuid PRIMARY KEY,
+    patient_user_id varchar(128) NOT NULL,
     request_id varchar(64),
     scene_code varchar(32) NOT NULL CHECK (scene_code = 'AI_TRIAGE'),
     hospital_scope varchar(64) NOT NULL,
@@ -15,6 +16,9 @@ CREATE TABLE ai_session (
 
 CREATE INDEX idx_ai_session_stage
     ON ai_session (current_stage, created_at DESC);
+
+CREATE INDEX idx_ai_session_patient_created
+    ON ai_session (patient_user_id, created_at DESC);
 
 CREATE TABLE knowledge_base (
     id uuid PRIMARY KEY,

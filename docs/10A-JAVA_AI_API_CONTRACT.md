@@ -168,6 +168,11 @@
 
 - 当前实现仅支持患者本人回看自己的 AI 会话
 - 医生侧查看 AI 内容仍走后续 `GET /api/v1/encounters/{encounterId}/ai-summary`
+- 当前历史消息直接读取 Python 已持久化的会话消息事实
+- assistant 历史消息口径：
+  - `COLLECTING`：展示本轮追问文本
+  - `READY`：展示推荐结果提示与 `careAdvice`
+  - `BLOCKED`：展示阻断提示与 `careAdvice`
 - `startedAt`、`endedAt`、`turns[].startedAt`、`turns[].completedAt`、`messages[].createdAt` 对外统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`
 
 ### 6.2 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
@@ -209,6 +214,7 @@
 
 - `CURRENT`：当前展示的是最新 finalized 结果，当前没有新的 active cycle 在收集
 - `UPDATING`：当前展示的是上一版 finalized 结果，但当前有新的 active cycle 仍在 `COLLECTING`
+- `GET /api/v1/ai/sessions` 与 `GET /api/v1/ai/sessions/{sessionId}` 的摘要字段应与该 finalized 优先口径一致；不能因为新一轮进入 `COLLECTING` 就把上一版 finalized 摘要冲掉
 
 结果页行为约束：
 

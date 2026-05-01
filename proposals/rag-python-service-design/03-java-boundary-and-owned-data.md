@@ -106,6 +106,9 @@ Java 调用：
 
 - `POST /api/v1/query`
 - `POST /api/v1/query/stream`
+- `GET /api/v1/sessions`
+- `GET /api/v1/sessions/{session_id}`
+- `GET /api/v1/sessions/{session_id}/triage-result`
 - `/api/v1/admin/knowledge-*`
 - `/api/v1/admin/ingest-jobs/*`
 
@@ -116,6 +119,7 @@ Java 只消费 Python 返回的：
 - `turn_id`
 - `query_run_id`
 - `triage_result`
+- 患者自己的会话摘要、轮次、消息明细与 finalized 导诊结果
 - 知识库后台 API DTO
 
 运行时不再需要数据库直连读取 Python 内部事实。

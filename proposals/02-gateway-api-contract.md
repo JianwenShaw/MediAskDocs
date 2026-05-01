@@ -19,6 +19,9 @@
 |------|------|------|------|
 | POST | `/api/v1/ai/triage/query` | 同步 query | JWT |
 | POST | `/api/v1/ai/triage/query/stream` | 流式 SSE 代理 | JWT |
+| GET | `/api/v1/ai/sessions` | 当前患者 AI 会话列表 | JWT |
+| GET | `/api/v1/ai/sessions/{sessionId}` | 当前患者 AI 会话明细 | JWT |
+| GET | `/api/v1/ai/sessions/{sessionId}/triage-result` | 当前患者最近一次 finalized 导诊结果 | JWT |
 
 ---
 
@@ -39,6 +42,126 @@
 ## 4. 同步响应
 
 Java 将 Python 返回的 `triage_result` 封装进统一 `Result<T>` 响应。
+
+### 4.1 `GET /api/v1/ai/sessions`
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "msg": "ok",
+  "timestamp": 1777612345678,
+  "data": {
+    "items": [
+      {
+        "sessionId": "82f7a4c2-7784-4d31-9c6e-6c8fbbe8c2cd",
+        "sceneType": "AI_TRIAGE",
+        "status": "COLLECTING",
+        "departmentId": 101,
+        "chiefComplaintSummary": "近两天持续头痛，伴恶心",
+        "summary": "建议尽快门诊就诊",
+        "startedAt": "2026-05-01T09:00:00Z",
+        "endedAt": "2026-05-01T09:03:00Z"
+      }
+    ]
+  }
+}
+```
+
+### 4.2 `GET /api/v1/ai/sessions/{sessionId}`
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "msg": "ok",
+  "timestamp": 1777612345678,
+  "data": {
+    "sessionId": "82f7a4c2-7784-4d31-9c6e-6c8fbbe8c2cd",
+    "sceneType": "AI_TRIAGE",
+    "status": "COLLECTING",
+    "departmentId": 101,
+    "chiefComplaintSummary": "近两天持续头痛，伴恶心",
+    "summary": "建议尽快门诊就诊",
+    "startedAt": "2026-05-01T09:00:00Z",
+    "endedAt": "2026-05-01T09:03:00Z",
+    "turns": [
+      {
+        "turnId": "4b1eaf1f-3e28-479f-9fb5-f259db73507a",
+        "turnNo": 1,
+        "turnStatus": "COLLECTING",
+        "startedAt": "2026-05-01T09:00:00Z",
+        "completedAt": "2026-05-01T09:00:05Z",
+        "errorCode": null,
+        "errorMessage": null,
+        "messages": [
+          {
+            "role": "user",
+            "content": "我这两天一直头痛，还想吐",
+            "createdAt": "2026-05-01T09:00:00Z"
+          },
+          {
+            "role": "assistant",
+            "content": "请问是否有肢体无力或说话含糊？",
+            "createdAt": "2026-05-01T09:00:05Z"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 4.3 `GET /api/v1/ai/sessions/{sessionId}/triage-result`
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "msg": "ok",
+  "timestamp": 1777612345678,
+  "data": {
+    "sessionId": "82f7a4c2-7784-4d31-9c6e-6c8fbbe8c2cd",
+    "resultStatus": "UPDATING",
+    "triageStage": "READY",
+    "riskLevel": "low",
+    "guardrailAction": "allow",
+    "nextAction": "VIEW_TRIAGE_RESULT",
+    "finalizedTurnId": "4b1eaf1f-3e28-479f-9fb5-f259db73507a",
+    "finalizedAt": "2026-05-01T09:03:00Z",
+    "hasActiveCycle": true,
+    "activeCycleTurnNo": 1,
+    "chiefComplaintSummary": "近两天持续头痛，伴恶心",
+    "recommendedDepartments": [
+      {
+        "departmentId": 101,
+        "departmentName": "神经内科",
+        "priority": 1,
+        "reason": "头痛伴恶心，优先考虑神经系统相关问题"
+      }
+    ],
+    "careAdvice": "建议尽快门诊就诊",
+    "citations": [
+      {
+        "citationOrder": 1,
+        "chunkId": "0aa7d1af-b4f9-4409-920d-31e81b1bb6ce",
+        "snippet": "头痛伴恶心时应先排查神经系统相关疾病。"
+      }
+    ]
+  }
+}
+```
+
+补充约定：
+
+- Java 继续负责把 Python snake_case DTO 映射为对前端暴露的 camelCase DTO
+- `GET /api/v1/ai/sessions` 和 `GET /api/v1/ai/sessions/{sessionId}` 的摘要字段口径与 Python 保持一致：
+  - 优先展示最近一次 finalized 结果摘要
+  - 若从未 finalized，则回退到最新 collecting 摘要
+- `GET /api/v1/ai/sessions/{sessionId}` 的 `messages[]` 直接反映 Python 持久化的历史消息
 
 ---
 

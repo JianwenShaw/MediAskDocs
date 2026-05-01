@@ -20,6 +20,9 @@
 |------|------|------|
 | POST | `/api/v1/query` | 同步完整 query，返回 `triage_result` |
 | POST | `/api/v1/query/stream` | 流式 SSE，事件驱动 |
+| GET | `/api/v1/sessions` | 查询当前患者的 AI 会话摘要列表 |
+| GET | `/api/v1/sessions/{session_id}` | 查询当前患者的 AI 会话明细 |
+| GET | `/api/v1/sessions/{session_id}/triage-result` | 查询当前患者最近一次 finalized 导诊结果 |
 
 不再使用旧 `/api/v1/chat`。
 
@@ -29,6 +32,7 @@
 
 - `Content-Type: application/json`
 - `X-Request-Id: <string>`（由 Java 网关优先传入；若缺失 Python 生成并在响应中回传）
+- `X-Patient-User-Id: <string>`（Java 透传当前登录患者的 `users.id`；query 和 sessions 接口都必传）
 
 ---
 
@@ -67,6 +71,152 @@
   "triage_result": { /* 判别联合，见 §8 */ }
 }
 ```
+
+## 5A. 会话查询接口
+
+### 5A.1 `GET /api/v1/sessions`
+
+语义：
+
+- 返回当前 `X-Patient-User-Id` 对应患者的 AI 会话摘要列表
+- 按 `started_at DESC` 排序；同一时间按 `session_id DESC`
+- 优先展示最近一次 finalized 结果摘要；若从未 finalized，则回退到最新 collecting snapshot
+
+响应示例：
+
+```json
+{
+  "items": [
+    {
+      "session_id": "82f7a4c2-7784-4d31-9c6e-6c8fbbe8c2cd",
+      "scene": "AI_TRIAGE",
+      "status": "COLLECTING",
+      "department_id": 101,
+      "chief_complaint_summary": "近两天持续头痛，伴恶心",
+      "summary": "建议尽快门诊就诊",
+      "started_at": "2026-05-01T09:00:00Z",
+      "ended_at": "2026-05-01T09:03:00Z"
+    }
+  ]
+}
+```
+
+字段约束：
+
+- `scene` 当前固定 `AI_TRIAGE`
+- `status` ∈ {`COLLECTING`, `READY`, `BLOCKED`, `CLOSED`}
+- `department_id` 仅在最近一次 finalized 为 `READY` 时返回
+- `summary` 优先取最近一次 finalized 的结果摘要；若无 finalized，则回退为最新 collecting 的 `chief_complaint_summary`
+
+### 5A.2 `GET /api/v1/sessions/{session_id}`
+
+语义：
+
+- 返回当前患者的单个 AI 会话详情
+- 顶层摘要字段与列表接口口径一致
+- `turns[].messages[]` 直接反映 Python 落库的历史消息事实
+
+响应示例：
+
+```json
+{
+  "session_id": "82f7a4c2-7784-4d31-9c6e-6c8fbbe8c2cd",
+  "scene": "AI_TRIAGE",
+  "status": "COLLECTING",
+  "department_id": 101,
+  "chief_complaint_summary": "近两天持续头痛，伴恶心",
+  "summary": "建议尽快门诊就诊",
+  "started_at": "2026-05-01T09:00:00Z",
+  "ended_at": "2026-05-01T09:03:00Z",
+  "turns": [
+    {
+      "turn_id": "4b1eaf1f-3e28-479f-9fb5-f259db73507a",
+      "turn_no": 1,
+      "turn_status": "COLLECTING",
+      "started_at": "2026-05-01T09:00:00Z",
+      "completed_at": "2026-05-01T09:00:05Z",
+      "error_code": null,
+      "error_message": null,
+      "messages": [
+        {
+          "role": "user",
+          "content": "我这两天一直头痛，还想吐",
+          "created_at": "2026-05-01T09:00:00Z"
+        },
+        {
+          "role": "assistant",
+          "content": "请问是否有肢体无力或说话含糊？",
+          "created_at": "2026-05-01T09:00:05Z"
+        }
+      ]
+    }
+  ]
+}
+```
+
+字段约束：
+
+- `turn_status` 取该 turn 的最终阶段；若尚未写入 `stage_after`，则回退为 `stage_before`
+- `messages[].role` 只允许 `user` 或 `assistant`
+- 当前实现每轮最多返回 2 条消息：1 条用户消息 + 1 条助手消息
+- `assistant` 消息规则：
+  - `COLLECTING`：为本轮 follow-up questions 拼接后的历史文本
+  - `READY`：为推荐结果提示 + `care_advice`
+  - `BLOCKED`：为阻断提示 + `care_advice`
+
+### 5A.3 `GET /api/v1/sessions/{session_id}/triage-result`
+
+语义：
+
+- 返回当前患者最近一次 finalized 导诊结果
+- 若当前已有新一轮 cycle 在 `COLLECTING`，继续返回上一版 finalized 结果，并标记 `result_status = UPDATING`
+
+响应示例：
+
+```json
+{
+  "session_id": "82f7a4c2-7784-4d31-9c6e-6c8fbbe8c2cd",
+  "result_status": "UPDATING",
+  "triage_stage": "READY",
+  "risk_level": "low",
+  "guardrail_action": "allow",
+  "next_action": "VIEW_TRIAGE_RESULT",
+  "finalized_turn_id": "4b1eaf1f-3e28-479f-9fb5-f259db73507a",
+  "finalized_at": "2026-05-01T09:03:00Z",
+  "has_active_cycle": true,
+  "active_cycle_turn_no": 1,
+  "chief_complaint_summary": "近两天持续头痛，伴恶心",
+  "recommended_departments": [
+    {
+      "department_id": 101,
+      "department_name": "神经内科",
+      "priority": 1,
+      "reason": "头痛伴恶心，优先考虑神经系统相关问题"
+    }
+  ],
+  "care_advice": "建议尽快门诊就诊",
+  "citations": [
+    {
+      "citation_order": 1,
+      "chunk_id": "0aa7d1af-b4f9-4409-920d-31e81b1bb6ce",
+      "snippet": "头痛伴恶心时应先排查神经系统相关疾病。"
+    }
+  ],
+  "blocked_reason": null,
+  "catalog_version": "deptcat-v20260423-01"
+}
+```
+
+字段约束：
+
+- `result_status` ∈ {`CURRENT`, `UPDATING`}
+- `triage_stage` 成功返回时只允许 `READY` 或 `BLOCKED`
+- `guardrail_action` 当前实现只返回：
+  - `allow`：`READY`
+  - `refuse`：`BLOCKED`
+- `active_cycle_turn_no` 仅在 `has_active_cycle = true` 时非空
+- `blocked_reason` 仅在 `BLOCKED` 时非空
+- `catalog_version` 仅在 `READY` 时非空
 
 ---
 
@@ -298,3 +448,25 @@ P0 固定枚举：
 - `TRIAGE_MODEL_SCHEMA_INVALID`
 - `TRIAGE_STREAM_ASSEMBLY_FAILED`
 - `TRIAGE_INTERNAL_ERROR`
+
+### 12.3 会话查询接口补充错误
+
+`GET /api/v1/sessions/{session_id}`：
+
+- 当前患者无权访问该会话，或该会话不存在：返回 `404`
+
+`GET /api/v1/sessions/{session_id}/triage-result`：
+
+- 当前患者无权访问该会话，或该会话不存在：返回 `404`
+- 从未产出过 finalized 结果：返回 `409`
+
+无 finalized 结果时的错误响应示例：
+
+```json
+{
+  "code": 6021,
+  "msg": "triage result not ready",
+  "requestId": "req_01",
+  "timestamp": 1777612345678
+}
+```
