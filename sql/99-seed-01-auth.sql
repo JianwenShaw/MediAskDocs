@@ -35,7 +35,8 @@ VALUES
     (1135, 'admin:knowledge-ingest-job:view', '查看知识入库任务', 'API', 'ACTIVE', 350),
     (1136, 'admin:knowledge-index-version:list', '知识索引版本列表', 'API', 'ACTIVE', 360),
     (1137, 'admin:knowledge-release:list', '知识发布记录列表', 'API', 'ACTIVE', 370),
-    (1138, 'admin:knowledge-release:publish', '发布知识库版本', 'API', 'ACTIVE', 380)
+    (1138, 'admin:knowledge-release:publish', '发布知识库版本', 'API', 'ACTIVE', 380),
+    (1139, 'audit:query', '查询审计日志', 'API', 'ACTIVE', 390)
 ON CONFLICT (permission_code) DO NOTHING;
 
 INSERT INTO role_permissions (id, role_id, permission_id)
@@ -71,7 +72,8 @@ VALUES
     (1239, 1003, 1135),
     (1240, 1003, 1136),
     (1241, 1003, 1137),
-    (1242, 1003, 1138)
+    (1242, 1003, 1138),
+    (1243, 1003, 1139)
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- admin / admin123
@@ -224,5 +226,7 @@ INSERT INTO data_scope_rules (id, role_id, resource_type, scope_type, status)
 VALUES
     (3401, 1001, 'EMR_RECORD', 'SELF', 'ACTIVE'),
     (3402, 1002, 'EMR_RECORD', 'DEPARTMENT', 'ACTIVE'),
-    (3403, 1003, 'AUDIT_EVENT', 'ALL', 'ACTIVE')
+    (3403, 1003, 'AUDIT_EVENT', 'ALL', 'ACTIVE'),
+    (3404, 1001, 'PRESCRIPTION_ORDER', 'SELF', 'ACTIVE'),
+    (3405, 1002, 'PRESCRIPTION_ORDER', 'DEPARTMENT', 'ACTIVE')
 ON CONFLICT DO NOTHING;

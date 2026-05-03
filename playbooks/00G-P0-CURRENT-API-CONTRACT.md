@@ -13,7 +13,7 @@
 - 现有文档还没有把“当前已实现接口”的参数约束、身份要求和真实业务语义讲到足够完整。
 - [../docs/01-OVERVIEW.md](../docs/01-OVERVIEW.md)、[../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md)、[../docs/03A-JAVA_CONFIG.md](../docs/03A-JAVA_CONFIG.md) 里包含大量目标设计或后续规划接口，不能直接当作当前仓库的对外契约。
 - [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md)、[00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md)、[00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md) 适合看完成度和实现顺序，但对当前已实现接口的细节覆盖仍不够。
-- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、AI 会话列表 / 明细 / finalized 结果读取、门诊场次查询、挂号、接诊列表、接诊详情、EMR 创建与详情、处方创建与详情。审计接口还没有对外落地。
+- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、AI 会话列表 / 明细 / finalized 结果读取、门诊场次查询、挂号、接诊列表、接诊详情、EMR 创建与详情、处方创建与详情，以及审计事件/敏感访问查询接口。
 
 ## 2. 通用协议
 
@@ -672,15 +672,34 @@
 
 - 接诊不存在或不属于当前医生时返回 `404 + 4013`
 - 处方不存在返回 `404 + 4016`
-- 当前还没有处方对象级授权与访问留痕
+- 当前已对处方详情接入对象级授权与访问留痕；医生按接诊归属访问，患者按本人处方自助访问
 - `prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
 
-## 12. 容易被文档误导的未实现接口
+## 12. 审计查询接口
 
-下面这些接口在设计文档里已经出现，但当前代码里还没有对应 controller，不应当被当成当前可调用契约：
+### 12.1 `GET /api/v1/audit/events`
 
-- `GET /api/v1/audit/events`
-- `GET /api/v1/audit/data-access`
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态与 `audit:query` 权限 |
+| 对象授权 | 走 `AUDIT_EVENT_QUERY` 场景鉴权；拒绝访问会写失败审计 |
+| 查询参数 | `from?`、`to?`、`actionCode?`、`operatorUserId?`、`patientUserId?`、`encounterId?`、`resourceType?`、`resourceId?`、`successFlag?`、`requestId?`、`pageNo?`、`pageSize?` |
+| `resourceId` 口径 | 字符串业务键 |
+| 响应结构 | `PageData`，包含 `items`、`pageNum`、`pageSize`、`total`、`totalPages`、`hasNext` |
+| 响应项关键字段 | `operatorUserId`、`operatorUsername`、`operatorRoleCode`、`actorDepartmentId`、`patientUserId`、`encounterId`、`reasonText`、`clientIp`、`userAgent`、`resourceType`、`resourceId`、`successFlag` |
+| 真实语义 | 查询 `audit_event`，并对本次查询本身写 `AUDIT_QUERY` 审计；查询摘要会记录操作者、患者、接诊、时间窗和结果条件 |
+
+### 12.2 `GET /api/v1/audit/data-access`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态与 `audit:query` 权限 |
+| 对象授权 | 走 `AUDIT_DATA_ACCESS_QUERY` 场景鉴权；拒绝访问会写失败审计 |
+| 查询参数 | `from?`、`to?`、`resourceType?`、`resourceId?`、`operatorUserId?`、`patientUserId?`、`encounterId?`、`accessAction?`、`accessResult?`、`requestId?`、`pageNo?`、`pageSize?` |
+| `resourceId` 口径 | 字符串业务键 |
+| 响应结构 | `PageData`，包含 `items`、`pageNum`、`pageSize`、`total`、`totalPages`、`hasNext` |
+| 响应项关键字段 | `operatorUserId`、`operatorUsername`、`operatorRoleCode`、`actorDepartmentId`、`patientUserId`、`encounterId`、`clientIp`、`userAgent`、`accessAction`、`accessPurposeCode`、`accessResult`、`denyReasonCode` |
+| 真实语义 | 查询 `data_access_log`，并对本次查询本身写 `AUDIT_QUERY` 审计；支持按接诊直接回看病历/处方/AI 敏感访问轨迹 |
 
 ## 13. 一句话结论
 

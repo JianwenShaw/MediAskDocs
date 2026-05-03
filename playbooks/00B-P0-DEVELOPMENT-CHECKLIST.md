@@ -243,17 +243,18 @@
 
 ### Java 对外接口
 
-- [ ] `GET /api/v1/audit/events`
-- [ ] `GET /api/v1/audit/data-access`
+- [x] `GET /api/v1/audit/events`
+- [x] `GET /api/v1/audit/data-access`
 
 ### 必做能力
 
 - [x] `ScenarioAuthorization`、`ScenarioCode`、`data_scope_rules` 基础骨架已存在
 - [x] 现有 401/403 接口返回统一错误体与稳定 `requestId`
-- [ ] 所有按 ID 查看病历、AI 原文、处方详情的接口做对象级授权
-- [ ] 非授权访问触发敏感访问留痕
-- [ ] 查看病历正文、AI 原文时写 `data_access_log`
-- [ ] 登录、挂号、病历保存、处方保存、权限变更等关键动作写 `audit_event`
+- [x] 所有按 ID 查看病历、AI 原文、处方详情的接口做对象级授权
+- [x] 非授权访问触发敏感访问留痕
+- [x] 查看病历正文、AI 原文时写 `data_access_log`
+- [x] 查看诊断详情、处方详情、患者身份信息详情时写 `data_access_log`
+- [x] 登录、挂号、病历保存、处方保存、患者资料变更、审计查询等关键动作写 `audit_event`
 
 ## 5. 页面 / API / 表 / 用例 / 当前状态映射
 
@@ -268,7 +269,7 @@
 | AI 到挂号承接 | `/api/v1/ai/sessions/{id}/registration-handoff` | `ai_session`、`registration_order` | 把 AI 结果转为挂号入口 | 后端已实现，前端未开始 |
 | 医生接诊列表 | `/api/v1/encounters` | `visit_encounter`、`registration_order` | 医生查看本人待接诊记录 | 已实现 |
 | 接诊详情 / 病历 / 处方 | `/api/v1/encounters/{id}`、`/api/v1/emr/*`、`/api/v1/prescriptions/*` | `visit_encounter`、`emr_*`、`prescription_*` | 接诊详情、病历录入、处方录入 | 后端已完成，前端未完成 |
-| 审计页 | `/api/v1/audit/*` | `audit_event`、`data_access_log` | 审计查询与敏感访问追溯 | 未开始 |
+| 审计页 | `/api/v1/audit/*` | `audit_event`、`data_access_log` | 审计查询与敏感访问追溯 | 后端已实现，前端未开始 |
 
 ## 6. 联调验收清单
 

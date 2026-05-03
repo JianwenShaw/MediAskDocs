@@ -242,8 +242,8 @@
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
 |------|------------------|----------------------|
-| `GET /api/v1/audit/events` | `from?`、`to?`、`action?`、`operatorUserId?` | `items[]` |
-| `GET /api/v1/audit/data-access` | `from?`、`to?`、`resourceType?`、`operatorUserId?` | `items[]` |
+| `GET /api/v1/audit/events` | `from?`、`to?`、`actionCode?`、`operatorUserId?`、`patientUserId?`、`encounterId?`、`resourceType?`、`resourceId?`、`successFlag?`、`requestId?`、`pageNo?`、`pageSize?` | `PageData(items[].operatorUserId, items[].operatorUsername, items[].actorDepartmentId, items[].patientUserId, items[].encounterId, items[].reasonText, items[].clientIp, items[].userAgent)` |
+| `GET /api/v1/audit/data-access` | `from?`、`to?`、`resourceType?`、`resourceId?`、`operatorUserId?`、`patientUserId?`、`encounterId?`、`accessAction?`、`accessResult?`、`requestId?`、`pageNo?`、`pageSize?` | `PageData(items[].operatorUserId, items[].operatorUsername, items[].actorDepartmentId, items[].patientUserId, items[].encounterId, items[].clientIp, items[].userAgent)` |
 
 ## 5. Java -> Python 内部 DTO 清单
 

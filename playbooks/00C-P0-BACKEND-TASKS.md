@@ -229,7 +229,9 @@
 
 - [ ] 查看病历正文要写 `data_access_log`
 - [ ] 查看 AI 原文要写 `data_access_log`
-- [ ] 登录、挂号、病历保存、处方保存、权限变更要写 `audit_event`
+- [ ] 查看诊断详情、处方详情、患者身份信息详情要写 `data_access_log`
+- [ ] 越权访问被拒绝时同样写 `data_access_log`
+- [ ] 登录、挂号、病历保存、诊断保存、处方保存、权限变更、审计查询/导出要写 `audit_event`
 
 ## 4. Java / Python 分工
 

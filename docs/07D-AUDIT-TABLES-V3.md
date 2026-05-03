@@ -34,6 +34,7 @@
 
 - 谁在什么时间做了什么操作
 - 操作的目标资源是什么
+- 影响了哪位患者 / 哪次接诊
 - 是否成功
 - 请求链路 request_id 是什么
 
@@ -54,11 +55,20 @@
 
 - `request_id`：跨网关、Java、Python、审计排查的主线索
 - `trace_id`：P2 启用 APM 时用于额外对齐 SkyWalking / OpenTelemetry
+- `actor_type`：当前默认 `USER`，后续可扩展 `SYSTEM`
 - `operator_user_id`：明确是谁操作的
+- `operator_username`：保留操作时使用的登录名；登录失败时尤其需要它来定位被尝试的账号
 - `operator_role_code`：保留操作时的角色视角，避免后续角色变更后回溯困难
-- `action_code`：标准化操作类型，如 CREATE、UPDATE、EXPORT、AI_REVIEW
-- `resource_type` / `resource_id`：形成审计对象索引
+- `actor_department_id`：定位操作者当时处于哪个科室/组织视角
+- `action_code`：标准化业务动作码，如 `AUTH_LOGIN_SUCCESS`、`REGISTRATION_CREATE`、`EMR_SAVE`、`ROLE_ASSIGN`
+- `resource_type` / `resource_id`：形成审计对象索引；`resource_id` 在 P0 固定使用稳定业务键字符串，例如 `encounterId`、`sessionId`
+- `patient_user_id`：关联患者主体，支持“最近谁动过这个患者的数据”
+- `encounter_id`：关联一次接诊，方便从病历、诊断、处方回溯到诊疗现场
 - `success_flag`：便于区分成功与失败操作，支持安全分析
+- `client_ip` / `user_agent`：支持基础安全排查
+- `reason_text`：导出、高权限变更、二次确认等场景的操作理由；`P0` 当前也用于记录 `AUDIT_QUERY` 的受控查询摘要，字段长度建议至少 `VARCHAR(1024)`
+
+`P0` 不建议把病历原文、AI 原文、证件号、手机号前后值直接塞进 `audit_event`；这类高敏内容如确有需要，后续统一进入 `audit_payload`。
 
 ### 2.4 推荐索引
 
@@ -123,6 +133,7 @@
 - 谁查看了哪份病历
 - 谁导出了哪张处方
 - 谁看了哪段 AI 原文
+- 谁查看了患者身份信息
 - 谁访问审计密文载荷被允许或拒绝
 
 ### 4.2 为什么它不能并入 `audit_event`
@@ -145,11 +156,26 @@
 
 ### 4.3 关键字段
 
-- `access_purpose`：为什么看，是查看、导出、打印、调试还是复核
-- `resource_type` / `resource_id`：看了什么
+- `actor_type`：当前默认 `USER`，后续可扩展 `SYSTEM`
+- `actor_department_id`：保留操作者所在科室/组织上下文
+- `operator_username`：保留操作者当时的登录名，便于直接排查账号层面的敏感访问
+- `access_action`：查看、导出、下载、打印等访问动作
+- `access_purpose_code`：为什么看，建议固定为 `TREATMENT`、`SELF_SERVICE`、`ADMIN_OPERATION`、`SECURITY_INVESTIGATION`、`AUDIT_REVIEW`
+- `resource_type` / `resource_id`：看了什么；允许与拒绝访问必须使用同一业务键口径，避免追责时出现资源对不上
 - `patient_user_id`：如果是患者相关敏感数据，这个字段很关键
-- `access_result` / `deny_reason`：不只是记录允许，还要记录拒绝
+- `encounter_id`：如果访问对象归属于一次诊疗，应同步写入
+- `access_result` / `deny_reason_code`：不只是记录允许，还要记录拒绝
+- `client_ip` / `user_agent`：用于识别异常终端与可疑来源
 - `request_id` / `trace_id`：默认靠 `request_id` 对齐；启用 APM 时再补 `trace_id`
+
+`P0` 最少应覆盖：
+
+- 病历正文
+- 诊断详情
+- 处方详情
+- AI 原文 / 完整问诊明细
+- 患者身份信息详情
+- 审计明细本身
 
 ### 4.4 为什么这张表在医疗系统里非常重要
 
