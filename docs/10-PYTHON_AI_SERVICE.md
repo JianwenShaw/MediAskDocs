@@ -139,7 +139,9 @@ POST /api/v1/query/stream
 
 - 只有 `final.triage_result` 是业务真相。
 - `delta` 只用于展示自然语言。
+- `delta` 会在 Python 消费上游 LLM 流时实时发出，不等待整段回答完成。
 - Python 必须完整组装模型 JSON 并本地校验后再发送 `final`。
+- SSE 响应头固定包含 `Cache-Control: no-cache`、`Connection: keep-alive`、`X-Accel-Buffering: no`，避免代理缓冲把真流式变成伪流式。
 
 ## 5. `triage_result` 判别联合
 

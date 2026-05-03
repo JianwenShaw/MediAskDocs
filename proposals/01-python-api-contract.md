@@ -236,8 +236,10 @@
 - 前端只能根据 `final` 事件跳页
 - Java 透传 SSE 时，只以 `final` 中的 `triage_result` 作为业务真相
 - `delta` 只用于展示自然语言
+- `delta` 应在 Python 消费模型流时实时向下游发出，而不是等完整响应组装后一次性发送
 - Python 必须在服务端完整组装 DeepSeek JSON 后再生成 `final`
 - Python 不得把 DeepSeek keep-alive 注释直接透给业务端
+- SSE 响应应关闭缓冲，至少包含 `Cache-Control: no-cache`、`Connection: keep-alive`、`X-Accel-Buffering: no`
 
 ---
 

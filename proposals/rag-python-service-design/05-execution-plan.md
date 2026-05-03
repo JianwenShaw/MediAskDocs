@@ -391,15 +391,17 @@ SSE 事件固定为：
 2. 发送 `start`
 3. 完成输入护栏并发送 `progress`
 4. 读取 Redis 导诊目录并发送 `progress`
-5. 调 DeepSeek，完成 `triage_materials`
-6. 本地校验并做状态机收口
-7. 发送 `final`
-8. 发送 `done`
+5. 调 DeepSeek，并在消费上游流时连续发送 `delta`
+6. 完成 `triage_materials`
+7. 本地校验并做状态机收口
+8. 发送 `final`
+9. 发送 `done`
 
 ### 9.4 验收标准
 
 - `start` 中包含 `request_id/session_id/turn_id/query_run_id`。
 - `progress.step` 只使用冻结枚举。
+- 流式成功时，如果上游返回文本增量，则在 `final` 前收到 `delta`。
 - `final` 中包含完整 `triage_result`。
 - 出错时发送 `error` 事件。
 - 不通过 `delta` 驱动业务状态。
