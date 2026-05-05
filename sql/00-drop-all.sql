@@ -24,7 +24,6 @@ DROP TABLE IF EXISTS audit.audit_event CASCADE;
 DROP TABLE IF EXISTS prescription_item CASCADE;
 DROP TABLE IF EXISTS prescription_order CASCADE;
 DROP TABLE IF EXISTS emr_diagnosis CASCADE;
-DROP TABLE IF EXISTS emr_record_content CASCADE;
 DROP TABLE IF EXISTS emr_record CASCADE;
 
 DROP TABLE IF EXISTS visit_encounter CASCADE;

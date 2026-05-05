@@ -10,16 +10,6 @@ INSERT INTO emr_record (
     department_id,
     record_status,
     chief_complaint_summary,
-    created_at,
-    updated_at
-)
-VALUES
-    (9101, 'EMR20260430001', 8102, 2006, 3201, 3103, 'DRAFT', '发热伴咽痛 2 天', TIMESTAMPTZ '2026-04-30 09:15:00+08:00', TIMESTAMPTZ '2026-04-30 09:50:00+08:00'),
-    (9102, 'EMR20260504001', 8104, 2003, 3203, 3102, 'DRAFT', '发热缓解后复诊评估', TIMESTAMPTZ '2026-05-04 15:10:00+08:00', TIMESTAMPTZ '2026-05-04 15:30:00+08:00')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO emr_record_content (
-    record_id,
     content_encrypted,
     content_masked,
     content_hash,
@@ -27,9 +17,9 @@ INSERT INTO emr_record_content (
     updated_at
 )
 VALUES
-    (9101, '8eotyqbLLCDTx/W8+m/LDNtcenxKJNbgqEYVYUmBIxr+G4jmfmSLsGHuv8pH+Bzh96C7e7opEhGwL94E0WZtIbpDxtm+u6k7QvesLAhDFDI/6oD4x/3S5LKBWAuTmDEEKruPLlEv5r2hlSxVLrRWw6CoEVgWroS8wWLJDrb9QJw2BCiIXanfORP0tzwhIzyYm+zTrXXS+7jmRR6da+aFrj5Cf6DjV7MGZLFhVYtZppxCIvWzeNH4Nh0bOm5bP2Ew+38NlFxrZX0tTQ==', '患者主诉发热伴咽痛 2 天，无明显呼吸困难。查体提示咽部充血，考虑急性上呼吸道感染，建议多饮水、规律休息并口服对症药物。', '8cc55558269847c465457ea133d638804cd9051ceb471395fc2164a9fa53e11d', TIMESTAMPTZ '2026-04-30 09:15:00+08:00', TIMESTAMPTZ '2026-04-30 09:50:00+08:00'),
-    (9102, '2Y2YkCR/EPuN8rk2cA9IHE9GbXdUn8wXyA2yYZNg0sU3EpFCeNkFuzQY4mEFI06a6jUdM42cRoBpLAB1pL4oCfpbpO/ZeDd3qZ414nevP6ZJ9PXFzSuFnoVQ0edbCF6+ztXHqna2ziXdAWo0fDLzxEJvHqwhw7ngyOdZIwKY8XBP6PsTVMhFHg9PkPw52Zv0pjx7J8JNm1CMtk87CAj0TCSpkB0Y32rQlOf0UZ33jw2/eSwWDawF32pexfZFUmZ43G3H5A==', '患者发热症状较前明显缓解，当前无寒战和胸闷。查体生命体征平稳，考虑病毒感染恢复期，建议居家休息、补液并监测体温。', 'e1d8f01bdebf91edd2c7efec06cc96603003c401b03937f9f5812cab051c0b6b', TIMESTAMPTZ '2026-05-04 15:10:00+08:00', TIMESTAMPTZ '2026-05-04 15:30:00+08:00')
-ON CONFLICT (record_id) DO NOTHING;
+    (9101, 'EMR20260430001', 8102, 2006, 3201, 3103, 'DRAFT', '发热伴咽痛 2 天', '8eotyqbLLCDTx/W8+m/LDNtcenxKJNbgqEYVYUmBIxr+G4jmfmSLsGHuv8pH+Bzh96C7e7opEhGwL94E0WZtIbpDxtm+u6k7QvesLAhDFDI/6oD4x/3S5LKBWAuTmDEEKruPLlEv5r2hlSxVLrRWw6CoEVgWroS8wWLJDrb9QJw2BCiIXanfORP0tzwhIzyYm+zTrXXS+7jmRR6da+aFrj5Cf6DjV7MGZLFhVYtZppxCIvWzeNH4Nh0bOm5bP2Ew+38NlFxrZX0tTQ==', '患者主诉发热伴咽痛 2 天，无明显呼吸困难。查体提示咽部充血，考虑急性上呼吸道感染，建议多饮水、规律休息并口服对症药物。', '8cc55558269847c465457ea133d638804cd9051ceb471395fc2164a9fa53e11d', TIMESTAMPTZ '2026-04-30 09:15:00+08:00', TIMESTAMPTZ '2026-04-30 09:50:00+08:00'),
+    (9102, 'EMR20260504001', 8104, 2003, 3203, 3102, 'DRAFT', '发热缓解后复诊评估', '2Y2YkCR/EPuN8rk2cA9IHE9GbXdUn8wXyA2yYZNg0sU3EpFCeNkFuzQY4mEFI06a6jUdM42cRoBpLAB1pL4oCfpbpO/ZeDd3qZ414nevP6ZJ9PXFzSuFnoVQ0edbCF6+ztXHqna2ziXdAWo0fDLzxEJvHqwhw7ngyOdZIwKY8XBP6PsTVMhFHg9PkPw52Zv0pjx7J8JNm1CMtk87CAj0TCSpkB0Y32rQlOf0UZ33jw2/eSwWDawF32pexfZFUmZ43G3H5A==', '患者发热症状较前明显缓解，当前无寒战和胸闷。查体生命体征平稳，考虑病毒感染恢复期，建议居家休息、补液并监测体温。', 'e1d8f01bdebf91edd2c7efec06cc96603003c401b03937f9f5812cab051c0b6b', TIMESTAMPTZ '2026-05-04 15:10:00+08:00', TIMESTAMPTZ '2026-05-04 15:30:00+08:00')
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO emr_diagnosis (
     id,
