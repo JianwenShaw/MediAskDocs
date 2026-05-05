@@ -13,7 +13,7 @@
 - 现有文档还没有把“当前已实现接口”的参数约束、身份要求和真实业务语义讲到足够完整。
 - [../docs/01-OVERVIEW.md](../docs/01-OVERVIEW.md)、[../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md)、[../docs/03A-JAVA_CONFIG.md](../docs/03A-JAVA_CONFIG.md) 里包含大量目标设计或后续规划接口，不能直接当作当前仓库的对外契约。
 - [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md)、[00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md)、[00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md) 适合看完成度和实现顺序，但对当前已实现接口的细节覆盖仍不够。
-- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、AI 会话列表 / 明细 / finalized 结果读取、门诊场次查询、挂号、接诊列表、接诊详情、EMR 创建与详情、处方创建/详情/更新药品/开具/取消，以及审计事件/敏感访问查询接口。
+- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、AI 会话列表 / 明细 / finalized 结果读取、门诊场次查询、挂号、接诊列表、接诊详情、EMR 历史摘要列表、EMR 创建与详情、处方创建/详情/更新药品/开具/取消，以及审计事件/敏感访问查询接口。
 
 ## 2. 通用协议
 
@@ -54,6 +54,7 @@
 | 认证 | `GET /api/v1/auth/me` | 已登录 | 返回当前登录用户的实时上下文，而不是只回 token 里的静态声明 |
 | 患者本人资料 | `GET /api/v1/patients/me/profile` | 已登录 + 患者本人权限 + `PATIENT` 角色 | 查询当前患者自己的业务档案 |
 | 患者本人资料 | `PUT /api/v1/patients/me/profile` | 已登录 + 患者本人权限 + `PATIENT` 角色 | 更新当前患者自己的业务档案 |
+| 患者本人病历 | `GET /api/v1/patients/me/emrs` | 已登录 + `emr:read` 权限 + `PATIENT` 角色 | 查询当前患者自己的病历摘要列表 |
 | 医生本人资料 | `GET /api/v1/doctors/me/profile` | 已登录 + 医生本人权限 + `DOCTOR` 角色 | 查询当前医生自己的执业档案 |
 | 医生本人资料 | `PUT /api/v1/doctors/me/profile` | 已登录 + 医生本人权限 + `DOCTOR` 角色 | 更新当前医生自己的执业档案 |
 | 管理员患者管理 | `GET /api/v1/admin/patients` | 已登录 + 管理员患者列表权限 | 后台分页查患者，不是患者自助查询 |
@@ -85,6 +86,7 @@
 | 医生接诊 | `GET /api/v1/encounters` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生自己的接诊列表 |
 | 医生接诊 | `GET /api/v1/encounters/{encounterId}` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生自己的单个接诊详情 |
 | 医生接诊 | `GET /api/v1/encounters/{encounterId}/ai-summary` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生可查看的接诊 AI 预问诊摘要 |
+| 医生接诊 | `GET /api/v1/encounters/{encounterId}/emr-history` | 已登录 + `emr:read` 权限 + `DOCTOR` 角色 | 查询当前接诊患者的历史病历摘要列表 |
 | 医生接诊 | `PATCH /api/v1/encounters/{encounterId}` | 已登录 + 接诊更新权限 + `DOCTOR` 角色 | 更新当前医生自己的接诊状态（开始/完成） |
 | 处方 | `POST /api/v1/prescriptions` | 已登录 + 处方创建权限 + `DOCTOR` 角色 | 医生为自己的接诊创建处方（DRAFT） |
 | 处方 | `GET /api/v1/prescriptions/{encounterId}` | 已登录 + 处方读取权限 | 查看处方详情（医生按接诊归属、患者按本人） |
@@ -516,7 +518,7 @@
 补充说明：
 
 - 当前控制器会从登录态取 `doctorId`，再传给 UseCase。
-- 当前实现已覆盖接诊列表、接诊详情、AI 摘要、EMR、处方。
+- 当前实现已覆盖接诊列表、接诊详情、AI 摘要、当前接诊患者历史病历摘要、EMR、处方。
 - 没有接诊权限的医生会先在场景鉴权阶段收到 `403 + 1003`。
 
 ### 9.2 `GET /api/v1/encounters/{encounterId}`
@@ -536,7 +538,23 @@
 - `patientSummary.sessionDate` 统一返回 `yyyy-MM-dd` 字符串；`startedAt`、`endedAt` 统一返回带时区偏移的秒级 ISO-8601 字符串。
 - 接诊不存在返回 `404 + 4004`；接诊不属于当前医生返回 `403 + 4003`。
 
-### 9.3 `PATCH /api/v1/encounters/{encounterId}`
+### 9.3 `GET /api/v1/encounters/{encounterId}/emr-history`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态、`emr:read` 权限、`DOCTOR` 角色 |
+| 路径参数 | `encounterId` |
+| 响应字段 | `items[].emrRecordId`、`encounterId`、`recordNo`、`recordStatus`、`departmentId`、`departmentName?`、`doctorId`、`doctorName?`、`sessionDate?`、`chiefComplaintSummary?`、`createdAt` |
+| 真实语义 | 先按当前 `encounterId` 校验医生是否可访问该接诊，再返回该患者的历史病历摘要列表，不返回病历正文 |
+
+补充说明：
+
+- 这个接口的访问控制是对象级的：医生只能用自己可见的当前接诊作为入口查看历史病历。
+- 返回列表会排除当前 `encounterId` 自己对应的病历，避免当前病历和历史病历重复展示。
+- 当前实现只查摘要投影，不解密 `contentEncrypted`，病历全文仍需调用 `GET /api/v1/emr/{encounterId}`。
+- `departmentName`、`doctorName`、`sessionDate` 在关联历史组织或排班记录已软删除时允许为空。
+
+### 9.4 `PATCH /api/v1/encounters/{encounterId}`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -663,9 +681,56 @@
 - Python 不调用 Java 内部 HTTP 目录接口，只按 `docs/proposals/03-redis-catalog-contract.md` 读取 Redis。
 - `publishedAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
 
-## 11. 当前已实现处方接口
+## 11. 当前已实现 EMR 接口
 
-### 11.1 `POST /api/v1/prescriptions`
+### 11.1 `GET /api/v1/patients/me/emrs`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `emr:read` 权限 + `PATIENT` 角色 |
+| 请求参数 | 无 |
+| 响应字段 | `items[].emrRecordId`、`encounterId`、`recordNo`、`recordStatus`、`departmentId`、`departmentName?`、`doctorId`、`doctorName?`、`sessionDate?`、`chiefComplaintSummary?`、`createdAt` |
+| 真实语义 | 永远只返回当前登录患者自己的病历摘要列表，不支持传任意患者 ID |
+
+补充说明：
+
+- 这里的列表是病历摘要，不包含 `content` 和 `diagnoses[]`。
+- `emrRecordId`、`encounterId`、`departmentId`、`doctorId` 对外按字符串返回。
+- `sessionDate` 按 `yyyy-MM-dd` 返回；`createdAt` 按带时区偏移的秒级 ISO-8601 字符串返回。
+
+### 11.2 `POST /api/v1/emr`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `emr:create` 权限 + `DOCTOR` 角色 |
+| 请求体 | `encounterId`、`chiefComplaintSummary?`、`content`、`diagnoses[]` |
+| 响应字段 | `recordId`、`recordNo`、`encounterId`、`recordStatus`、`version` |
+| 真实语义 | 医生为自己的接诊创建病历草稿；一个接诊当前只允许一份病历 |
+
+补充说明：
+
+- `diagnoses[]` 最小字段固定为：`diagnosisType`、`diagnosisCode?`、`diagnosisName`、`isPrimary`、`sortOrder`。
+- `content` 是病历正文，入库时会执行 AES 加密、PII 脱敏和 SHA-256 哈希。
+- 成功返回的人类可读编号 `recordNo` 形如 `EMR123456`。
+
+### 11.3 `GET /api/v1/emr/{encounterId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `emr:read` 权限；患者按本人、医生按对象级接诊可见性 |
+| 路径参数 | `encounterId` |
+| 响应字段 | `emrRecordId`、`content`、`diagnoses[]` |
+| 真实语义 | 返回单次接诊对应病历的全文详情 |
+
+补充说明：
+
+- 患者访问时按 `SELF_SERVICE` 目的记录敏感访问日志；医生访问时按 `TREATMENT` 目的记录。
+- 当前返回的是全文详情，不是摘要投影。
+- 接口找不到病历时返回 `404 + 4008`。
+
+## 12. 当前已实现处方接口
+
+### 12.1 `POST /api/v1/prescriptions`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -683,7 +748,7 @@
 - 当前实现不依赖药品字典、库存、审方规则或配伍校验
 - `prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
 
-### 11.2 `GET /api/v1/prescriptions/{encounterId}`
+### 12.2 `GET /api/v1/prescriptions/{encounterId}`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -699,7 +764,7 @@
 - 当前已对处方详情接入对象级授权与访问留痕；医生按接诊归属访问，患者按本人处方自助访问
 - `prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
 
-### 11.3 `PATCH /api/v1/prescriptions/{encounterId}/items`
+### 12.3 `PATCH /api/v1/prescriptions/{encounterId}/items`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -717,7 +782,7 @@
 - 并发更新冲突（乐观锁失败）返回 `409 + 4018`
 - `items` 不能为空；`prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
 
-### 11.4 `POST /api/v1/prescriptions/{encounterId}/issue`
+### 12.4 `POST /api/v1/prescriptions/{encounterId}/issue`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -735,7 +800,7 @@
 - 并发更新冲突（乐观锁失败）返回 `409 + 4018`
 - `prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
 
-### 11.5 `POST /api/v1/prescriptions/{encounterId}/cancel`
+### 12.5 `POST /api/v1/prescriptions/{encounterId}/cancel`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -753,7 +818,7 @@
 - 并发更新冲突（乐观锁失败）返回 `409 + 4018`
 - `prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
 
-### 11.6 处方状态流转
+### 12.6 处方状态流转
 
 | 当前状态 | 允许操作 | 目标状态 |
 |----------|----------|----------|
@@ -764,9 +829,9 @@
 
 所有状态变更均使用乐观锁（`version` 字段）保证并发安全。
 
-## 12. 审计查询接口
+## 13. 审计查询接口
 
-### 12.1 `GET /api/v1/audit/events`
+### 13.1 `GET /api/v1/audit/events`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -778,7 +843,7 @@
 | 响应项关键字段 | `operatorUserId`、`operatorUsername`、`operatorRoleCode`、`actorDepartmentId`、`patientUserId`、`encounterId`、`reasonText`、`clientIp`、`userAgent`、`resourceType`、`resourceId`、`successFlag` |
 | 真实语义 | 查询 `audit_event`，并对本次查询本身写 `AUDIT_QUERY` 审计；查询摘要会记录操作者、患者、接诊、时间窗和结果条件 |
 
-### 12.2 `GET /api/v1/audit/data-access`
+### 13.2 `GET /api/v1/audit/data-access`
 
 | 项目 | 当前代码口径 |
 |------|--------------|

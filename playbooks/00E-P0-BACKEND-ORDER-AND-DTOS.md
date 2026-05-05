@@ -217,7 +217,9 @@
 | `GET /api/v1/encounters` | `status?` | `items[].encounterId`、`registrationId`、`patientUserId`、`patientName`、`departmentId`、`departmentName`、`sessionDate`、`periodCode`、`encounterStatus`、`startedAt`、`endedAt` |
 | `GET /api/v1/encounters/{id}` | Path `encounterId` | `encounterId`、`registrationId`、`patientSummary` |
 | `GET /api/v1/encounters/{id}/ai-summary` | Path `encounterId` | `encounterId`、`sessionId`、`chiefComplaintSummary`、`riskLevel`、`recommendedDepartments`、`careAdvice`、`citations`、`blockedReason`、`catalogVersion`、`finalizedAt` |
+| `GET /api/v1/encounters/{id}/emr-history` | Path `encounterId` | `items[].emrRecordId`、`encounterId`、`recordNo`、`recordStatus`、`departmentId`、`departmentName`、`doctorId`、`doctorName`、`sessionDate`、`chiefComplaintSummary`、`createdAt` |
 | `PATCH /api/v1/encounters/{id}` | Path `encounterId` + Body `action` | `encounterId`、`encounterStatus`、`startedAt`、`endedAt` |
+| `GET /api/v1/patients/me/emrs` | 无 | `items[].emrRecordId`、`encounterId`、`recordNo`、`recordStatus`、`departmentId`、`departmentName`、`doctorId`、`doctorName`、`sessionDate`、`chiefComplaintSummary`、`createdAt` |
 | `POST /api/v1/emr` | `encounterId`、`chiefComplaintSummary?`、`content`、`diagnoses[]` | `recordId`、`recordNo`、`encounterId`、`recordStatus`、`version` |
 | `GET /api/v1/emr/{encounterId}` | Path `encounterId` | `emrRecordId`、`content`、`diagnoses[]` |
 | `POST /api/v1/prescriptions` | `encounterId`、`items[]` | `prescriptionOrderId`、`encounterId`、`status`、`version`、`items[]` |
@@ -231,6 +233,7 @@
 - `GET /api/v1/encounters` 只基于 `visit_encounter` 查询，不用 `registration_order` 直接拼“待接诊”列表。
 - 挂号创建成功后即预创建 `visit_encounter`，初始状态固定为 `SCHEDULED`。
 - `GET /api/v1/encounters/{id}/ai-summary` 通过 `registration_order.source_ai_session_id` 关联 AI 会话；没有关联 AI 问诊或没有 finalized triage 结果时，统一返回 `404 + 4005`
+- `GET /api/v1/encounters/{id}/emr-history` 只返回当前接诊患者的历史病历摘要，不返回病历正文；当前 `encounterId` 对应病历会从列表中排除
 - `status` 只接受 `SCHEDULED`、`IN_PROGRESS`、`COMPLETED`、`CANCELLED`，不传则返回当前医生全部可见记录。
 - `PATCH /api/v1/encounters/{id}` 的 `action` 仅支持 `START`、`COMPLETE`。`START` 仅允许 `SCHEDULED -> IN_PROGRESS`；`COMPLETE` 仅允许 `IN_PROGRESS -> COMPLETED`。
 - `COMPLETE` 成功后同步更新 `registration_order.order_status = COMPLETED`；当前不联动 `clinic_slot`。
@@ -243,6 +246,7 @@
 - P0 处方录入不依赖药品字典、库存、审方规则或配伍校验；处方项按人工录入文本字段持久化
 - `POST /api/v1/emr` 的 `diagnoses[]` 最小字段固定为：`diagnosisType`（`PRIMARY` / `SECONDARY`）、`diagnosisCode?`、`diagnosisName`、`isPrimary`、`sortOrder`
 - `POST /api/v1/emr` 的 `content` 为病历正文，存储时做 AES 加密、PII 脱敏（身份证/手机号/姓名）和 SHA-256 哈希；`chiefComplaintSummary` 为可选摘要字段，存于 `emr_record` 表本身，便于列表展示
+- `GET /api/v1/patients/me/emrs` 只返回当前患者本人的病历摘要列表，病历全文继续通过 `GET /api/v1/emr/{encounterId}` 读取
 - 病历状态支持 `DRAFT` → `SIGNED` → `AMENDED`；创建后默认为 `DRAFT`，`sign()` 仅允许从 `DRAFT` 转换，`amend()` 仅允许从 `SIGNED` 转换
 - `POST /api/v1/emr` 成功后返回 `recordNo`（人类可读编号，如 `EMR123456`）、`recordStatus`、`version`（乐观锁版本号）
 
