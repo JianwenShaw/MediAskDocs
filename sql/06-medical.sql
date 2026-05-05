@@ -7,6 +7,9 @@ CREATE TABLE emr_record (
     department_id BIGINT NOT NULL,
     record_status VARCHAR(16) NOT NULL DEFAULT 'DRAFT',
     chief_complaint_summary TEXT,
+    content_encrypted TEXT,
+    content_masked TEXT,
+    content_hash VARCHAR(128),
     version INT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -17,16 +20,6 @@ CREATE TABLE emr_record (
     CONSTRAINT fk_emr_record_encounter_identity FOREIGN KEY (encounter_id, patient_id, doctor_id, department_id)
         REFERENCES visit_encounter (id, patient_id, doctor_id, department_id),
     CONSTRAINT ck_emr_record_status CHECK (record_status IN ('DRAFT', 'SIGNED', 'AMENDED', 'ARCHIVED'))
-);
-
-CREATE TABLE emr_record_content (
-    record_id BIGINT PRIMARY KEY,
-    content_encrypted TEXT NOT NULL,
-    content_masked TEXT,
-    content_hash VARCHAR(128),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_emr_record_content_record FOREIGN KEY (record_id) REFERENCES emr_record (id)
 );
 
 CREATE TABLE emr_diagnosis (

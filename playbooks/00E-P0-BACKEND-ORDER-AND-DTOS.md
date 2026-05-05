@@ -218,7 +218,7 @@
 | `GET /api/v1/encounters/{id}` | Path `encounterId` | `encounterId`、`registrationId`、`patientSummary` |
 | `GET /api/v1/encounters/{id}/ai-summary` | Path `encounterId` | `encounterId`、`sessionId`、`chiefComplaintSummary`、`structuredSummary`、`riskLevel`、`recommendedDepartments`、`latestCitations` |
 | `PATCH /api/v1/encounters/{id}` | Path `encounterId` + Body `action` | `encounterId`、`encounterStatus`、`startedAt`、`endedAt` |
-| `POST /api/v1/emr` | `encounterId`、`chiefComplaint`、`historyOfPresentIllness`、`diagnoses[]` | `emrRecordId`、`encounterId` |
+| `POST /api/v1/emr` | `encounterId`、`chiefComplaintSummary?`、`content`、`diagnoses[]` | `recordId`、`recordNo`、`encounterId`、`recordStatus`、`version` |
 | `GET /api/v1/emr/{encounterId}` | Path `encounterId` | `emrRecordId`、`content`、`diagnoses[]` |
 | `POST /api/v1/prescriptions` | `encounterId`、`items[]` | `prescriptionOrderId`、`encounterId`、`status`、`version`、`items[]` |
 | `GET /api/v1/prescriptions/{encounterId}` | Path `encounterId` | `prescriptionOrderId`、`encounterId`、`status`、`version`、`items[]` |
@@ -240,6 +240,10 @@
 - 创建处方前必须已存在 `emr_record`；`prescription_order.record_id` 直接关联该接诊对应病历
 - 处方状态支持 `DRAFT` → `ISSUED` → `CANCELLED`（DRAFT 也可直接取消）；`updateItems` 仅允许 DRAFT 状态
 - P0 处方录入不依赖药品字典、库存、审方规则或配伍校验；处方项按人工录入文本字段持久化
+- `POST /api/v1/emr` 的 `diagnoses[]` 最小字段固定为：`diagnosisType`（`PRIMARY` / `SECONDARY`）、`diagnosisCode?`、`diagnosisName`、`isPrimary`、`sortOrder`
+- `POST /api/v1/emr` 的 `content` 为病历正文，存储时做 AES 加密、PII 脱敏（身份证/手机号/姓名）和 SHA-256 哈希；`chiefComplaintSummary` 为可选摘要字段，存于 `emr_record` 表本身，便于列表展示
+- 病历状态支持 `DRAFT` → `SIGNED` → `AMENDED`；创建后默认为 `DRAFT`，`sign()` 仅允许从 `DRAFT` 转换，`amend()` 仅允许从 `SIGNED` 转换
+- `POST /api/v1/emr` 成功后返回 `recordNo`（人类可读编号，如 `EMR123456`）、`recordStatus`、`version`（乐观锁版本号）
 
 ## 4.5 审计
 
