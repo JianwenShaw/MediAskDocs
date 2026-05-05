@@ -216,7 +216,7 @@
 |------|------------------|----------------------|
 | `GET /api/v1/encounters` | `status?` | `items[].encounterId`、`registrationId`、`patientUserId`、`patientName`、`departmentId`、`departmentName`、`sessionDate`、`periodCode`、`encounterStatus`、`startedAt`、`endedAt` |
 | `GET /api/v1/encounters/{id}` | Path `encounterId` | `encounterId`、`registrationId`、`patientSummary` |
-| `GET /api/v1/encounters/{id}/ai-summary` | Path `encounterId` | `encounterId`、`sessionId`、`chiefComplaintSummary`、`structuredSummary`、`riskLevel`、`recommendedDepartments`、`latestCitations` |
+| `GET /api/v1/encounters/{id}/ai-summary` | Path `encounterId` | `encounterId`、`sessionId`、`chiefComplaintSummary`、`riskLevel`、`recommendedDepartments`、`careAdvice`、`citations`、`blockedReason`、`catalogVersion`、`finalizedAt` |
 | `PATCH /api/v1/encounters/{id}` | Path `encounterId` + Body `action` | `encounterId`、`encounterStatus`、`startedAt`、`endedAt` |
 | `POST /api/v1/emr` | `encounterId`、`chiefComplaintSummary?`、`content`、`diagnoses[]` | `recordId`、`recordNo`、`encounterId`、`recordStatus`、`version` |
 | `GET /api/v1/emr/{encounterId}` | Path `encounterId` | `emrRecordId`、`content`、`diagnoses[]` |
@@ -230,6 +230,7 @@
 
 - `GET /api/v1/encounters` 只基于 `visit_encounter` 查询，不用 `registration_order` 直接拼“待接诊”列表。
 - 挂号创建成功后即预创建 `visit_encounter`，初始状态固定为 `SCHEDULED`。
+- `GET /api/v1/encounters/{id}/ai-summary` 通过 `registration_order.source_ai_session_id` 关联 AI 会话；没有关联 AI 问诊或没有 finalized triage 结果时，统一返回 `404 + 4005`
 - `status` 只接受 `SCHEDULED`、`IN_PROGRESS`、`COMPLETED`、`CANCELLED`，不传则返回当前医生全部可见记录。
 - `PATCH /api/v1/encounters/{id}` 的 `action` 仅支持 `START`、`COMPLETE`。`START` 仅允许 `SCHEDULED -> IN_PROGRESS`；`COMPLETE` 仅允许 `IN_PROGRESS -> COMPLETED`。
 - `COMPLETE` 成功后同步更新 `registration_order.order_status = COMPLETED`；当前不联动 `clinic_slot`。

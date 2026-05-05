@@ -37,17 +37,42 @@
 | `GET /api/v1/ai/sessions` | 当前患者 AI 会话列表 | 已登录 + `PATIENT` |
 | `GET /api/v1/ai/sessions/{sessionId}` | 当前患者 AI 会话明细 | 已登录 + `PATIENT` |
 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 当前患者最近一次 finalized 导诊结果 | 已登录 + `PATIENT` |
+| `GET /api/v1/encounters/{encounterId}/ai-summary` | 当前医生查看接诊关联的 AI 结构化摘要 | 已登录 + `DOCTOR` + `encounter:query` |
 
 当前未实现：
 
 - `POST /api/v1/ai/chat`
 - `POST /api/v1/ai/sessions/{sessionId}/registration-handoff`
-- `GET /api/v1/encounters/{encounterId}/ai-summary`
 
 说明：
 
 - `/api/v1/ai/sessions*` 当前全部由 Java 网关直接读取 Python `/api/v1/sessions*`
 - Java 不用 `ai_triage_result` 回填会话历史；快照表仍只承担 finalized 业务承接
+- `/api/v1/encounters/{encounterId}/ai-summary` 通过 `registration_order.source_ai_session_id` 关联到 AI 会话，只返回结构化 triage 结果，不返回完整问诊原文
+
+## 2.1 医生接诊 AI 摘要
+
+`GET /api/v1/encounters/{encounterId}/ai-summary`
+
+返回包裹仍是 `Result<T>`，其中 `data` 最小字段为：
+
+- `encounterId`
+- `sessionId`
+- `chiefComplaintSummary`
+- `riskLevel`
+- `recommendedDepartments[]`
+- `careAdvice`
+- `citations[]`
+- `blockedReason`
+- `catalogVersion`
+- `finalizedAt`
+
+规则：
+
+- 仅医生可访问，且只允许读取自己接诊的记录
+- 该接口不会返回 AI 原始对话或患者侧会话明细
+- 如果接诊没有关联 `sourceAiSessionId`，返回 `404 + 4005`
+- 如果关联了 AI 会话但没有可读取的 finalized triage 结果，同样返回 `404 + 4005`
 
 ## 3. 同步 Query
 

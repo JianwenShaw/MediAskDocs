@@ -329,6 +329,7 @@
 
 - `clinicSessionId`、`clinicSlotId` 在当前 DTO 层没有显式 Bean Validation，但业务上都被当作必需 ID 使用。
 - 当前实现创建成功后 `status` 固定返回 `CONFIRMED`。
+- 当前实现会原样承接可选 `sourceAiSessionId`，用于后续医生端读取接诊 AI 摘要。
 - 当前实现会先校验场次是否存在且处于开放状态；不存在时返回 `404 + 3004`。
 - 如果号源已满或无法预占，会返回 `409 + 3005`。
 - 已登录但不是患者角色时，返回 `403 + 2008`。
@@ -349,6 +350,7 @@
 - 这里的患者主体使用的是当前登录用户的 `userId`。
 - `CurrentUserResponse.patientId` 是 `patient_profile.id`，不要和挂号业务里的患者用户 ID 混用。
 - `createdAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移，例如 `2026-04-19T10:34:54+08:00`。
+- `sourceAiSessionId` 当前为普通字符串字段，原样返回；未关联 AI 问诊时省略或返回 `null`。
 
 ### 7.5 `GET /api/v1/registrations/{registrationId}`
 
@@ -364,7 +366,24 @@
 - `createdAt`、`cancelledAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移。
 - `sessionDate` 当前统一返回 `yyyy-MM-dd` 字符串，例如 `2026-04-03`。
 - `periodCode` 当前直接返回枚举名，例如 `MORNING`。
+- `sourceAiSessionId` 当前为普通字符串字段，原样返回；未关联 AI 问诊时省略或返回 `null`。
 - 当关联主数据已软删除时，`departmentName`、`doctorName`、`sessionDate`、`periodCode` 允许返回 `null`。
+
+### 7.9 `GET /api/v1/encounters/{encounterId}/ai-summary`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态、`DOCTOR` 角色和 `encounter:query` 权限 |
+| 路径参数 | `encounterId` |
+| 响应字段 | `encounterId`、`sessionId`、`chiefComplaintSummary`、`riskLevel`、`recommendedDepartments`、`careAdvice`、`citations`、`blockedReason`、`catalogVersion`、`finalizedAt` |
+| 真实语义 | 医生读取自己接诊关联的 AI 结构化摘要；不返回完整问诊原文或患者侧会话详情 |
+
+补充说明：
+
+- 该接口通过 `registration_order.source_ai_session_id` 追到 AI 会话，再读取 triage-result。
+- `encounterId` 和 `recommendedDepartments[].departmentId` 以字符串返回。
+- `finalizedAt` 当前统一返回秒级 ISO-8601 字符串，包含时区偏移。
+- 如果接诊不存在、不是当前医生、未关联 AI 问诊，或关联会话没有 finalized triage 结果，分别返回现有的 `4004`、`4003`、`4005`。
 
 ### 7.6 `PATCH /api/v1/registrations/{registrationId}/cancel`
 

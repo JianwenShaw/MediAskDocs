@@ -59,6 +59,7 @@ CREATE TABLE registration_order (
     department_id BIGINT NOT NULL,
     session_id BIGINT NOT NULL,
     slot_id BIGINT NOT NULL,
+    source_ai_session_id VARCHAR(64),
     order_status VARCHAR(16) NOT NULL DEFAULT 'CONFIRMED',
     fee NUMERIC(10,2) NOT NULL DEFAULT 0,
     paid_at TIMESTAMPTZ,
