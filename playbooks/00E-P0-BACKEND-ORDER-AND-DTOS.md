@@ -220,8 +220,11 @@
 | `PATCH /api/v1/encounters/{id}` | Path `encounterId` + Body `action` | `encounterId`、`encounterStatus`、`startedAt`、`endedAt` |
 | `POST /api/v1/emr` | `encounterId`、`chiefComplaint`、`historyOfPresentIllness`、`diagnoses[]` | `emrRecordId`、`encounterId` |
 | `GET /api/v1/emr/{encounterId}` | Path `encounterId` | `emrRecordId`、`content`、`diagnoses[]` |
-| `POST /api/v1/prescriptions` | `encounterId`、`items[]` | `prescriptionOrderId`、`encounterId`、`status`、`items[]` |
-| `GET /api/v1/prescriptions/{encounterId}` | Path `encounterId` | `prescriptionOrderId`、`encounterId`、`status`、`items[]` |
+| `POST /api/v1/prescriptions` | `encounterId`、`items[]` | `prescriptionOrderId`、`encounterId`、`status`、`version`、`items[]` |
+| `GET /api/v1/prescriptions/{encounterId}` | Path `encounterId` | `prescriptionOrderId`、`encounterId`、`status`、`version`、`items[]` |
+| `PATCH /api/v1/prescriptions/{encounterId}/items` | Path `encounterId` + Body `items[]` | `prescriptionOrderId`、`encounterId`、`status`、`version`、`items[]` |
+| `POST /api/v1/prescriptions/{encounterId}/issue` | Path `encounterId` | `prescriptionOrderId`、`encounterId`、`status`、`version` |
+| `POST /api/v1/prescriptions/{encounterId}/cancel` | Path `encounterId` | `prescriptionOrderId`、`encounterId`、`status`、`version` |
 
 补充约定：
 
@@ -235,7 +238,7 @@
 - `POST /api/v1/prescriptions` 的 `items[]` 最小字段固定为：`sortOrder`、`drugName`、`drugSpecification?`、`dosageText?`、`frequencyText?`、`durationText?`、`quantity`、`unit?`、`route?`
 - `GET /api/v1/prescriptions/{encounterId}` 返回单张处方而不是列表；P0 口径固定为“一个 `encounter` 最多一张有效处方”
 - 创建处方前必须已存在 `emr_record`；`prescription_order.record_id` 直接关联该接诊对应病历
-- P0 处方状态只实现 `DRAFT`；`ISSUED`、`CANCELLED` 保留给后续独立动作，不在本轮实现
+- 处方状态支持 `DRAFT` → `ISSUED` → `CANCELLED`（DRAFT 也可直接取消）；`updateItems` 仅允许 DRAFT 状态
 - P0 处方录入不依赖药品字典、库存、审方规则或配伍校验；处方项按人工录入文本字段持久化
 
 ## 4.5 审计

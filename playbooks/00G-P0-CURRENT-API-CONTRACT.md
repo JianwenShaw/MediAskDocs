@@ -13,7 +13,7 @@
 - 现有文档还没有把“当前已实现接口”的参数约束、身份要求和真实业务语义讲到足够完整。
 - [../docs/01-OVERVIEW.md](../docs/01-OVERVIEW.md)、[../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md)、[../docs/03A-JAVA_CONFIG.md](../docs/03A-JAVA_CONFIG.md) 里包含大量目标设计或后续规划接口，不能直接当作当前仓库的对外契约。
 - [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md)、[00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md)、[00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md) 适合看完成度和实现顺序，但对当前已实现接口的细节覆盖仍不够。
-- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、AI 会话列表 / 明细 / finalized 结果读取、门诊场次查询、挂号、接诊列表、接诊详情、EMR 创建与详情、处方创建与详情，以及审计事件/敏感访问查询接口。
+- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、AI 会话列表 / 明细 / finalized 结果读取、门诊场次查询、挂号、接诊列表、接诊详情、EMR 创建与详情、处方创建/详情/更新药品/开具/取消，以及审计事件/敏感访问查询接口。
 
 ## 2. 通用协议
 
@@ -86,6 +86,11 @@
 | 医生接诊 | `GET /api/v1/encounters/{encounterId}` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生自己的单个接诊详情 |
 | 医生接诊 | `GET /api/v1/encounters/{encounterId}/ai-summary` | 已登录 + 接诊列表权限 + `DOCTOR` 角色 | 查询当前医生可查看的接诊 AI 预问诊摘要 |
 | 医生接诊 | `PATCH /api/v1/encounters/{encounterId}` | 已登录 + 接诊更新权限 + `DOCTOR` 角色 | 更新当前医生自己的接诊状态（开始/完成） |
+| 处方 | `POST /api/v1/prescriptions` | 已登录 + 处方创建权限 + `DOCTOR` 角色 | 医生为自己的接诊创建处方（DRAFT） |
+| 处方 | `GET /api/v1/prescriptions/{encounterId}` | 已登录 + 处方读取权限 | 查看处方详情（医生按接诊归属、患者按本人） |
+| 处方 | `PATCH /api/v1/prescriptions/{encounterId}/items` | 已登录 + 处方更新权限 + `DOCTOR` 角色 | 更新处方药品（仅 DRAFT 状态） |
+| 处方 | `POST /api/v1/prescriptions/{encounterId}/issue` | 已登录 + 处方开具权限 + `DOCTOR` 角色 | 开具处方（DRAFT → ISSUED） |
+| 处方 | `POST /api/v1/prescriptions/{encounterId}/cancel` | 已登录 + 处方取消权限 + `DOCTOR` 角色 | 取消处方（DRAFT/ISSUED → CANCELLED） |
 
 ## 4. 认证与当前用户
 
@@ -665,7 +670,7 @@
 |------|--------------|
 | 认证/身份 | 需要登录态、处方读取权限、`DOCTOR` 角色 |
 | 路径参数 | `encounterId` |
-| 响应字段 | `prescriptionOrderId`、`encounterId`、`status`、`items[]` |
+| 响应字段 | `prescriptionOrderId`、`encounterId`、`status`、`version`、`items[]` |
 | 真实语义 | 当前只允许医生查看自己接诊范围内的处方详情，不返回列表 |
 
 补充说明：
@@ -674,6 +679,71 @@
 - 处方不存在返回 `404 + 4016`
 - 当前已对处方详情接入对象级授权与访问留痕；医生按接诊归属访问，患者按本人处方自助访问
 - `prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
+
+### 11.3 `PATCH /api/v1/prescriptions/{encounterId}/items`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 需要登录态、处方更新权限、`DOCTOR` 角色 |
+| 路径参数 | `encounterId` |
+| 请求体 | `items[]`：`sortOrder`、`drugName`、`drugSpecification?`、`dosageText?`、`frequencyText?`、`durationText?`、`quantity`、`unit?`、`route?` |
+| 响应字段 | `prescriptionOrderId`、`encounterId`、`status`、`version`、`items[]` |
+| 真实语义 | 仅允许当前登录医生更新自己接诊的 DRAFT 处方药品；采用全量替换策略（删除旧项 + 插入新项），使用乐观锁保证并发安全 |
+
+补充说明：
+
+- 接诊不存在或不属于当前医生时返回 `404 + 4013`
+- 处方不存在返回 `404 + 4016`
+- 处方状态非 DRAFT 时返回 `409 + 4017`
+- 并发更新冲突（乐观锁失败）返回 `409 + 4018`
+- `items` 不能为空；`prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
+
+### 11.4 `POST /api/v1/prescriptions/{encounterId}/issue`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 需要登录态、处方开具权限、`DOCTOR` 角色 |
+| 路径参数 | `encounterId` |
+| 请求体 | 无 |
+| 响应字段 | `prescriptionOrderId`、`encounterId`、`status`、`version` |
+| 真实语义 | 将当前登录医生自己接诊的 DRAFT 处方开具为 ISSUED 状态 |
+
+补充说明：
+
+- 接诊不存在或不属于当前医生时返回 `404 + 4013`
+- 处方不存在返回 `404 + 4016`
+- 处方状态非 DRAFT 时返回 `409 + 4017`
+- 并发更新冲突（乐观锁失败）返回 `409 + 4018`
+- `prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
+
+### 11.5 `POST /api/v1/prescriptions/{encounterId}/cancel`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 需要登录态、处方取消权限、`DOCTOR` 角色 |
+| 路径参数 | `encounterId` |
+| 请求体 | 无 |
+| 响应字段 | `prescriptionOrderId`、`encounterId`、`status`、`version` |
+| 真实语义 | 将当前登录医生自己接诊的 DRAFT 或 ISSUED 处方取消为 CANCELLED 状态 |
+
+补充说明：
+
+- 接诊不存在或不属于当前医生时返回 `404 + 4013`
+- 处方不存在返回 `404 + 4016`
+- 处方状态非 DRAFT 且非 ISSUED 时返回 `409 + 4017`
+- 并发更新冲突（乐观锁失败）返回 `409 + 4018`
+- `prescriptionOrderId`、`encounterId` 对外统一序列化为字符串
+
+### 11.6 处方状态流转
+
+| 当前状态 | 允许操作 | 目标状态 |
+|----------|----------|----------|
+| `DRAFT` | `updateItems` | `DRAFT`（药品更新） |
+| `DRAFT` | `issue` | `ISSUED` |
+| `DRAFT` | `cancel` | `CANCELLED` |
+| `ISSUED` | `cancel` | `CANCELLED` |
+
+所有状态变更均使用乐观锁（`version` 字段）保证并发安全。
 
 ## 12. 审计查询接口
 

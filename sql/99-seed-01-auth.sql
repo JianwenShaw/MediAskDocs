@@ -36,7 +36,10 @@ VALUES
     (1136, 'admin:knowledge-index-version:list', '知识索引版本列表', 'API', 'ACTIVE', 360),
     (1137, 'admin:knowledge-release:list', '知识发布记录列表', 'API', 'ACTIVE', 370),
     (1138, 'admin:knowledge-release:publish', '发布知识库版本', 'API', 'ACTIVE', 380),
-    (1139, 'audit:query', '查询审计日志', 'API', 'ACTIVE', 390)
+    (1139, 'audit:query', '查询审计日志', 'API', 'ACTIVE', 390),
+    (1140, 'prescription:update', '更新处方', 'API', 'ACTIVE', 400),
+    (1141, 'prescription:issue', '开具处方', 'API', 'ACTIVE', 410),
+    (1142, 'prescription:cancel', '取消处方', 'API', 'ACTIVE', 420)
 ON CONFLICT (permission_code) DO NOTHING;
 
 INSERT INTO role_permissions (id, role_id, permission_id)
@@ -73,7 +76,10 @@ VALUES
     (1240, 1003, 1136),
     (1241, 1003, 1137),
     (1242, 1003, 1138),
-    (1243, 1003, 1139)
+    (1243, 1003, 1139),
+    (1244, 1002, 1140),
+    (1245, 1002, 1141),
+    (1246, 1002, 1142)
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- admin / admin123
