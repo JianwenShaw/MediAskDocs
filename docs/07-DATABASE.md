@@ -299,6 +299,7 @@ erDiagram
 | 表 | 约束 | 字段 |
 |------|------|------|
 | `users` | `uk_users_username` | `username` |
+| `users` | `uk_users_phone` | `phone` |
 | `patient_profile` | `uk_patient_profile_no` | `patient_no` |
 | `doctors` | `uk_doctors_code` | `doctor_code` |
 | `schedule_ruleset` | `uk_schedule_ruleset_code_version` | `(department_id, ruleset_code, version_no)` |

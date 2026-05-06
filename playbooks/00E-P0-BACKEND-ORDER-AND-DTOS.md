@@ -97,7 +97,7 @@
 
 | 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
 |------|------------------|----------------------|
-| `POST /api/v1/auth/login` | `username`、`password` | `accessToken`、`refreshToken`、`userContext.userId`、`userContext.roles` |
+| `POST /api/v1/auth/login` | `phone`、`password` | `accessToken`、`refreshToken`、`userContext.userId`、`userContext.roles` |
 | `GET /api/v1/auth/me` | 无 | `userId`、`username`、`roles`、`displayName` |
 
 认证补充约定：

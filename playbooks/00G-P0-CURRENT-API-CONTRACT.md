@@ -48,7 +48,7 @@
 
 | 分组 | 接口 | 认证/身份要求 | 真实业务语义 |
 |------|------|---------------|--------------|
-| 认证 | `POST /api/v1/auth/login` | 公开 | 用户名密码登录，签发新的 access/refresh token |
+| 认证 | `POST /api/v1/auth/login` | 公开 | 手机号密码登录，签发新的 access/refresh token |
 | 认证 | `POST /api/v1/auth/refresh` | 公开 | 使用 refresh token 轮换登录态 |
 | 认证 | `POST /api/v1/auth/logout` | 已登录 | 要求当前 access token 与 refresh token 属于同一用户、同一会话，再执行退出 |
 | 认证 | `GET /api/v1/auth/me` | 已登录 | 返回当前登录用户的实时上下文，而不是只回 token 里的静态声明 |
@@ -118,11 +118,11 @@
 | 项目 | 当前代码口径 |
 |------|--------------|
 | 认证 | 公开接口 |
-| 请求体 | `username`、`password` |
-| `username` 要求 | 非空；会去掉首尾空格 |
+| 请求体 | `phone`、`password` |
+| `phone` 要求 | 非空；会去掉首尾空格 |
 | `password` 要求 | 非空；保留首尾空格，不做 trim |
 | 响应字段 | `accessToken`、`accessTokenExpiresAt`、`refreshToken`、`refreshTokenExpiresAt`、`userContext` |
-| 真实语义 | 校验用户名密码；账号若被禁用或锁定会失败；用户必须至少有一个角色；成功后更新最后登录时间并签发一组新的 access/refresh token |
+| 真实语义 | 校验手机号密码；账号若被禁用或锁定会失败；用户必须至少有一个角色；成功后更新最后登录时间并签发一组新的 access/refresh token |
 
 补充说明：
 
@@ -242,6 +242,7 @@
 | 字段 | 要求 |
 |------|------|
 | `username` | 必填；非空；会 trim |
+| `phone` | 必填；非空；会 trim |
 | `password` | 必填；非空；保留首尾空格，不做 trim |
 | `displayName` | 必填；非空；会 trim |
 | `mobileMasked` | 可空；空白字符串转 `null` |
@@ -262,6 +263,7 @@
 |------|------|
 | Path `patientId` | 必填；必须大于 `0` |
 | `displayName` | 必填；非空；会 trim |
+| `phone` | 必填；非空；会 trim |
 | `mobileMasked` | 可空；空白字符串转 `null` |
 | `gender` | 可空；空白字符串转 `null` |
 | `birthDate` | 可空，`LocalDate` |

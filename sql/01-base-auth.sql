@@ -1,6 +1,7 @@
 CREATE TABLE users (
     id BIGINT PRIMARY KEY,
     username VARCHAR(64) NOT NULL,
+    phone VARCHAR(32) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     display_name VARCHAR(128) NOT NULL,
     mobile_masked VARCHAR(32),
@@ -12,6 +13,7 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ DEFAULT NULL,
     CONSTRAINT uk_users_username UNIQUE (username),
+    CONSTRAINT uk_users_phone UNIQUE (phone),
     CONSTRAINT ck_users_user_type CHECK (user_type IN ('PATIENT', 'DOCTOR', 'ADMIN')),
     CONSTRAINT ck_users_account_status CHECK (account_status IN ('ACTIVE', 'DISABLED', 'LOCKED'))
 );
