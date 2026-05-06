@@ -176,7 +176,7 @@ sequenceDiagram
 | 领域对象 | 核心表（示例） | 说明 |
 |---------|----------------|------|
 | 用户/权限 | `users`/`roles`/`user_roles`/`permissions` | 认证与授权基座 |
-| 医疗资源 | `hospitals`/`departments`/`doctors`/`doctor_schedules` | 医院组织与排班 |
+| 医疗资源 | `departments`/`doctors`/`doctor_schedules` | 科室、医生与排班 |
 | 预约挂号 | `registration_order`/`clinic_slot` | 预约单与号源占用 |
 | 诊疗病历 | `emr_record`/`emr_record_content` | 结构化病历、版本控制 |
 | 处方管理 | `prescription_order`/`prescription_item`/`drugs` | 处方与药品字典 |

@@ -84,11 +84,9 @@
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#E5F0FF', 'primaryTextColor': '#1C1C1E', 'primaryBorderColor': '#007AFF', 'lineColor': '#8E8E93', 'tertiaryColor': '#F2F2F7'}}}%%
 erDiagram
-    USERS ||--o| USER_PII_PROFILE : owns
     USERS ||--o| PATIENT_PROFILE : extends
     USERS ||--o| DOCTORS : is
 
-    HOSPITALS ||--o{ DEPARTMENTS : contains
     DOCTORS ||--o{ DOCTOR_DEPARTMENT_REL : serves
     DEPARTMENTS ||--o{ DOCTOR_DEPARTMENT_REL : contains
 
@@ -145,7 +143,6 @@ erDiagram
 | 表名 | 说明 | V3 变化 |
 |------|------|---------|
 | `users` | 账号身份主表 | 重构：仅保留认证与账号状态 |
-| `user_pii_profile` | 高敏身份资料 | 新增 |
 | `patient_profile` | 患者业务档案 | 新增 |
 | `roles` | 角色表 | 保留并继续支持继承 |
 | `permissions` | 权限表 | 保留树形结构 |
@@ -157,9 +154,8 @@ erDiagram
 
 | 表名 | 说明 | V3 变化 |
 |------|------|---------|
-| `hospitals` | 医院表 | 保留 |
-| `departments` | 科室表 | 增强：`dept_type` |
-| `doctors` | 医生主档 | 重构：不再强绑单科室 |
+| `departments` | 科室表 | 增强：`dept_type`，保留 `hospital_id` 兼容字段 |
+| `doctors` | 医生主档 | 重构：不再强绑单科室，保留 `hospital_id` 兼容字段 |
 | `doctor_department_rel` | 医生-科室关系 | 新增：支持多科室归属 |
 
 ### 6.3 排班规划域（03-scheduling.sql）
@@ -187,7 +183,6 @@ erDiagram
 | `clinic_slot` | 可交易号源单元 | 新增，替代 `appointment_slots` |
 | `registration_order` | 挂号订单 | 新增，替代 `appointments` |
 | `visit_encounter` | 实际就诊履约实体，挂号创建成功后预创建，初始状态为 `SCHEDULED` | 新增 |
-| `status_transition_log` | 挂号/接诊/号源状态变更流水，记录 `from_status/to_status/action/request_id` | 新增 |
 
 ### 6.5 AI 会话、模型运行与知识库（05-ai.sql）
 

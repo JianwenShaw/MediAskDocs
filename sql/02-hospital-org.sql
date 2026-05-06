@@ -1,17 +1,3 @@
-CREATE TABLE hospitals (
-    id BIGINT PRIMARY KEY,
-    hospital_code VARCHAR(64) NOT NULL,
-    name VARCHAR(128) NOT NULL,
-    hospital_level VARCHAR(32),
-    status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
-    version INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMPTZ DEFAULT NULL,
-    CONSTRAINT uk_hospitals_code UNIQUE (hospital_code),
-    CONSTRAINT ck_hospitals_status CHECK (status IN ('ACTIVE', 'DISABLED'))
-);
-
 CREATE TABLE departments (
     id BIGINT PRIMARY KEY,
     hospital_id BIGINT NOT NULL,
@@ -25,7 +11,6 @@ CREATE TABLE departments (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ DEFAULT NULL,
     CONSTRAINT uk_departments_code UNIQUE (hospital_id, dept_code),
-    CONSTRAINT fk_departments_hospital FOREIGN KEY (hospital_id) REFERENCES hospitals (id),
     CONSTRAINT ck_departments_status CHECK (status IN ('ACTIVE', 'DISABLED')),
     CONSTRAINT ck_departments_type CHECK (dept_type IN ('CLINICAL', 'TECHNICAL', 'MANAGEMENT'))
 );
@@ -45,7 +30,6 @@ CREATE TABLE doctors (
     CONSTRAINT uk_doctors_user UNIQUE (user_id),
     CONSTRAINT uk_doctors_code UNIQUE (doctor_code),
     CONSTRAINT fk_doctors_user FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT fk_doctors_hospital FOREIGN KEY (hospital_id) REFERENCES hospitals (id),
     CONSTRAINT ck_doctors_status CHECK (status IN ('ACTIVE', 'DISABLED'))
 );
 

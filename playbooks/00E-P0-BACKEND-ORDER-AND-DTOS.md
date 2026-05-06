@@ -24,8 +24,8 @@
 
 | 批次 | 先建表 | 目的 | 解锁的后续能力 |
 |------|--------|------|----------------|
-| `M1` | `users`、`user_pii_profile`、`patient_profile`、`roles`、`permissions`、`user_roles`、`role_permissions` | 登录、角色识别、最小权限基线 | 认证、用户上下文 |
-| `M2` | `hospitals`、`departments`、`doctors`、`doctor_department_rel`、`data_scope_rules` | 组织主体与医生归属 | 导诊推荐、接诊权限 |
+| `M1` | `users`、`patient_profile`、`roles`、`permissions`、`user_roles`、`role_permissions` | 登录、角色识别、最小权限基线 | 认证、用户上下文 |
+| `M2` | `departments`、`doctors`、`doctor_department_rel`、`data_scope_rules` | 组织主体与医生归属 | 导诊推荐、接诊权限 |
 | `M3` | `knowledge_base`、`knowledge_document`、`knowledge_chunk` | 知识库业务主事实 | 文档导入、知识治理 |
 | `M4` | `knowledge_chunk_index` | 检索投影 | 向量检索、关键词召回 |
 | `M5` | `ai_session`、`ai_turn`、`ai_turn_content`、`ai_model_run`、`ai_guardrail_event`、`ai_run_citation` | AI 问诊闭环 | 问诊、引用、护栏 |

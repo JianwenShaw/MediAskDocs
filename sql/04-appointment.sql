@@ -17,7 +17,6 @@ CREATE TABLE clinic_session (
     deleted_at TIMESTAMPTZ DEFAULT NULL,
     CONSTRAINT uk_clinic_session_doctor_period UNIQUE (doctor_id, session_date, period_code),
     CONSTRAINT uk_clinic_session_identity UNIQUE (id, doctor_id, department_id),
-    CONSTRAINT fk_clinic_session_hospital FOREIGN KEY (hospital_id) REFERENCES hospitals (id),
     CONSTRAINT fk_clinic_session_department FOREIGN KEY (department_id) REFERENCES departments (id),
     CONSTRAINT fk_clinic_session_doctor FOREIGN KEY (doctor_id) REFERENCES doctors (id),
     CONSTRAINT ck_clinic_session_period_code CHECK (period_code IN ('MORNING', 'AFTERNOON', 'EVENING')),
@@ -105,19 +104,3 @@ CREATE INDEX idx_clinic_session_department_date ON clinic_session (department_id
 CREATE INDEX idx_registration_order_doctor_created ON registration_order (doctor_id, created_at);
 CREATE INDEX idx_registration_order_patient_created ON registration_order (patient_id, created_at);
 CREATE INDEX idx_visit_encounter_doctor_created ON visit_encounter (doctor_id, created_at);
-
-CREATE TABLE status_transition_log (
-    id BIGINT PRIMARY KEY,
-    entity_type VARCHAR(64) NOT NULL,
-    entity_id BIGINT NOT NULL,
-    from_status VARCHAR(32),
-    to_status VARCHAR(32) NOT NULL,
-    action VARCHAR(64) NOT NULL,
-    operator_user_id BIGINT,
-    request_id VARCHAR(64),
-    occurred_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_status_transition_entity_time ON status_transition_log (entity_type, entity_id, occurred_at);
-CREATE INDEX idx_status_transition_request ON status_transition_log (request_id);

@@ -678,7 +678,7 @@ public class CreateRegistrationRequest {
 |------|------|
 | 索引/密文分离 | 列表查询只读索引表，查看原文时解密密文表（如 `emr_record` + `emr_record_content`） |
 | 独立加密列 | 应用层 AES-256 加密（如 `ai_turn_content.encrypted_content`） |
-| PII 隔离 | 高敏感身份信息独立存储于 `user_pii_profile` |
+| PII 最小化 | 当前实现仅保留 `users` 中的脱敏展示字段 |
 | 访问审计 | 每次访问敏感数据均记录至 `data_access_log` |
 
 ---

@@ -83,14 +83,12 @@
 ### 关键表
 
 - [x] `users`
-- [x] `user_pii_profile`
 - [x] `patient_profile`
 - [x] `roles`
 - [x] `permissions`
 - [x] `user_roles`
 - [x] `role_permissions`
 - [x] `data_scope_rules`
-- [x] `hospitals`
 - [x] `departments`
 - [x] `doctors`
 - [x] `doctor_department_rel`

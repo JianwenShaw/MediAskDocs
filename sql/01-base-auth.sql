@@ -16,18 +16,6 @@ CREATE TABLE users (
     CONSTRAINT ck_users_account_status CHECK (account_status IN ('ACTIVE', 'DISABLED', 'LOCKED'))
 );
 
-CREATE TABLE user_pii_profile (
-    user_id BIGINT PRIMARY KEY,
-    real_name_encrypted TEXT,
-    phone_encrypted TEXT,
-    id_no_encrypted TEXT,
-    email_encrypted TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMPTZ DEFAULT NULL,
-    CONSTRAINT fk_user_pii_profile_user FOREIGN KEY (user_id) REFERENCES users (id)
-);
-
 CREATE TABLE patient_profile (
     id BIGINT PRIMARY KEY,
     user_id BIGINT NOT NULL,

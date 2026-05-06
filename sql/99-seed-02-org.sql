@@ -1,8 +1,3 @@
-INSERT INTO hospitals (id, hospital_code, name, hospital_level, status)
-VALUES
-    (3001, 'HOSP_MAIN', 'MediAsk Teaching Hospital', '3A', 'ACTIVE')
-ON CONFLICT (hospital_code) DO NOTHING;
-
 INSERT INTO departments (id, hospital_id, dept_code, name, dept_type, status, sort_order)
 VALUES
     (3101, 3001, 'NEURO', '神经内科', 'CLINICAL', 'ACTIVE', 10),

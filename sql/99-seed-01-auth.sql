@@ -183,41 +183,6 @@ VALUES
     (2131, 2031, 1001, 2001)
 ON CONFLICT (user_id, role_id) DO NOTHING;
 
-INSERT INTO user_pii_profile (user_id, real_name_encrypted, phone_encrypted, id_no_encrypted, email_encrypted)
-VALUES
-    (2001, 'enc_admin_name', 'enc_admin_phone', 'enc_admin_id', 'enc_admin_mail'),
-    (2002, 'enc_doctor_zhang_name', 'enc_doctor_zhang_phone', 'enc_doctor_zhang_id', 'enc_doctor_zhang_mail'),
-    (2003, 'enc_patient_li_name', 'enc_patient_li_phone', 'enc_patient_li_id', 'enc_patient_li_mail'),
-    (2004, 'enc_doctor_wang_name', 'enc_doctor_wang_phone', 'enc_doctor_wang_id', 'enc_doctor_wang_mail'),
-    (2005, 'enc_doctor_chen_name', 'enc_doctor_chen_phone', 'enc_doctor_chen_id', 'enc_doctor_chen_mail'),
-    (2006, 'enc_patient_wu_name', 'enc_patient_wu_phone', 'enc_patient_wu_id', 'enc_patient_wu_mail'),
-    (2007, 'enc_patient_zhao_name', 'enc_patient_zhao_phone', 'enc_patient_zhao_id', 'enc_patient_zhao_mail'),
-    (2008, 'enc_doctor_liu_name', 'enc_doctor_liu_phone', 'enc_doctor_liu_id', 'enc_doctor_liu_mail'),
-    (2009, 'enc_doctor_zhao2_name', 'enc_doctor_zhao2_phone', 'enc_doctor_zhao2_id', 'enc_doctor_zhao2_mail'),
-    (2010, 'enc_doctor_yang_name', 'enc_doctor_yang_phone', 'enc_doctor_yang_id', 'enc_doctor_yang_mail'),
-    (2011, 'enc_doctor_zhou_name', 'enc_doctor_zhou_phone', 'enc_doctor_zhou_id', 'enc_doctor_zhou_mail'),
-    (2012, 'enc_doctor_wu2_name', 'enc_doctor_wu2_phone', 'enc_doctor_wu2_id', 'enc_doctor_wu2_mail'),
-    (2013, 'enc_doctor_sun_name', 'enc_doctor_sun_phone', 'enc_doctor_sun_id', 'enc_doctor_sun_mail'),
-    (2014, 'enc_doctor_lin_name', 'enc_doctor_lin_phone', 'enc_doctor_lin_id', 'enc_doctor_lin_mail'),
-    (2015, 'enc_doctor_he_name', 'enc_doctor_he_phone', 'enc_doctor_he_id', 'enc_doctor_he_mail'),
-    (2016, 'enc_doctor_guo_name', 'enc_doctor_guo_phone', 'enc_doctor_guo_id', 'enc_doctor_guo_mail'),
-    (2017, 'enc_doctor_ma_name', 'enc_doctor_ma_phone', 'enc_doctor_ma_id', 'enc_doctor_ma_mail'),
-    (2018, 'enc_doctor_tang_name', 'enc_doctor_tang_phone', 'enc_doctor_tang_id', 'enc_doctor_tang_mail'),
-    (2019, 'enc_doctor_deng_name', 'enc_doctor_deng_phone', 'enc_doctor_deng_id', 'enc_doctor_deng_mail'),
-    (2020, 'enc_doctor_xu_name', 'enc_doctor_xu_phone', 'enc_doctor_xu_id', 'enc_doctor_xu_mail'),
-    (2021, 'enc_doctor_feng_name', 'enc_doctor_feng_phone', 'enc_doctor_feng_id', 'enc_doctor_feng_mail'),
-    (2022, 'enc_doctor_jiang_name', 'enc_doctor_jiang_phone', 'enc_doctor_jiang_id', 'enc_doctor_jiang_mail'),
-    (2023, 'enc_doctor_qin_name', 'enc_doctor_qin_phone', 'enc_doctor_qin_id', 'enc_doctor_qin_mail'),
-    (2024, 'enc_doctor_xie_name', 'enc_doctor_xie_phone', 'enc_doctor_xie_id', 'enc_doctor_xie_mail'),
-    (2025, 'enc_doctor_shen_name', 'enc_doctor_shen_phone', 'enc_doctor_shen_id', 'enc_doctor_shen_mail'),
-    (2026, 'enc_doctor_han_name', 'enc_doctor_han_phone', 'enc_doctor_han_id', 'enc_doctor_han_mail'),
-    (2027, 'enc_doctor_yuan_name', 'enc_doctor_yuan_phone', 'enc_doctor_yuan_id', 'enc_doctor_yuan_mail'),
-    (2028, 'enc_doctor_su_name', 'enc_doctor_su_phone', 'enc_doctor_su_id', 'enc_doctor_su_mail'),
-    (2029, 'enc_patient_chen2_name', 'enc_patient_chen2_phone', 'enc_patient_chen2_id', 'enc_patient_chen2_mail'),
-    (2030, 'enc_patient_he2_name', 'enc_patient_he2_phone', 'enc_patient_he2_id', 'enc_patient_he2_mail'),
-    (2031, 'enc_patient_guo2_name', 'enc_patient_guo2_phone', 'enc_patient_guo2_id', 'enc_patient_guo2_mail')
-ON CONFLICT (user_id) DO NOTHING;
-
 INSERT INTO patient_profile (id, user_id, patient_no, gender, birth_date, blood_type, allergy_summary)
 VALUES
     (2201, 2003, 'P20260001', 'FEMALE', DATE '1995-03-12', 'A', '青霉素过敏'),

@@ -472,7 +472,7 @@ PostgreSQL 17+ 单实例，58 张表分布在 7 个 SQL 文件中。详见 [docs
 |------|--------|------|
 | **索引/密文分离** | `emr_record` + `emr_record_content` | 列表查询只读索引表；查看原文时解密密文表 |
 | **独立加密列** | `ai_turn_content`、`audit_payload` | `encrypted_content` 列，应用层 AES-256 加密/解密 |
-| **PII 隔离** | `user_pii_profile` | 高敏感身份信息独立存储，按需授权查询 |
+| **PII 最小化** | `users` | 当前实现仅保留脱敏展示字段，不再单独维护 PII 子表 |
 | **访问审计** | `data_access_log` | 每次访问敏感数据（EMR 查看、处方导出、AI 原文读取）均记录 |
 
 ---
