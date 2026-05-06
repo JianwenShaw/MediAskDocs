@@ -175,6 +175,8 @@ CREATE TABLE query_result_snapshot (
     next_action varchar(32) NOT NULL CHECK (next_action IN ('CONTINUE_TRIAGE', 'VIEW_TRIAGE_RESULT', 'MANUAL_SUPPORT', 'EMERGENCY_OFFLINE')),
     risk_level varchar(16) CHECK (risk_level IN ('low', 'medium', 'high')),
     chief_complaint_summary text NOT NULL,
+    follow_up_questions_json jsonb NOT NULL DEFAULT '[]'::jsonb,
+    recommended_departments_json jsonb NOT NULL DEFAULT '[]'::jsonb,
     catalog_version varchar(64),
     care_advice text,
     blocked_reason varchar(64) CHECK (blocked_reason IN (
@@ -195,6 +197,8 @@ CREATE TABLE query_result_snapshot (
             triage_completion_reason IS NULL AND
             next_action = 'CONTINUE_TRIAGE' AND
             risk_level IS NULL AND
+            jsonb_array_length(follow_up_questions_json) BETWEEN 1 AND 2 AND
+            jsonb_array_length(recommended_departments_json) = 0 AND
             catalog_version IS NULL AND
             care_advice IS NULL AND
             blocked_reason IS NULL
@@ -203,6 +207,8 @@ CREATE TABLE query_result_snapshot (
             triage_completion_reason IN ('SUFFICIENT_INFO', 'MAX_TURNS_REACHED') AND
             next_action = 'VIEW_TRIAGE_RESULT' AND
             risk_level IN ('low', 'medium', 'high') AND
+            jsonb_array_length(follow_up_questions_json) = 0 AND
+            jsonb_array_length(recommended_departments_json) BETWEEN 1 AND 3 AND
             catalog_version IS NOT NULL AND
             care_advice IS NOT NULL AND
             blocked_reason IS NULL
@@ -211,6 +217,8 @@ CREATE TABLE query_result_snapshot (
             triage_completion_reason = 'HIGH_RISK_BLOCKED' AND
             next_action IN ('MANUAL_SUPPORT', 'EMERGENCY_OFFLINE') AND
             risk_level = 'high' AND
+            jsonb_array_length(follow_up_questions_json) = 0 AND
+            jsonb_array_length(recommended_departments_json) = 0 AND
             catalog_version IS NULL AND
             care_advice IS NOT NULL AND
             blocked_reason IS NOT NULL
@@ -218,38 +226,6 @@ CREATE TABLE query_result_snapshot (
     ),
     CONSTRAINT uq_query_result_snapshot_stage UNIQUE (query_run_id, triage_stage)
 );
-
-CREATE TABLE query_result_follow_up_question (
-    query_run_id uuid NOT NULL REFERENCES query_result_snapshot (query_run_id),
-    triage_stage varchar(32) NOT NULL CHECK (triage_stage = 'COLLECTING'),
-    question_order integer NOT NULL CHECK (question_order BETWEEN 1 AND 2),
-    question_text text NOT NULL,
-    created_at timestamptz NOT NULL,
-    PRIMARY KEY (query_run_id, question_order),
-    CONSTRAINT fk_qrfq_collecting_snapshot
-        FOREIGN KEY (query_run_id, triage_stage)
-        REFERENCES query_result_snapshot (query_run_id, triage_stage)
-);
-
-CREATE INDEX idx_qrfq_query
-    ON query_result_follow_up_question (query_run_id, question_order);
-
-CREATE TABLE query_result_department (
-    query_run_id uuid NOT NULL REFERENCES query_result_snapshot (query_run_id),
-    triage_stage varchar(32) NOT NULL CHECK (triage_stage = 'READY'),
-    priority integer NOT NULL CHECK (priority BETWEEN 1 AND 3),
-    department_id bigint NOT NULL,
-    department_name varchar(128) NOT NULL,
-    reason text NOT NULL,
-    created_at timestamptz NOT NULL,
-    PRIMARY KEY (query_run_id, priority),
-    CONSTRAINT fk_qrd_ready_snapshot
-        FOREIGN KEY (query_run_id, triage_stage)
-        REFERENCES query_result_snapshot (query_run_id, triage_stage)
-);
-
-CREATE INDEX idx_qrd_department
-    ON query_result_department (department_id);
 
 CREATE TABLE ai_model_run (
     id uuid PRIMARY KEY,
@@ -296,18 +272,6 @@ CREATE INDEX idx_ai_guardrail_query
 CREATE INDEX idx_ai_guardrail_risk
     ON ai_guardrail_event (risk_code, created_at DESC);
 
-CREATE TABLE ai_run_artifact (
-    id uuid PRIMARY KEY,
-    model_run_id uuid REFERENCES ai_model_run (id),
-    query_run_id uuid NOT NULL REFERENCES query_run (id),
-    artifact_type varchar(32) NOT NULL CHECK (artifact_type IN ('TRIAGE_MATERIALS', 'RETRIEVAL_CONTEXT', 'LLM_RAW_RESPONSE', 'DEBUG_PAYLOAD')),
-    artifact_json jsonb NOT NULL,
-    created_at timestamptz NOT NULL
-);
-
-CREATE INDEX idx_ai_run_artifact_query_type
-    ON ai_run_artifact (query_run_id, artifact_type);
-
 CREATE TABLE ingest_job (
     id uuid PRIMARY KEY,
     kb_id uuid NOT NULL REFERENCES knowledge_base (id),
@@ -353,23 +317,6 @@ CREATE INDEX idx_kci_embedding
     ON knowledge_chunk_index
     USING hnsw (embedding vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
-
-CREATE TABLE retrieval_hit (
-    query_run_id uuid NOT NULL REFERENCES query_run (id),
-    retriever_type varchar(16) NOT NULL CHECK (retriever_type IN ('DENSE', 'SPARSE', 'FUSION', 'RERANK')),
-    rank_no integer NOT NULL CHECK (rank_no >= 1),
-    chunk_id uuid NOT NULL REFERENCES knowledge_chunk (id),
-    vector_score double precision,
-    keyword_score double precision,
-    fusion_score double precision,
-    rerank_score double precision,
-    selected_for_context boolean NOT NULL,
-    created_at timestamptz NOT NULL,
-    PRIMARY KEY (query_run_id, retriever_type, rank_no)
-);
-
-CREATE INDEX idx_retrieval_hit_chunk
-    ON retrieval_hit (chunk_id);
 
 CREATE TABLE answer_citation (
     query_run_id uuid NOT NULL REFERENCES query_run (id),

@@ -1,12 +1,8 @@
 DROP TABLE IF EXISTS answer_citation CASCADE;
-DROP TABLE IF EXISTS retrieval_hit CASCADE;
 DROP TABLE IF EXISTS knowledge_chunk_index CASCADE;
 DROP TABLE IF EXISTS ingest_job CASCADE;
-DROP TABLE IF EXISTS ai_run_artifact CASCADE;
 DROP TABLE IF EXISTS ai_guardrail_event CASCADE;
 DROP TABLE IF EXISTS ai_model_run CASCADE;
-DROP TABLE IF EXISTS query_result_department CASCADE;
-DROP TABLE IF EXISTS query_result_follow_up_question CASCADE;
 DROP TABLE IF EXISTS query_result_snapshot CASCADE;
 DROP TABLE IF EXISTS query_run CASCADE;
 DROP TABLE IF EXISTS ai_turn CASCADE;
