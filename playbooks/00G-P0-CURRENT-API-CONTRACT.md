@@ -67,6 +67,11 @@
 | 管理员医生管理 | `POST /api/v1/admin/doctors` | 已登录 + 管理员医生创建权限 | 后台创建医生账户、医生档案和科室分配 |
 | 管理员医生管理 | `PUT /api/v1/admin/doctors/{doctorId}` | 已登录 + 管理员医生更新权限 | 后台更新指定医生档案和科室分配 |
 | 管理员医生管理 | `DELETE /api/v1/admin/doctors/{doctorId}` | 已登录 + 管理员医生删除权限 | 后台软删除指定医生 |
+| 管理员科室管理 | `GET /api/v1/admin/departments` | 已登录 + 管理员科室列表权限 | 后台分页查科室，支持关键词搜索 |
+| 管理员科室管理 | `GET /api/v1/admin/departments/{id}` | 已登录 + 管理员科室查看权限 | 查指定科室后台详情 |
+| 管理员科室管理 | `POST /api/v1/admin/departments` | 已登录 + 管理员科室创建权限 | 后台创建科室 |
+| 管理员科室管理 | `PUT /api/v1/admin/departments/{id}` | 已登录 + 管理员科室更新权限 | 后台更新指定科室 |
+| 管理员科室管理 | `DELETE /api/v1/admin/departments/{id}` | 已登录 + 管理员科室删除权限 | 后台软删除指定科室 |
 | 知识库后台管理 | `GET /api/v1/admin/knowledge-bases` | 已登录 + 知识库列表权限 | Java 网关转发到 Python 知识库列表接口 |
 | 知识库后台管理 | `POST /api/v1/admin/knowledge-bases` | 已登录 + 知识库创建权限 | Java 网关转发到 Python 知识库创建接口 |
 | 知识库后台管理 | `PATCH /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库更新权限 | Java 网关转发到 Python 知识库更新接口 |
@@ -323,7 +328,6 @@
 | `password` | 必填；非空；保留首尾空格，不做 trim |
 | `displayName` | 必填；非空；会 trim |
 | `hospitalId` | 必填；必须大于 `0` |
-| `doctorCode` | 必填；非空；会 trim |
 | `professionalTitle` | 可空；空白字符串转 `null` |
 | `introductionMasked` | 可空；空白字符串转 `null` |
 | `departmentIds` | 可空；第一个为默认主科室 |
@@ -331,9 +335,10 @@
 业务语义：
 
 - 这是后台创建医生账户、医生档案和科室分配的一体化接口。
-- 创建时会生成 `userId` 和 `doctorId`，写入 `users`、`doctors`、`user_roles`（DOCTOR 角色）和 `doctor_department_rel`。
+- 创建时会生成 `userId` 和 `doctorId`，`doctorCode` 由后端自动生成（`DOC_` 前缀 + 雪花 ID），前端不需要传。
+- 写入 `users`、`doctors`、`user_roles`（DOCTOR 角色）和 `doctor_department_rel`。
 - 当前实现会对密码做哈希后再写入。
-- 用户名/手机号/医生编码冲突分别返回 `2022`/`2024`/`2023`。
+- 用户名/手机号冲突分别返回 `2022`/`2024`。
 - DOCTOR 角色不存在时返回 `2025`。
 
 ### 6A.4 `PUT /api/v1/admin/doctors/{doctorId}`
@@ -361,6 +366,75 @@
 | 路径参数 | `doctorId`，必须大于 `0` |
 | 成功响应 | `Result<Void>` |
 | 真实语义 | 后台软删除指定医生（`users` + `doctors` + 科室关系置为 `DISABLED`） |
+
+---
+
+## 6B. 管理员科室管理
+
+### 6B.1 `GET /api/v1/admin/departments`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和管理员科室列表权限 |
+| 查询参数 | `keyword?`、`pageNum?`、`pageSize?` |
+| `keyword` 规则 | 空白字符串会转成 `null`；会匹配 `name` 和 `deptCode` |
+| `pageNum` 规则 | 默认 `1`；必须大于 `0`；最大 `10000` |
+| `pageSize` 规则 | 默认 `20`；必须大于 `0`；最大 `100` |
+| 响应结构 | `PageData`，包含 `items`、`pageNum`、`pageSize`、`total`、`totalPages`、`hasNext` |
+| 列表项字段 | `id`、`hospitalId`、`deptCode`、`name`、`deptType`、`sortOrder`、`status` |
+| 真实语义 | 面向后台管理使用，按关键字分页查科室，按 `sortOrder` 升序、`id` 升序排列 |
+
+### 6B.2 `GET /api/v1/admin/departments/{id}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和管理员科室查看权限 |
+| 路径参数 | `id`，必须大于 `0` |
+| 响应字段 | `id`、`hospitalId`、`deptCode`、`name`、`deptType`、`sortOrder`、`status` |
+| 真实语义 | 查后台完整科室详情；不存在时返回 `404 + 2028` |
+
+### 6B.3 `POST /api/v1/admin/departments`
+
+| 字段 | 要求 |
+|------|------|
+| `hospitalId` | 必填；必须大于 `0` |
+| `deptCode` | 必填；非空；会 trim |
+| `name` | 必填；非空；会 trim |
+| `deptType` | 必填；非空；会 trim；约束为 `CLINICAL` / `TECHNICAL` / `MANAGEMENT` |
+| `sortOrder` | 可空；默认 `0` |
+
+业务语义：
+
+- 这是后台创建科室的接口。
+- 创建时会生成雪花 ID，初始 `status` 固定为 `ACTIVE`，`version` 固定为 `0`。
+- `deptCode` 在同一 `hospitalId` 下唯一（`uk_departments_code`），冲突返回 `2029`。
+- 创建成功记录 `audit_event`。
+
+### 6B.4 `PUT /api/v1/admin/departments/{id}`
+
+| 字段 | 要求 |
+|------|------|
+| Path `id` | 必填；必须大于 `0` |
+| `name` | 必填；非空；会 trim |
+| `deptType` | 必填；非空；会 trim |
+| `status` | 必填；非空；会 trim；约束为 `ACTIVE` / `DISABLED` |
+| `sortOrder` | 可空；默认 `0` |
+
+业务语义：
+
+- 这是后台更新科室的接口。
+- 更新采用乐观锁（`version` 字段），并发冲突返回 `2030`。
+- 科室不存在时返回 `404 + 2028`。
+- 更新成功记录 `audit_event`。
+
+### 6B.5 `DELETE /api/v1/admin/departments/{id}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和管理员科室删除权限 |
+| 路径参数 | `id`，必须大于 `0` |
+| 成功响应 | `Result<Void>` |
+| 真实语义 | 后台软删除指定科室（MyBatis-Plus 逻辑删除，`deletedAt` 置为当前时间）；不存在时返回 `404 + 2028`；成功记录 `audit_event` |
 
 ---
 

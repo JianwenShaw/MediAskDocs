@@ -39,7 +39,17 @@ VALUES
     (1139, 'audit:query', '查询审计日志', 'API', 'ACTIVE', 390),
     (1140, 'prescription:update', '更新处方', 'API', 'ACTIVE', 400),
     (1141, 'prescription:issue', '开具处方', 'API', 'ACTIVE', 410),
-    (1142, 'prescription:cancel', '取消处方', 'API', 'ACTIVE', 420)
+    (1142, 'prescription:cancel', '取消处方', 'API', 'ACTIVE', 420),
+    (1143, 'admin:doctor:list', '后台医生列表', 'API', 'ACTIVE', 430),
+    (1144, 'admin:doctor:view', '后台医生详情', 'API', 'ACTIVE', 440),
+    (1145, 'admin:doctor:create', '后台新增医生', 'API', 'ACTIVE', 450),
+    (1146, 'admin:doctor:update', '后台修改医生', 'API', 'ACTIVE', 460),
+    (1147, 'admin:doctor:delete', '后台删除医生', 'API', 'ACTIVE', 470),
+    (1148, 'admin:department:list', '后台科室列表', 'API', 'ACTIVE', 480),
+    (1149, 'admin:department:view', '后台科室详情', 'API', 'ACTIVE', 490),
+    (1150, 'admin:department:create', '后台新增科室', 'API', 'ACTIVE', 500),
+    (1151, 'admin:department:update', '后台修改科室', 'API', 'ACTIVE', 510),
+    (1152, 'admin:department:delete', '后台删除科室', 'API', 'ACTIVE', 520)
 ON CONFLICT (permission_code) DO NOTHING;
 
 INSERT INTO role_permissions (id, role_id, permission_id)
@@ -79,7 +89,17 @@ VALUES
     (1243, 1003, 1139),
     (1244, 1002, 1140),
     (1245, 1002, 1141),
-    (1246, 1002, 1142)
+    (1246, 1002, 1142),
+    (1247, 1003, 1143),
+    (1248, 1003, 1144),
+    (1249, 1003, 1145),
+    (1250, 1003, 1146),
+    (1251, 1003, 1147),
+    (1252, 1003, 1148),
+    (1253, 1003, 1149),
+    (1254, 1003, 1150),
+    (1255, 1003, 1151),
+    (1256, 1003, 1152)
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- admin / admin123

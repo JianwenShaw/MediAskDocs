@@ -81,6 +81,7 @@
 | `A11` | `/api/v1/prescriptions` | 处方录入 | `M7` |
 | `A12` | `/api/v1/audit/events`、`/api/v1/audit/data-access` | 最小审计查询 | `M8` |
 | `A13` | `/api/v1/admin/doctors` | 管理员医生 CRUD | `M2` |
+| `A14` | `/api/v1/admin/departments` | 管理员科室 CRUD | `M2` |
 
 ## 3.2 Python 内部接口优先顺序
 
@@ -150,17 +151,39 @@
 |------|------------------|----------------------|
 | `GET /api/v1/admin/doctors` | `keyword?`、`pageNum?`、`pageSize?` | `items[].doctorId`、`userId`、`username`、`displayName`、`doctorCode`、`professionalTitle`、`primaryDepartmentName`、`accountStatus` |
 | `GET /api/v1/admin/doctors/{doctorId}` | Path `doctorId` | `doctorId`、`userId`、`username`、`displayName`、`phone`、`hospitalId`、`doctorCode`、`professionalTitle`、`introductionMasked`、`departments[].departmentId`、`departments[].departmentName`、`departments[].primary`、`accountStatus` |
-| `POST /api/v1/admin/doctors` | `username`、`phone`、`password`、`displayName`、`hospitalId`、`doctorCode`、`professionalTitle?`、`introductionMasked?`、`departmentIds[]?` | `doctorId`、`userId`、`username`、`displayName`、`phone`、`hospitalId`、`doctorCode`、`professionalTitle`、`introductionMasked`、`departments[]`、`accountStatus` |
+| `POST /api/v1/admin/doctors` | `username`、`phone`、`password`、`displayName`、`hospitalId`、`professionalTitle?`、`introductionMasked?`、`departmentIds[]?` | `doctorId`、`userId`、`username`、`displayName`、`phone`、`hospitalId`、`doctorCode`、`professionalTitle`、`introductionMasked`、`departments[]`、`accountStatus` |
 | `PUT /api/v1/admin/doctors/{doctorId}` | Path `doctorId` + Body `displayName`、`phone`、`professionalTitle?`、`introductionMasked?`、`departmentIds[]?` | 同 POST 响应 |
 | `DELETE /api/v1/admin/doctors/{doctorId}` | Path `doctorId` | `Void` |
 
 补充约定：
 
 - 创建医生时会同步创建 `users` 记录、`doctors` 记录、DOCTOR 角色分配和 `doctor_department_rel` 科室关系。
+- `doctorCode` 由后端自动生成（`DOC_` 前缀 + 雪花 ID），前端不需要传。
 - `departmentIds` 第一个元素自动设为主科室（`is_primary = TRUE`）。
 - 更新科室关系采用全量替换策略（旧关系置 `DISABLED` + 插入新关系）。
 - 软删除医生时会同时软删除 `users` 和 `doctors` 记录，并将科室关系置为 `DISABLED`。
 - 所有操作记录 `audit_event`；查看详情记录 `data_access_log`。
+
+## 4.1C 管理员科室管理
+
+| 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
+|------|------------------|----------------------|
+| `GET /api/v1/admin/departments` | `keyword?`、`pageNum?`、`pageSize?` | `items[].id`、`hospitalId`、`deptCode`、`name`、`deptType`、`sortOrder`、`status` |
+| `GET /api/v1/admin/departments/{id}` | Path `id` | `id`、`hospitalId`、`deptCode`、`name`、`deptType`、`sortOrder`、`status` |
+| `POST /api/v1/admin/departments` | `hospitalId`、`deptCode`、`name`、`deptType`、`sortOrder?` | 同 GET 详情响应 |
+| `PUT /api/v1/admin/departments/{id}` | Path `id` + Body `name`、`deptType`、`status`、`sortOrder?` | 同 GET 详情响应 |
+| `DELETE /api/v1/admin/departments/{id}` | Path `id` | `Void` |
+
+补充约定：
+
+- `deptType` 约束为 `CLINICAL` / `TECHNICAL` / `MANAGEMENT`。
+- `status` 约束为 `ACTIVE` / `DISABLED`；创建时默认 `ACTIVE`。
+- `sortOrder` 默认 `0`，列表按 `sortOrder` 升序、`id` 升序排列。
+- `keyword` 同时匹配 `name` 和 `deptCode`。
+- `deptCode` 在同一 `hospitalId` 下唯一（`uk_departments_code`），冲突返回 `2029`。
+- 更新使用乐观锁（`version` 字段），并发冲突返回 `2030`。
+- 删除为软删除（`deleted_at` 标记），不存在返回 `2028`。
+- 所有写操作记录 `audit_event`。
 
 ## 4.2 AI Triage
 
