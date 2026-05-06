@@ -13,7 +13,7 @@
 - 现有文档还没有把“当前已实现接口”的参数约束、身份要求和真实业务语义讲到足够完整。
 - [../docs/01-OVERVIEW.md](../docs/01-OVERVIEW.md)、[../docs/10A-JAVA_AI_API_CONTRACT.md](../docs/10A-JAVA_AI_API_CONTRACT.md)、[../docs/03A-JAVA_CONFIG.md](../docs/03A-JAVA_CONFIG.md) 里包含大量目标设计或后续规划接口，不能直接当作当前仓库的对外契约。
 - [00B-P0-DEVELOPMENT-CHECKLIST.md](./00B-P0-DEVELOPMENT-CHECKLIST.md)、[00C-P0-BACKEND-TASKS.md](./00C-P0-BACKEND-TASKS.md)、[00E-P0-BACKEND-ORDER-AND-DTOS.md](./00E-P0-BACKEND-ORDER-AND-DTOS.md) 适合看完成度和实现顺序，但对当前已实现接口的细节覆盖仍不够。
-- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、AI 会话列表 / 明细 / finalized 结果读取、门诊场次查询、挂号、接诊列表、接诊详情、EMR 历史摘要列表、EMR 创建与详情、处方创建/详情/更新药品/开具/取消，以及审计事件/敏感访问查询接口。
+- 当前代码真实已实现的外部接口包括：认证、当前用户、患者本人资料、医生本人资料、管理员患者管理、管理员医生管理、知识库后台管理、知识文档后台管理、AI triage query / SSE 代理、AI 会话列表 / 明细 / finalized 结果读取、门诊场次查询、挂号、接诊列表、接诊详情、EMR 历史摘要列表、EMR 创建与详情、处方创建/详情/更新药品/开具/取消，以及审计事件/敏感访问查询接口。
 
 ## 2. 通用协议
 
@@ -62,6 +62,11 @@
 | 管理员患者管理 | `POST /api/v1/admin/patients` | 已登录 + 管理员患者创建权限 | 后台创建患者账户和患者档案 |
 | 管理员患者管理 | `PUT /api/v1/admin/patients/{patientId}` | 已登录 + 管理员患者更新权限 | 后台更新指定患者档案 |
 | 管理员患者管理 | `DELETE /api/v1/admin/patients/{patientId}` | 已登录 + 管理员患者删除权限 | 后台软删除指定患者 |
+| 管理员医生管理 | `GET /api/v1/admin/doctors` | 已登录 + 管理员医生列表权限 | 后台分页查医生，含科室归属 |
+| 管理员医生管理 | `GET /api/v1/admin/doctors/{doctorId}` | 已登录 + 管理员医生查看权限 | 查指定医生后台详情 |
+| 管理员医生管理 | `POST /api/v1/admin/doctors` | 已登录 + 管理员医生创建权限 | 后台创建医生账户、医生档案和科室分配 |
+| 管理员医生管理 | `PUT /api/v1/admin/doctors/{doctorId}` | 已登录 + 管理员医生更新权限 | 后台更新指定医生档案和科室分配 |
+| 管理员医生管理 | `DELETE /api/v1/admin/doctors/{doctorId}` | 已登录 + 管理员医生删除权限 | 后台软删除指定医生 |
 | 知识库后台管理 | `GET /api/v1/admin/knowledge-bases` | 已登录 + 知识库列表权限 | Java 网关转发到 Python 知识库列表接口 |
 | 知识库后台管理 | `POST /api/v1/admin/knowledge-bases` | 已登录 + 知识库创建权限 | Java 网关转发到 Python 知识库创建接口 |
 | 知识库后台管理 | `PATCH /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库更新权限 | Java 网关转发到 Python 知识库更新接口 |
@@ -283,6 +288,81 @@
 | 路径参数 | `patientId`，必须大于 `0` |
 | 成功响应 | `Result<Void>` |
 | 真实语义 | 后台软删除指定患者，不是物理删除 |
+
+## 6A. 管理员医生管理
+
+### 6A.1 `GET /api/v1/admin/doctors`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和管理员医生列表权限 |
+| 查询参数 | `keyword?`、`pageNum?`、`pageSize?` |
+| `keyword` 规则 | 空白字符串会转成 `null`；会匹配用户名、展示名和医生编码 |
+| `pageNum` 规则 | 默认 `1`；必须大于 `0`；最大 `10000` |
+| `pageSize` 规则 | 默认 `20`；必须大于 `0`；最大 `100` |
+| 响应结构 | `PageData`，包含 `items`、`pageNum`、`pageSize`、`total`、`totalPages`、`hasNext` |
+| 列表项字段 | `doctorId`、`userId`、`username`、`displayName`、`doctorCode`、`professionalTitle`、`primaryDepartmentName`、`accountStatus` |
+| 真实语义 | 面向后台管理使用，按关键字分页查医生，连带主科室名称 |
+
+### 6A.2 `GET /api/v1/admin/doctors/{doctorId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和管理员医生查看权限 |
+| 路径参数 | `doctorId`，必须大于 `0` |
+| 响应字段 | `doctorId`、`userId`、`username`、`displayName`、`phone`、`hospitalId`、`doctorCode`、`professionalTitle`、`introductionMasked`、`departments[]`、`accountStatus` |
+| `departments[]` | `departmentId`、`departmentName`、`primary` |
+| 真实语义 | 查后台完整医生详情（含科室分配）；不存在时返回 `404 + 2021`；访问会记录 `data_access_log` 并标记 `ADMIN_OPERATION` 目的 |
+
+### 6A.3 `POST /api/v1/admin/doctors`
+
+| 字段 | 要求 |
+|------|------|
+| `username` | 必填；非空；会 trim |
+| `phone` | 必填；非空；会 trim |
+| `password` | 必填；非空；保留首尾空格，不做 trim |
+| `displayName` | 必填；非空；会 trim |
+| `hospitalId` | 必填；必须大于 `0` |
+| `doctorCode` | 必填；非空；会 trim |
+| `professionalTitle` | 可空；空白字符串转 `null` |
+| `introductionMasked` | 可空；空白字符串转 `null` |
+| `departmentIds` | 可空；第一个为默认主科室 |
+
+业务语义：
+
+- 这是后台创建医生账户、医生档案和科室分配的一体化接口。
+- 创建时会生成 `userId` 和 `doctorId`，写入 `users`、`doctors`、`user_roles`（DOCTOR 角色）和 `doctor_department_rel`。
+- 当前实现会对密码做哈希后再写入。
+- 用户名/手机号/医生编码冲突分别返回 `2022`/`2024`/`2023`。
+- DOCTOR 角色不存在时返回 `2025`。
+
+### 6A.4 `PUT /api/v1/admin/doctors/{doctorId}`
+
+| 字段 | 要求 |
+|------|------|
+| Path `doctorId` | 必填；必须大于 `0` |
+| `displayName` | 必填；非空；会 trim |
+| `phone` | 必填；非空；会 trim |
+| `professionalTitle` | 可空；空白字符串转 `null` |
+| `introductionMasked` | 可空；空白字符串转 `null` |
+| `departmentIds` | 可空；采用全量替换策略 |
+
+业务语义：
+
+- 这是后台更新医生档案和科室分配的接口。
+- 更新采用乐观锁；并发冲突返回 `2026`。
+- 更新成功后会使对应 `CacheKeyGenerator.doctorProfileByUserId` 缓存失效。
+
+### 6A.5 `DELETE /api/v1/admin/doctors/{doctorId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和管理员医生删除权限 |
+| 路径参数 | `doctorId`，必须大于 `0` |
+| 成功响应 | `Result<Void>` |
+| 真实语义 | 后台软删除指定医生（`users` + `doctors` + 科室关系置为 `DISABLED`） |
+
+---
 
 ## 7. 门诊场次与挂号
 
