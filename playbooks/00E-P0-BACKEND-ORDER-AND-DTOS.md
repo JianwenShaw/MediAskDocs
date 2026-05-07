@@ -170,15 +170,17 @@
 |------|------------------|----------------------|
 | `GET /api/v1/admin/departments` | `keyword?`、`pageNum?`、`pageSize?` | `items[].id`、`hospitalId`、`deptCode`、`name`、`deptType`、`sortOrder`、`status` |
 | `GET /api/v1/admin/departments/{id}` | Path `id` | `id`、`hospitalId`、`deptCode`、`name`、`deptType`、`sortOrder`、`status` |
-| `POST /api/v1/admin/departments` | `hospitalId`、`deptCode`、`name`、`deptType`、`sortOrder?` | 同 GET 详情响应 |
+| `POST /api/v1/admin/departments` | `hospitalId`、`name`、`deptType` | 同 GET 详情响应 |
 | `PUT /api/v1/admin/departments/{id}` | Path `id` + Body `name`、`deptType`、`status`、`sortOrder?` | 同 GET 详情响应 |
 | `DELETE /api/v1/admin/departments/{id}` | Path `id` | `Void` |
 
 补充约定：
 
+- `deptCode` 由后端自动生成（`DEPT_` 前缀 + 雪花 ID），前端不需要传。
+- `sortOrder` 创建时默认为 `0`，如需调整顺序通过更新接口修改。
 - `deptType` 约束为 `CLINICAL` / `TECHNICAL` / `MANAGEMENT`。
 - `status` 约束为 `ACTIVE` / `DISABLED`；创建时默认 `ACTIVE`。
-- `sortOrder` 默认 `0`，列表按 `sortOrder` 升序、`id` 升序排列。
+- 列表按 `sortOrder` 升序、`id` 升序排列。
 - `keyword` 同时匹配 `name` 和 `deptCode`。
 - `deptCode` 在同一 `hospitalId` 下唯一（`uk_departments_code`），冲突返回 `2029`。
 - 更新使用乐观锁（`version` 字段），并发冲突返回 `2030`。

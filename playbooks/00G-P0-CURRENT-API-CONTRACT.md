@@ -398,15 +398,14 @@
 | 字段 | 要求 |
 |------|------|
 | `hospitalId` | 必填；必须大于 `0` |
-| `deptCode` | 必填；非空；会 trim |
 | `name` | 必填；非空；会 trim |
 | `deptType` | 必填；非空；会 trim；约束为 `CLINICAL` / `TECHNICAL` / `MANAGEMENT` |
-| `sortOrder` | 可空；默认 `0` |
 
 业务语义：
 
 - 这是后台创建科室的接口。
-- 创建时会生成雪花 ID，初始 `status` 固定为 `ACTIVE`，`version` 固定为 `0`。
+- 创建时会生成雪花 ID，`deptCode` 由后端自动生成（`DEPT_` 前缀 + 雪花 ID），`sortOrder` 默认为 `0`，前端不需要传。
+- 初始 `status` 固定为 `ACTIVE`，`version` 固定为 `0`。
 - `deptCode` 在同一 `hospitalId` 下唯一（`uk_departments_code`），冲突返回 `2029`。
 - 创建成功记录 `audit_event`。
 
