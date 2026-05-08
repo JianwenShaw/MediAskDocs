@@ -408,7 +408,7 @@ P0 约束：
 | `id` | `uuid` | PK | 模型运行 id |
 | `query_run_id` | `uuid` | FK -> `query_run.id` | 所属 query run |
 | `provider` | `varchar(32)` | not null | 固定为 `DEEPSEEK` |
-| `model` | `varchar(64)` | not null | 固定为 `deepseek-chat` |
+| `model` | `varchar(64)` | not null | 实际调用的 DeepSeek 模型名，例如 `deepseek-chat`、`deepseek-v4-pro` |
 | `run_type` | `varchar(32)` | not null | 调用用途 |
 | `stream_mode` | `varchar(16)` | not null | `SYNC / SSE` |
 | `status` | `varchar(16)` | not null | 运行状态 |
@@ -520,9 +520,9 @@ LLM 原始响应和调试产物。它不再承载最终导诊结果真相。
 | `created_at` | `timestamptz` | not null | 创建时间 |
 | `updated_at` | `timestamptz` | not null | 更新时间 |
 
-唯一约束：
+唯一约束 / 唯一索引：
 
-- (`kb_id`, `content_hash`)
+- `uq_knowledge_document_kb_hash_active` on (`kb_id`, `content_hash`) where `deleted_at IS NULL`
 
 关键索引：
 

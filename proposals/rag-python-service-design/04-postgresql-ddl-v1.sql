@@ -50,12 +50,15 @@ CREATE TABLE knowledge_document (
     lifecycle_status varchar(16) NOT NULL CHECK (lifecycle_status IN ('DRAFT', 'ENABLED', 'ARCHIVED')),
     deleted_at timestamptz,
     created_at timestamptz NOT NULL,
-    updated_at timestamptz NOT NULL,
-    CONSTRAINT uq_knowledge_document_kb_hash UNIQUE (kb_id, content_hash)
+    updated_at timestamptz NOT NULL
 );
 
 CREATE INDEX idx_knowledge_document_kb_status
     ON knowledge_document (kb_id, lifecycle_status);
+
+CREATE UNIQUE INDEX uq_knowledge_document_kb_hash_active
+    ON knowledge_document (kb_id, content_hash)
+    WHERE deleted_at IS NULL;
 
 CREATE TABLE knowledge_index_version (
     id uuid PRIMARY KEY,
@@ -255,7 +258,7 @@ CREATE TABLE ai_model_run (
     id uuid PRIMARY KEY,
     query_run_id uuid NOT NULL REFERENCES query_run (id),
     provider varchar(32) NOT NULL CHECK (provider = 'DEEPSEEK'),
-    model varchar(64) NOT NULL CHECK (model = 'deepseek-chat'),
+    model varchar(64) NOT NULL,
     run_type varchar(32) NOT NULL CHECK (run_type IN ('TRIAGE_MATERIALS', 'RAG_ANSWER')),
     stream_mode varchar(16) NOT NULL CHECK (stream_mode IN ('SYNC', 'SSE')),
     status varchar(16) NOT NULL CHECK (status IN ('RUNNING', 'SUCCEEDED', 'FAILED')),
@@ -374,7 +377,7 @@ CREATE INDEX idx_retrieval_hit_chunk
 CREATE TABLE answer_citation (
     query_run_id uuid NOT NULL REFERENCES query_run (id),
     citation_order integer NOT NULL CHECK (citation_order >= 1),
-    chunk_id uuid NOT NULL REFERENCES knowledge_chunk (id),
+    chunk_id uuid NOT NULL,
     snippet text NOT NULL,
     created_at timestamptz NOT NULL,
     PRIMARY KEY (query_run_id, citation_order)

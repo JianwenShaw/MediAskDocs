@@ -250,7 +250,7 @@ Python 负责：
 每次模型调用写入 `ai_model_run`：
 
 - `provider = DEEPSEEK`
-- `model = deepseek-chat`
+- `model = 实际配置的 DeepSeek 模型名`
 - `run_type = TRIAGE_MATERIALS`
 - `stream_mode = SYNC` 或 `SSE`
 - `status = RUNNING / SUCCEEDED / FAILED`
