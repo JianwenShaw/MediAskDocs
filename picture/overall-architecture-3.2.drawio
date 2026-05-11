@@ -1,0 +1,123 @@
+<mxfile host="app.diagrams.net" agent="Codex">
+  <diagram id="overall-architecture-3-2" name="3.2 总体架构设计">
+    <mxGraphModel dx="1134" dy="721" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1280" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;fontFamily=Microsoft YaHei;fontSize=22;fontStyle=1;fontColor=#1F2937;align=center;verticalAlign=middle;" value="MediAsk 系统总体架构" vertex="1">
+          <mxGeometry height="34" width="370" x="455" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="front_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#64748B;fontColor=#1F2937;fontSize=15;fontStyle=1;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;verticalAlign=top;spacingTop=10;" value="用户访问层" vertex="1">
+          <mxGeometry height="560" width="210" x="55" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="java_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#64748B;fontColor=#1F2937;fontSize=15;fontStyle=1;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;verticalAlign=top;spacingTop=10;" value="Java 业务服务" vertex="1">
+          <mxGeometry height="560" width="270" x="315" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="python_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#64748B;fontColor=#1F2937;fontSize=15;fontStyle=1;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;verticalAlign=top;spacingTop=10;" value="Python AI 服务" vertex="1">
+          <mxGeometry height="560" width="270" x="635" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="resource_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#64748B;fontColor=#1F2937;fontSize=15;fontStyle=1;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;verticalAlign=top;spacingTop=10;" value="数据与模型资源" vertex="1">
+          <mxGeometry height="560" width="270" x="955" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="users" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="患者 / 医生 / 管理员" vertex="1">
+          <mxGeometry height="58" width="130" x="95" y="205" as="geometry" />
+        </mxCell>
+        <mxCell id="frontend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="前端应用&lt;br&gt;页面交互与结果展示" vertex="1">
+          <mxGeometry height="72" width="150" x="85" y="350" as="geometry" />
+        </mxCell>
+        <mxCell id="java_api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="接口与安全层&lt;br&gt;REST / SSE、认证授权、统一响应" vertex="1">
+          <mxGeometry height="76" width="180" x="360" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="java_business" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="业务用例层&lt;br&gt;导诊承接、挂号、接诊、病历处方" vertex="1">
+          <mxGeometry height="76" width="180" x="360" y="315" as="geometry" />
+        </mxCell>
+        <mxCell id="java_adapter" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="基础设施适配层&lt;br&gt;数据库、Redis、Python 服务调用" vertex="1">
+          <mxGeometry height="76" width="180" x="360" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="java_worker" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="后台任务&lt;br&gt;科室目录发布" vertex="1">
+          <mxGeometry height="58" width="180" x="360" y="585" as="geometry" />
+        </mxCell>
+        <mxCell id="python_api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#EA580C;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="AI 服务接口层&lt;br&gt;导诊、会话、知识库管理接口" vertex="1">
+          <mxGeometry height="76" width="180" x="680" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="python_triage" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#EA580C;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="智能导诊模块&lt;br&gt;上下文组织、安全判断、结果生成" vertex="1">
+          <mxGeometry height="76" width="180" x="680" y="335" as="geometry" />
+        </mxCell>
+        <mxCell id="python_rag" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#EA580C;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="知识库与 RAG 模块&lt;br&gt;文档入库、知识检索、引用追溯" vertex="1">
+          <mxGeometry height="76" width="180" x="680" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="postgres" parent="1" style="shape=datastore;whiteSpace=wrap;html=1;fillColor=#F3E8FF;strokeColor=#7E22CE;fontColor=#1F2937;fontSize=13;fontFamily=Microsoft YaHei;strokeWidth=1.5;" value="PostgreSQL + pgvector&lt;br&gt;业务数据、AI 会话、知识索引" vertex="1">
+          <mxGeometry height="84" width="170" x="1005" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="redis" parent="1" style="shape=datastore;whiteSpace=wrap;html=1;fillColor=#F3E8FF;strokeColor=#7E22CE;fontColor=#1F2937;fontSize=13;fontFamily=Microsoft YaHei;strokeWidth=1.5;" value="Redis&lt;br&gt;导诊科室目录" vertex="1">
+          <mxGeometry height="72" width="170" x="1005" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="oss" parent="1" style="shape=datastore;whiteSpace=wrap;html=1;fillColor=#F3E8FF;strokeColor=#7E22CE;fontColor=#1F2937;fontSize=13;fontFamily=Microsoft YaHei;strokeWidth=1.5;" value="对象存储&lt;br&gt;知识文档原始文件" vertex="1">
+          <mxGeometry height="72" width="170" x="1005" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="model_api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E8FF;strokeColor=#7E22CE;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="外部模型服务&lt;br&gt;大语言模型 / Embedding" vertex="1">
+          <mxGeometry height="72" width="170" x="1005" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="e_user_front" edge="1" parent="1" source="users" style="endArrow=block;html=1;rounded=0;strokeColor=#475569;strokeWidth=1.5;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="frontend" value="使用">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_front_java" edge="1" parent="1" source="frontend" style="endArrow=block;html=1;rounded=0;strokeColor=#475569;strokeWidth=1.5;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="java_api" value="业务请求">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_java_api_business" edge="1" parent="1" source="java_api" style="endArrow=block;html=1;rounded=0;strokeColor=#475569;strokeWidth=1.5;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="java_business" value="调用用例">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_java_business_adapter" edge="1" parent="1" source="java_business" style="endArrow=block;html=1;rounded=0;strokeColor=#475569;strokeWidth=1.5;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="java_adapter" value="读写数据 / 调用外部能力">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_java_python" edge="1" parent="1" source="java_adapter" style="endArrow=block;html=1;rounded=0;strokeColor=#475569;strokeWidth=1.5;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="python_api" value="AI 能力调用">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_python_api_triage" edge="1" parent="1" source="python_api" style="endArrow=block;html=1;rounded=0;strokeColor=#475569;strokeWidth=1.5;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="python_triage" value="导诊任务">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_python_triage_rag" edge="1" parent="1" source="python_triage" style="endArrow=block;html=1;rounded=0;strokeColor=#475569;strokeWidth=1.5;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="python_rag" value="检索增强">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_java_worker_redis" edge="1" parent="1" source="java_worker" style="endArrow=block;html=1;rounded=0;strokeColor=#64748B;strokeWidth=1;dashed=1;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="redis" value="发布目录">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="620" y="614" />
+              <mxPoint x="620" y="366" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_java_pg" edge="1" parent="1" source="java_adapter" style="endArrow=block;html=1;rounded=0;strokeColor=#64748B;strokeWidth=1;dashed=1;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="postgres" value="业务数据">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="610" y="488" />
+              <mxPoint x="610" y="222" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_python_pg" edge="1" parent="1" source="python_rag" style="endArrow=block;html=1;rounded=0;strokeColor=#64748B;strokeWidth=1;dashed=1;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="postgres" value="AI 与知识数据">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="930" y="538" />
+              <mxPoint x="930" y="222" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_python_redis" edge="1" parent="1" source="python_triage" style="endArrow=block;html=1;rounded=0;strokeColor=#64748B;strokeWidth=1;dashed=1;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="redis" value="读取目录">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_python_oss" edge="1" parent="1" source="python_rag" style="endArrow=block;html=1;rounded=0;strokeColor=#64748B;strokeWidth=1;dashed=1;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="oss" value="文档存取">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_python_model" edge="1" parent="1" source="python_triage" style="endArrow=block;html=1;rounded=0;strokeColor=#64748B;strokeWidth=1;dashed=1;fontColor=#1F2937;fontSize=12;fontFamily=Microsoft YaHei;" target="model_api" value="模型生成 / 向量化">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="930" y="373" />
+              <mxPoint x="930" y="636" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
