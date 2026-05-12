@@ -20,6 +20,7 @@
 |------|------|------|
 | POST | `/api/v1/query` | 同步完整 query，返回 `triage_result` |
 | POST | `/api/v1/query/stream` | 流式 SSE，事件驱动 |
+| POST | `/api/v1/admin/query-evaluations` | Admin dry-run 问诊评估，返回 `triage_result + evaluation` |
 | GET | `/api/v1/sessions` | 查询当前患者的 AI 会话摘要列表 |
 | GET | `/api/v1/sessions/{session_id}` | 查询当前患者的 AI 会话明细 |
 | GET | `/api/v1/sessions/{session_id}/triage-result` | 查询当前患者最近一次 finalized 导诊结果 |
@@ -33,6 +34,11 @@
 - `Content-Type: application/json`
 - `X-Request-Id: <string>`（由 Java 网关优先传入；若缺失 Python 生成并在响应中回传）
 - `X-Patient-User-Id: <string>`（Java 透传当前登录患者的 `users.id`；query 和 sessions 接口都必传）
+
+Admin 接口补充：
+
+- `X-Actor-Id: <string>`（当前操作人；admin 接口必传）
+- `X-Hospital-Scope: <string>`（当前管理侧医院作用域；admin 接口必传）
 
 ---
 
@@ -217,6 +223,249 @@
 - `active_cycle_turn_no` 仅在 `has_active_cycle = true` 时非空
 - `blocked_reason` 仅在 `BLOCKED` 时非空
 - `catalog_version` 仅在 `READY` 时非空
+
+## 5B. Admin Dry-Run 问诊评估接口
+
+### 5B.1 `POST /api/v1/admin/query-evaluations`
+
+语义：
+
+- 这是内部 Admin 调试接口，不给患者前台直接调用
+- 接口会实时执行一次完整的干跑问诊评估：护栏检查、目录加载、知识检索、模型调用、`triage_result` 组装
+- 不创建真实 `session`，不写 `ai_turn`、`query_run`、`ai_model_run`、`query_result_snapshot`、`answer_citation`
+- 返回两部分：
+  - `triage_result`：这次 dry-run 的真实问诊结果
+  - `evaluation`：便于人工抽查效果的评估指标
+- 不使用 SSE，固定返回普通 JSON
+
+请求体：
+
+```json
+{
+  "scene": "AI_TRIAGE",
+  "hospital_scope": "default",
+  "user_message": "头痛三天，伴有低烧"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `scene` | `string` | 是 | 当前固定 `AI_TRIAGE` |
+| `hospital_scope` | `string` | 是 | 本次评估命中的医院目录/知识库作用域 |
+| `user_message` | `string` | 是 | 用于本次 dry-run 的患者输入原文 |
+
+约束：
+
+- v1 不接收 `session_id`
+- v1 不接收历史对话
+- v1 固定按“单轮首轮问诊”口径运行
+- 调用不会污染正式问诊数据
+
+### 5B.2 成功响应总结构
+
+```json
+{
+  "request_id": "test-request-id",
+  "triage_result": { /* 判别联合，见 §8 */ },
+  "evaluation": { /* 评估指标，见 §5B.6 */ }
+}
+```
+
+顶层字段说明：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `request_id` | `string` | 本次请求 ID；用于日志串联和问题排查 |
+| `triage_result` | `object` | 本次 dry-run 产出的结构化问诊结果 |
+| `evaluation` | `object` | 本次 dry-run 的评估指标集合 |
+
+### 5B.3 `READY` 响应示例
+
+```json
+{
+  "request_id": "test-request-id",
+  "triage_result": {
+    "triage_stage": "READY",
+    "triage_completion_reason": "SUFFICIENT_INFO",
+    "next_action": "VIEW_TRIAGE_RESULT",
+    "risk_level": "low",
+    "chief_complaint_summary": "头痛三天，伴有低烧",
+    "recommended_departments": [
+      {
+        "department_id": 101,
+        "department_name": "神经内科",
+        "priority": 1,
+        "reason": "头痛相关症状优先考虑神经内科"
+      }
+    ],
+    "care_advice": "建议尽快门诊就诊。",
+    "catalog_version": "deptcat-v20260423-01",
+    "citations": [
+      {
+        "citation_order": 1,
+        "chunk_id": "33333333-3333-3333-3333-333333333333",
+        "snippet": "头痛伴恶心时应先排查神经系统相关疾病。"
+      }
+    ]
+  },
+  "evaluation": {
+    "finalized": true,
+    "triage_stage": "READY",
+    "guardrail_blocked": false,
+    "follow_up_question_count": 0,
+    "risk_level": "low",
+    "recommended_department_count": 1,
+    "primary_department_id": 101,
+    "primary_department_name": "神经内科",
+    "citation_count": 1,
+    "citation_chunk_ids": [
+      "33333333-3333-3333-3333-333333333333"
+    ],
+    "retrieved_chunk_count": 2,
+    "model_invoked": true,
+    "input_tokens": 11,
+    "output_tokens": 22,
+    "total_tokens": 33,
+    "duration_ms": 24,
+    "catalog_version": "deptcat-v20260423-01",
+    "kb_id": "11111111-1111-1111-1111-111111111111",
+    "index_version_id": "22222222-2222-2222-2222-222222222222"
+  }
+}
+```
+
+### 5B.4 `COLLECTING` 响应示例
+
+```json
+{
+  "request_id": "test-request-id",
+  "triage_result": {
+    "triage_stage": "COLLECTING",
+    "triage_completion_reason": null,
+    "next_action": "CONTINUE_TRIAGE",
+    "chief_complaint_summary": "头痛三天，伴有低烧",
+    "follow_up_questions": [
+      "请问是否发热？",
+      "请问头痛是否持续加重？"
+    ]
+  },
+  "evaluation": {
+    "finalized": false,
+    "triage_stage": "COLLECTING",
+    "guardrail_blocked": false,
+    "follow_up_question_count": 2,
+    "risk_level": null,
+    "recommended_department_count": 0,
+    "primary_department_id": null,
+    "primary_department_name": null,
+    "citation_count": 0,
+    "citation_chunk_ids": [],
+    "retrieved_chunk_count": 2,
+    "model_invoked": true,
+    "input_tokens": 11,
+    "output_tokens": 22,
+    "total_tokens": 33,
+    "duration_ms": 24,
+    "catalog_version": "deptcat-v20260423-01",
+    "kb_id": "11111111-1111-1111-1111-111111111111",
+    "index_version_id": "22222222-2222-2222-2222-222222222222"
+  }
+}
+```
+
+### 5B.5 `BLOCKED` 响应示例
+
+```json
+{
+  "request_id": "test-request-id",
+  "triage_result": {
+    "triage_stage": "BLOCKED",
+    "triage_completion_reason": "HIGH_RISK_BLOCKED",
+    "next_action": "EMERGENCY_OFFLINE",
+    "risk_level": "high",
+    "chief_complaint_summary": "我胸痛得厉害，喘不上气",
+    "recommended_departments": [],
+    "care_advice": "请立即寻求线下紧急帮助或联系人工支持",
+    "blocked_reason": "CHEST_PAIN_RISK",
+    "citations": []
+  },
+  "evaluation": {
+    "finalized": true,
+    "triage_stage": "BLOCKED",
+    "guardrail_blocked": true,
+    "follow_up_question_count": 0,
+    "risk_level": "high",
+    "recommended_department_count": 0,
+    "primary_department_id": null,
+    "primary_department_name": null,
+    "citation_count": 0,
+    "citation_chunk_ids": [],
+    "retrieved_chunk_count": 0,
+    "model_invoked": false,
+    "input_tokens": null,
+    "output_tokens": null,
+    "total_tokens": null,
+    "duration_ms": 3,
+    "catalog_version": null,
+    "kb_id": null,
+    "index_version_id": null
+  }
+}
+```
+
+### 5B.6 `evaluation` 字段合同
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `finalized` | `boolean` | 本次结果是否已经收口。`READY` / `BLOCKED` 为 `true`，`COLLECTING` 为 `false` |
+| `triage_stage` | `string` | 评估视角下的阶段镜像；与 `triage_result.triage_stage` 一致 |
+| `guardrail_blocked` | `boolean` | 是否在输入护栏阶段直接阻断。为 `true` 时，后续不会调用检索与模型 |
+| `follow_up_question_count` | `int` | 追问条数。只有 `COLLECTING` 可能大于 0，当前最多 2 |
+| `risk_level` | `string \| null` | 风险等级镜像。`READY` / `BLOCKED` 返回实际风险级别，`COLLECTING` 返回 `null` |
+| `recommended_department_count` | `int` | 推荐科室数量。`READY` 时通常为 1~3，其它阶段为 0 |
+| `primary_department_id` | `int \| null` | 首推科室 ID，取 `recommended_departments[0]`；仅 `READY` 时非空 |
+| `primary_department_name` | `string \| null` | 首推科室名称，取 `recommended_departments[0]`；仅 `READY` 时非空 |
+| `citation_count` | `int` | 引用条数。当前只统计实际进入 `triage_result.citations` 的引用 |
+| `citation_chunk_ids` | `string[]` | 引用来源 chunk ID 列表。顺序与 `triage_result.citations` 一致 |
+| `retrieved_chunk_count` | `int` | 检索后进入模型上下文的 chunk 数量；不是数据库总命中数 |
+| `model_invoked` | `boolean` | 是否实际调用了 LLM。护栏直接阻断时为 `false` |
+| `input_tokens` | `int \| null` | 模型输入 token 数；未调模型时为 `null` |
+| `output_tokens` | `int \| null` | 模型输出 token 数；未调模型时为 `null` |
+| `total_tokens` | `int \| null` | `input_tokens + output_tokens`；任一不存在时按当前实现求和或返回 `null` |
+| `duration_ms` | `int` | 本次 dry-run 总耗时，单位毫秒；从进入接口到响应组装完成 |
+| `catalog_version` | `string \| null` | 本次使用的导诊目录版本。护栏直接阻断时为 `null` |
+| `kb_id` | `string \| null` | 本次使用的知识库 ID。护栏直接阻断时为 `null` |
+| `index_version_id` | `string \| null` | 本次使用的知识索引版本 ID。护栏直接阻断时为 `null` |
+
+补充规则：
+
+- `evaluation` 是评估视图，不是新的业务真相；业务真相仍然是 `triage_result`
+- `evaluation` 中的多个字段是为了方便 UI 或人工审查直接读取，不需要前端自己再从 `triage_result` 反算
+- `primary_department_*`、`risk_level`、`citation_chunk_ids` 都与 `triage_result` 保持一致，不引入第二套含义
+
+### 5B.7 UI 使用建议
+
+- 列表或卡片摘要优先读：
+  - `evaluation.triage_stage`
+  - `evaluation.risk_level`
+  - `evaluation.primary_department_name`
+  - `evaluation.citation_count`
+  - `evaluation.duration_ms`
+- 若要展示“模型有没有真正参与”：
+  - 直接使用 `evaluation.model_invoked`
+  - 不要用 `input_tokens != null` 自己推断
+- 若要区分“未收口”与“已收口”：
+  - 用 `evaluation.finalized`
+  - 不要只看 `citation_count` 或 `recommended_department_count`
+- 若要展示追问强度：
+  - 用 `evaluation.follow_up_question_count`
+  - 需要展示文案时再读 `triage_result.follow_up_questions`
+- 若要支持人工抽查引用：
+  - 先看 `evaluation.citation_chunk_ids`
+  - 需要展示原文时再读 `triage_result.citations`
+- 若要高亮“护栏直接阻断”：
+  - 读 `evaluation.guardrail_blocked`
+  - 这种情况下 `model_invoked = false`、`retrieved_chunk_count = 0`、`catalog_version = null`
 
 ---
 
@@ -472,3 +721,27 @@ P0 固定枚举：
   "timestamp": 1777612345678
 }
 ```
+
+### 12.4 Admin dry-run 评估接口补充错误
+
+`POST /api/v1/admin/query-evaluations`：
+
+- 请求体非法：返回 `400`
+- 目录缺失、知识库发布缺失、模型返回非法内容等内部 triage 错误：返回 `5xx`
+
+注意：
+
+- 这个接口不是 query path，所以错误响应格式不是 `{ request_id, error }`
+- 它沿用 admin 统一错误格式：
+
+```json
+{
+  "code": 6007,
+  "msg": "published knowledge release is missing",
+  "requestId": "req_01",
+  "timestamp": 1777612345678
+}
+```
+
+- `code = 6007` 代表 triage 类应用错误包装
+- 更细粒度 triage 错误码（如 `TRIAGE_KNOWLEDGE_RELEASE_MISSING`）当前不会作为独立顶层字段返回，只体现在日志中
