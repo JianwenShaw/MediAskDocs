@@ -1,0 +1,71 @@
+<mxfile host="app.diagrams.net" agent="Codex">
+  <diagram id="function-modules-3-3" name="3.3 功能模块划分">
+    <mxGraphModel dx="876" dy="557" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1180" pageHeight="760" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="kUjNEXsEjtvrOnH7o-VX-1" edge="1" parent="1" source="system" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" target="admin_group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="kUjNEXsEjtvrOnH7o-VX-2" edge="1" parent="1" source="system" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=1.5;" target="patient_group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="system" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#64748B;fontColor=#1F2937;fontSize=16;fontStyle=1;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=2;" value="基于大模型的智能医疗辅助问诊系统" vertex="1">
+          <mxGeometry height="60" width="400" x="390" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="patient_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;fontColor=#1F2937;fontSize=15;fontStyle=1;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;verticalAlign=top;spacingTop=12;" value="患者端功能" vertex="1">
+          <mxGeometry height="310" width="230" x="200" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="doctor_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#1F2937;fontSize=15;fontStyle=1;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;verticalAlign=top;spacingTop=12;" value="医生端功能" vertex="1">
+          <mxGeometry height="310" width="230" x="475" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="admin_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#EA580C;fontColor=#1F2937;fontSize=15;fontStyle=1;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;verticalAlign=top;spacingTop=12;" value="管理端功能" vertex="1">
+          <mxGeometry height="310" width="230" x="750" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="patient_profile" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="个人信息维护" vertex="1">
+          <mxGeometry height="42" width="160" x="235" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="patient_triage" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="AI 智能导诊" vertex="1">
+          <mxGeometry height="42" width="160" x="235" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="patient_registration" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="门诊挂号" vertex="1">
+          <mxGeometry height="42" width="160" x="235" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="patient_records" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2563EB;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="挂号与病历查看" vertex="1">
+          <mxGeometry height="42" width="160" x="235" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="doctor_encounter" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#16A34A;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="接诊列表管理" vertex="1">
+          <mxGeometry height="42" width="160" x="510" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="doctor_ai_summary" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#16A34A;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="导诊摘要查看" vertex="1">
+          <mxGeometry height="42" width="160" x="510" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="doctor_emr" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#16A34A;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="病历记录管理" vertex="1">
+          <mxGeometry height="42" width="160" x="510" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="doctor_prescription" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#16A34A;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="处方管理" vertex="1">
+          <mxGeometry height="42" width="160" x="510" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="admin_user" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA580C;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="用户与角色管理" vertex="1">
+          <mxGeometry height="42" width="160" x="785" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="admin_department" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA580C;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="科室与医生管理" vertex="1">
+          <mxGeometry height="42" width="160" x="785" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="admin_clinic" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA580C;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="审计日志查看" vertex="1">
+          <mxGeometry height="42" width="160" x="785" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="admin_knowledge" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#EA580C;fontColor=#1F2937;fontSize=14;fontFamily=Microsoft YaHei;arcSize=8;strokeWidth=1.5;" value="知识库管理" vertex="1">
+          <mxGeometry height="42" width="160" x="785" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="e_system_doctor" edge="1" parent="1" source="system" style="endArrow=block;html=1;rounded=0;strokeColor=#475569;strokeWidth=1.5;" target="doctor_group" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="590" y="205" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
