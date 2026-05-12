@@ -38,6 +38,22 @@
 | `GET /api/v1/ai/sessions/{sessionId}` | 当前患者 AI 会话明细 | 已登录 + `PATIENT` |
 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 当前患者最近一次 finalized 导诊结果 | 已登录 + `PATIENT` |
 | `GET /api/v1/encounters/{encounterId}/ai-summary` | 当前医生查看接诊关联的 AI 结构化摘要 | 已登录 + `DOCTOR` + `encounter:query` |
+| `GET /api/v1/admin/knowledge-bases` | 知识库列表网关 | 已登录 + `admin:knowledge-base:list` |
+| `GET /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 知识库详情网关 | 已登录 + `admin:knowledge-base:list` |
+| `POST /api/v1/admin/knowledge-bases` | 知识库创建网关 | 已登录 + `admin:knowledge-base:create` |
+| `PATCH /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 知识库更新网关 | 已登录 + `admin:knowledge-base:update` |
+| `DELETE /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 知识库归档网关 | 已登录 + `admin:knowledge-base:delete` |
+| `POST /api/v1/admin/knowledge-documents/import` | 知识文档导入网关 | 已登录 + `admin:knowledge-document:import` |
+| `GET /api/v1/admin/knowledge-documents` | 知识文档列表网关 | 已登录 + `admin:knowledge-document:list` |
+| `GET /api/v1/admin/knowledge-documents/{documentId}` | 知识文档详情网关 | 已登录 + `admin:knowledge-document:list` |
+| `GET /api/v1/admin/knowledge-documents/{documentId}/chunks` | 知识文档 chunk 预览网关 | 已登录 + `admin:knowledge-document:list` |
+| `POST /api/v1/admin/knowledge-documents/{documentId}/reingest` | 知识文档重新入库网关 | 已登录 + `admin:knowledge-document:import` |
+| `DELETE /api/v1/admin/knowledge-documents/{documentId}` | 知识文档删除网关 | 已登录 + `admin:knowledge-document:delete` |
+| `GET /api/v1/admin/ingest-jobs` | 入库任务列表网关 | 已登录 + `admin:knowledge-ingest-job:view` |
+| `GET /api/v1/admin/ingest-jobs/{jobId}` | 入库任务详情网关 | 已登录 + `admin:knowledge-ingest-job:view` |
+| `GET /api/v1/admin/knowledge-index-versions` | 索引版本列表网关 | 已登录 + `admin:knowledge-index-version:list` |
+| `GET /api/v1/admin/knowledge-releases` | 发布记录列表网关 | 已登录 + `admin:knowledge-release:list` |
+| `POST /api/v1/admin/knowledge-releases` | 发布网关 | 已登录 + `admin:knowledge-release:publish` |
 
 当前未实现：
 
@@ -49,6 +65,27 @@
 - `/api/v1/ai/sessions*` 当前全部由 Java 网关直接读取 Python `/api/v1/sessions*`
 - Java 不用 `ai_triage_result` 回填会话历史；快照表仍只承担 finalized 业务承接
 - `/api/v1/encounters/{encounterId}/ai-summary` 通过 `registration_order.source_ai_session_id` 关联到 AI 会话，只返回结构化 triage 结果，不返回完整问诊原文
+
+## 2.2 知识库后台网关
+
+知识库后台仍然只允许前端访问 Java，不直连 Python。
+
+固定规则：
+
+- 前端和 Java 之间统一使用 camelCase。
+- Java 和 Python 之间统一使用 snake_case。
+- Java 调 Python 固定透传 `X-Request-Id`、`X-Actor-Id`、`X-Hospital-Scope`。
+- 当前 P0 `X-Hospital-Scope` 固定为 `default`。
+- Java 不读取 Python 的 `knowledge_*`、`ingest_job`、`knowledge_index_version`、`knowledge_release` 表，只做鉴权、转发、错误映射和 `Result<T>` 包装。
+
+新增知识库后台最小口径：
+
+- `GET /api/v1/admin/knowledge-bases/{knowledgeBaseId}`：Path 透传到 Python `/api/v1/admin/knowledge-bases/{knowledge_base_id}`。
+- `GET /api/v1/admin/knowledge-documents`：前端支持 `knowledgeBaseId`、`keyword`、`lifecycleStatus`、`latestJobStatus`、`pageNum`、`pageSize`；Java 转 Python 为 `knowledge_base_id`、`keyword`、`lifecycle_status`、`latest_job_status`、`page_num`、`page_size`。
+- `GET /api/v1/admin/knowledge-documents/{documentId}`：Path 透传到 Python `/api/v1/admin/knowledge-documents/{document_id}`。
+- `GET /api/v1/admin/knowledge-documents/{documentId}/chunks`：前端 `pageNum`、`pageSize` 转 Python `page_num`、`page_size`。
+- `POST /api/v1/admin/knowledge-documents/{documentId}/reingest`：Java 不带业务请求体，直接转 Python `/reingest`。
+- `GET /api/v1/admin/ingest-jobs`：前端 `knowledgeBaseId`、`documentId?`、`status?`、`pageNum?`、`pageSize?` 转 Python `knowledge_base_id`、`document_id?`、`status?`、`page_num?`、`page_size?`。
 
 ## 2.1 医生接诊 AI 摘要
 

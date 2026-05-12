@@ -73,12 +73,17 @@
 | 管理员科室管理 | `PUT /api/v1/admin/departments/{id}` | 已登录 + 管理员科室更新权限 | 后台更新指定科室 |
 | 管理员科室管理 | `DELETE /api/v1/admin/departments/{id}` | 已登录 + 管理员科室删除权限 | 后台软删除指定科室 |
 | 知识库后台管理 | `GET /api/v1/admin/knowledge-bases` | 已登录 + 知识库列表权限 | Java 网关转发到 Python 知识库列表接口 |
+| 知识库后台管理 | `GET /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库列表权限 | Java 网关转发到 Python 知识库详情接口 |
 | 知识库后台管理 | `POST /api/v1/admin/knowledge-bases` | 已登录 + 知识库创建权限 | Java 网关转发到 Python 知识库创建接口 |
 | 知识库后台管理 | `PATCH /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库更新权限 | Java 网关转发到 Python 知识库更新接口 |
 | 知识库后台管理 | `DELETE /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 已登录 + 知识库删除权限 | Java 网关转发到 Python 知识库归档接口 |
 | 知识文档后台管理 | `POST /api/v1/admin/knowledge-documents/import` | 已登录 + 知识文档导入权限 + 依赖 `mediask.ai.base-url` | Java 网关转发上传文件到 Python 入库接口 |
 | 知识文档后台管理 | `GET /api/v1/admin/knowledge-documents` | 已登录 + 知识文档列表权限 | Java 网关转发到 Python 文档列表接口 |
+| 知识文档后台管理 | `GET /api/v1/admin/knowledge-documents/{documentId}` | 已登录 + 知识文档列表权限 | Java 网关转发到 Python 文档详情接口 |
+| 知识文档后台管理 | `GET /api/v1/admin/knowledge-documents/{documentId}/chunks` | 已登录 + 知识文档列表权限 | Java 网关转发到 Python 文档 chunk 预览接口 |
+| 知识文档后台管理 | `POST /api/v1/admin/knowledge-documents/{documentId}/reingest` | 已登录 + 知识文档导入权限 | Java 网关转发到 Python 文档重新入库接口 |
 | 知识文档后台管理 | `DELETE /api/v1/admin/knowledge-documents/{documentId}` | 已登录 + 知识文档删除权限 | Java 网关转发到 Python 文档删除接口 |
+| 知识库后台管理 | `GET /api/v1/admin/ingest-jobs` | 已登录 + 入库任务查看权限 | Java 网关转发到 Python 入库任务列表接口 |
 | 知识库后台管理 | `GET /api/v1/admin/ingest-jobs/{jobId}` | 已登录 + 入库任务查看权限 | Java 网关转发到 Python 入库任务详情接口 |
 | 知识库后台管理 | `GET /api/v1/admin/knowledge-index-versions` | 已登录 + 索引版本列表权限 | Java 网关转发到 Python 索引版本列表接口 |
 | 知识库后台管理 | `GET /api/v1/admin/knowledge-releases` | 已登录 + 发布记录列表权限 | Java 网关转发到 Python 发布记录列表接口 |
@@ -584,6 +589,15 @@
 - Java 转发 `X-Request-Id`、`X-Actor-Id`、`X-Hospital-Scope`，其中 P0 `X-Hospital-Scope` 固定为 `default`。
 - Python 响应作为 `data` 转为 camelCase 后返回给前端。
 
+### 8.2A `GET /api/v1/admin/knowledge-bases/{knowledgeBaseId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和知识库列表权限 |
+| 路径参数 | `knowledgeBaseId`，按字符串透传给 Python |
+| 响应结构 | Python 返回的详情 DTO，Java 将 `data` 字段递归转为 camelCase 后外层包装 `Result<T>` |
+| 真实语义 | Java 不读取本地知识库表，只做鉴权、请求头透传和错误映射 |
+
 ### 8.3 `PATCH /api/v1/admin/knowledge-bases/{knowledgeBaseId}`
 
 | 字段 | 要求 |
@@ -626,12 +640,41 @@
 | 项目 | 当前代码口径 |
 |------|--------------|
 | 认证 | 需要登录态和知识文档列表权限 |
-| 前端查询参数 | `knowledgeBaseId`、`pageNum?`、`pageSize?` |
-| Java 转 Python 查询参数 | `knowledge_base_id`、`page_num?`、`page_size?` |
+| 前端查询参数 | `knowledgeBaseId`、`keyword?`、`lifecycleStatus?`、`latestJobStatus?`、`pageNum?`、`pageSize?` |
+| Java 转 Python 查询参数 | `knowledge_base_id`、`keyword?`、`lifecycle_status?`、`latest_job_status?`、`page_num?`、`page_size?` |
 | 响应结构 | Python 返回的分页 DTO，Java 将 `data` 字段递归转为 camelCase 后外层包装 `Result<T>` |
 | 真实语义 | Java 不查询 `knowledge_document`；列表字段以 Python API 为准 |
 
-### 8.7 `DELETE /api/v1/admin/knowledge-documents/{documentId}`
+### 8.7 `GET /api/v1/admin/knowledge-documents/{documentId}`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和知识文档列表权限 |
+| 路径参数 | `documentId`，按字符串透传给 Python |
+| 响应结构 | Python 返回的详情 DTO，Java 将 `data` 字段递归转为 camelCase 后外层包装 `Result<T>` |
+| 真实语义 | Java 不查询 `knowledge_document`；详情字段以 Python API 为准 |
+
+### 8.8 `GET /api/v1/admin/knowledge-documents/{documentId}/chunks`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和知识文档列表权限 |
+| 路径参数 | `documentId`，按字符串透传给 Python |
+| 前端查询参数 | `pageNum?`、`pageSize?` |
+| Java 转 Python 查询参数 | `page_num?`、`page_size?` |
+| 响应结构 | Python 返回的分页 DTO，Java 将 `data` 字段递归转为 camelCase 后外层包装 `Result<T>` |
+| 真实语义 | Java 不查询 chunk，只转发分页预览请求 |
+
+### 8.9 `POST /api/v1/admin/knowledge-documents/{documentId}/reingest`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证 | 需要登录态和知识文档导入权限 |
+| 路径参数 | `documentId`，按字符串透传给 Python |
+| 成功响应 | Python 返回的任务 DTO，Java 将 `data` 字段递归转为 camelCase 后外层包装 `Result<T>` |
+| 真实语义 | Java 不上传新文件，不重建索引，只请求 Python 基于已有 `source_uri` 重新创建入库任务 |
+
+### 8.10 `DELETE /api/v1/admin/knowledge-documents/{documentId}`
 
 | 项目 | 当前代码口径 |
 |------|--------------|
@@ -640,10 +683,11 @@
 | 成功响应 | `Result<Void>` |
 | 真实语义 | Java 转发删除请求；文档删除、索引重建或发布撤销由 Python 决定 |
 
-### 8.8 入库任务、索引版本与发布
+### 8.11 入库任务、索引版本与发布
 
 | 接口 | 当前代码口径 |
 |------|--------------|
+| `GET /api/v1/admin/ingest-jobs` | 需要入库任务查看权限；前端查询参数 `knowledgeBaseId`、`documentId?`、`status?`、`pageNum?`、`pageSize?`；Java 转 Python 为 `knowledge_base_id`、`document_id?`、`status?`、`page_num?`、`page_size?`；响应 `data` 转 camelCase |
 | `GET /api/v1/admin/ingest-jobs/{jobId}` | 需要入库任务查看权限；Path `jobId` 按字符串透传 |
 | `GET /api/v1/admin/knowledge-index-versions` | 需要索引版本列表权限；前端查询参数 `knowledgeBaseId`，Java 转 Python 为 `knowledge_base_id`，响应 `data` 转 camelCase |
 | `GET /api/v1/admin/knowledge-releases` | 需要发布记录列表权限；前端查询参数 `knowledgeBaseId`，Java 转 Python 为 `knowledge_base_id`，响应 `data` 转 camelCase |

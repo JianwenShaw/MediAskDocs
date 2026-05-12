@@ -126,11 +126,16 @@
 | 接口 | 请求 DTO 最小字段 | 响应 `data` 最小字段 |
 |------|------------------|----------------------|
 | `GET /api/v1/admin/knowledge-bases` | 前端传 `pageNum?`、`pageSize?`、`keyword?`；Java 转 Python 为 `page_num?`、`page_size?`、`keyword?` | 前端收到 camelCase 知识库分页 DTO |
+| `GET /api/v1/admin/knowledge-bases/{id}` | Path `id` | 前端收到 camelCase 知识库详情 DTO |
 | `POST /api/v1/admin/knowledge-bases` | 前端传 `code`、`name`、`description?`、`defaultEmbeddingModel`、`defaultEmbeddingDimension`、`retrievalStrategy`；Java 转 Python 为 snake_case | 前端收到 camelCase 知识库 DTO |
 | `PATCH /api/v1/admin/knowledge-bases/{id}` | Path `id`；前端 Body：`name?`、`description?`、`status?`；Java 转 Python 为 snake_case | 前端收到 camelCase 知识库 DTO |
 | `DELETE /api/v1/admin/knowledge-bases/{id}` | Path `id` | 无 |
-| `GET /api/v1/admin/knowledge-documents` | 前端传 `knowledgeBaseId`、`pageNum?`、`pageSize?`；Java 转 Python 为 `knowledge_base_id`、`page_num?`、`page_size?` | 前端收到 camelCase 文档分页 DTO |
+| `GET /api/v1/admin/knowledge-documents` | 前端传 `knowledgeBaseId`、`keyword?`、`lifecycleStatus?`、`latestJobStatus?`、`pageNum?`、`pageSize?`；Java 转 Python 为 `knowledge_base_id`、`keyword?`、`lifecycle_status?`、`latest_job_status?`、`page_num?`、`page_size?` | 前端收到 camelCase 文档分页 DTO |
+| `GET /api/v1/admin/knowledge-documents/{id}` | Path `id` | 前端收到 camelCase 文档详情 DTO |
+| `GET /api/v1/admin/knowledge-documents/{id}/chunks` | Path `id` + `pageNum?`、`pageSize?`；Java 转 Python 为 `page_num?`、`page_size?` | 前端收到 camelCase chunk 分页 DTO |
+| `POST /api/v1/admin/knowledge-documents/{id}/reingest` | Path `id` | 前端收到 camelCase 重新入库任务 DTO |
 | `DELETE /api/v1/admin/knowledge-documents/{id}` | Path `id` | 无 |
+| `GET /api/v1/admin/ingest-jobs` | 前端传 `knowledgeBaseId`、`documentId?`、`status?`、`pageNum?`、`pageSize?`；Java 转 Python 为 `knowledge_base_id`、`document_id?`、`status?`、`page_num?`、`page_size?` | 前端收到 camelCase 入库任务分页 DTO |
 | `GET /api/v1/admin/ingest-jobs/{id}` | Path `id` | 前端收到 camelCase 入库任务 DTO |
 | `GET /api/v1/admin/knowledge-index-versions` | 前端传 `knowledgeBaseId`；Java 转 Python 为 `knowledge_base_id` | 前端收到 camelCase 索引版本列表 DTO |
 | `GET /api/v1/admin/knowledge-releases` | 前端传 `knowledgeBaseId`；Java 转 Python 为 `knowledge_base_id` | 前端收到 camelCase 发布记录列表 DTO |
