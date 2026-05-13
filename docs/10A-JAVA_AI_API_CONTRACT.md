@@ -37,6 +37,7 @@
 | `GET /api/v1/ai/sessions` | 当前患者 AI 会话列表 | 已登录 + `PATIENT` |
 | `GET /api/v1/ai/sessions/{sessionId}` | 当前患者 AI 会话明细 | 已登录 + `PATIENT` |
 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | 当前患者最近一次 finalized 导诊结果 | 已登录 + `PATIENT` |
+| `POST /api/v1/admin/query-evaluations` | 管理端 dry-run 问诊评估网关 | 已登录 + `admin:triage-catalog:publish` |
 | `GET /api/v1/encounters/{encounterId}/ai-summary` | 当前医生查看接诊关联的 AI 结构化摘要 | 已登录 + `DOCTOR` + `encounter:query` |
 | `GET /api/v1/admin/knowledge-bases` | 知识库列表网关 | 已登录 + `admin:knowledge-base:list` |
 | `GET /api/v1/admin/knowledge-bases/{knowledgeBaseId}` | 知识库详情网关 | 已登录 + `admin:knowledge-base:list` |
@@ -86,6 +87,18 @@
 - `GET /api/v1/admin/knowledge-documents/{documentId}/chunks`：前端 `pageNum`、`pageSize` 转 Python `page_num`、`page_size`。
 - `POST /api/v1/admin/knowledge-documents/{documentId}/reingest`：Java 不带业务请求体，直接转 Python `/reingest`。
 - `GET /api/v1/admin/ingest-jobs`：前端 `knowledgeBaseId`、`documentId?`、`status?`、`pageNum?`、`pageSize?` 转 Python `knowledge_base_id`、`document_id?`、`status?`、`page_num?`、`page_size?`。
+
+## 2.3 Admin Dry-Run 评估网关
+
+固定规则：
+
+- Java 对前端暴露 `POST /api/v1/admin/query-evaluations`。
+- 前端请求字段只包含 `hospitalScope?`、`userMessage`。
+- Java 固定向 Python `POST /api/v1/admin/query-evaluations` 发送 `scene=AI_TRIAGE`。
+- Java 调 Python 透传 `X-Request-Id`、`X-API-Key`、`X-Actor-Id`、`X-Hospital-Scope`，不发送 `X-Patient-User-Id`。
+- 该接口不创建真实 session，不落库 finalized snapshot，不写问诊运行事实。
+- `triageResult` 仍是业务真相，`evaluation` 只是便于后台人工评估的附加视图。
+- 该接口的 triage 应用失败对前端统一为 `6007`；网络异常和协议损坏仍分别为 `6001/6003`。
 
 ## 2.1 医生接诊 AI 摘要
 

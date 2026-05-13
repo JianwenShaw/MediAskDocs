@@ -207,6 +207,7 @@
 | `GET /api/v1/ai/sessions` | 无 | `items[].sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?` |
 | `GET /api/v1/ai/sessions/{sessionId}` | Path `sessionId` | `sessionId`、`sceneType`、`status`、`departmentId?`、`chiefComplaintSummary?`、`summary?`、`startedAt`、`endedAt?`、`turns[]` |
 | `GET /api/v1/ai/sessions/{sessionId}/triage-result` | Path `sessionId` | `sessionId`、`resultStatus`、`triageStage`、`riskLevel`、`guardrailAction`、`nextAction`、`finalizedTurnId`、`finalizedAt`、`hasActiveCycle`、`activeCycleTurnNo?`、`chiefComplaintSummary?`、`recommendedDepartments[]`、`careAdvice?`、`citations[]`、`blockedReason?`、`catalogVersion?` |
+| `POST /api/v1/admin/query-evaluations` | 前端传 `hospitalScope?`、`userMessage`；Java 转 Python 为 `scene=AI_TRIAGE`、`hospital_scope`、`user_message`，并透传 `X-Actor-Id`、`X-Hospital-Scope` | 前端收到 `requestId`、`triageResult`、`evaluation`；其中 `evaluation.primaryDepartmentId` 按字符串返回 |
 
 ### `triageResult` 最小字段
 

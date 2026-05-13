@@ -88,6 +88,7 @@
 | 知识库后台管理 | `GET /api/v1/admin/knowledge-index-versions` | 已登录 + 索引版本列表权限 | Java 网关转发到 Python 索引版本列表接口 |
 | 知识库后台管理 | `GET /api/v1/admin/knowledge-releases` | 已登录 + 发布记录列表权限 | Java 网关转发到 Python 发布记录列表接口 |
 | 知识库后台管理 | `POST /api/v1/admin/knowledge-releases` | 已登录 + 发布权限 | Java 网关转发到 Python 发布接口 |
+| 管理端 AI 评估 | `POST /api/v1/admin/query-evaluations` | 已登录 + `admin:triage-catalog:publish` | Java 网关转发到 Python dry-run 问诊评估接口 |
 | AI Triage Query | `POST /api/v1/ai/triage/query` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起同步 triage query，返回结构化 `triageResult` |
 | AI Triage SSE | `POST /api/v1/ai/triage/query/stream` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 患者发起流式 triage query，Java 代理 Python SSE，并只在 `final` 前校验和落库 |
 | AI Sessions | `GET /api/v1/ai/sessions` | 已登录 + `PATIENT` 角色 + 依赖 AI service 配置 | 查询当前患者 AI 会话摘要列表 |
@@ -865,6 +866,24 @@
 | 项目 | 当前代码口径 |
 |------|--------------|
 | 认证/身份 | 已登录 + `ADMIN` 权限 `admin:triage-catalog:publish` |
+
+### 10.7 `POST /api/v1/admin/query-evaluations`
+
+| 项目 | 当前代码口径 |
+|------|--------------|
+| 认证/身份 | 已登录 + `ADMIN` 权限 `admin:triage-catalog:publish` |
+| 前端请求体 | `hospitalScope?`、`userMessage` |
+| Java 转 Python 请求体 | `scene=AI_TRIAGE`、`hospital_scope`、`user_message` |
+| Java -> Python 请求头 | `X-Request-Id`、`X-API-Key`、`X-Actor-Id`、`X-Hospital-Scope` |
+| 响应字段 | `requestId`、`triageResult`、`evaluation`，其中 `evaluation.primaryDepartmentId` 对前端按字符串返回 |
+| 真实语义 | 这是管理端 dry-run 调试接口，不创建真实 `session`，不写 `ai_turn`、`query_run`、`query_result_snapshot` 或 Java finalized snapshot |
+
+补充说明：
+
+- `triageResult` 仍是业务真相，`evaluation` 只是评估视图。
+- `hospitalScope` 为空时 Java 默认使用 `default`。
+- Python 返回管理端 triage 应用失败时，Java 对前端统一返回 `6007`。
+- Python 网络不可用映射为 `6001`，响应结构非法映射为 `6003`。
 | 查询参数 | `hospitalScope?`，默认 `default` |
 | 响应结构 | `Result<T>` |
 | 响应字段 | `catalogVersion`、`candidateCount`、`publishedAt` |

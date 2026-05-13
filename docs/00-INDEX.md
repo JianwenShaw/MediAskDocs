@@ -40,6 +40,7 @@
 | 设计 | [19-ERROR_EXCEPTION_RESPONSE_DESIGN.md](./19-ERROR_EXCEPTION_RESPONSE_DESIGN.md) | 错误码、异常与统一响应设计说明 |
 | 设计 | [20-RAG_DATABASE_PGVECTOR_DESIGN.md](./20-RAG_DATABASE_PGVECTOR_DESIGN.md) | PostgreSQL + pgvector 的 RAG 数据库设计基线 |
 | 数据库 | [21-THESIS-ER-DIAGRAM.md](./21-THESIS-ER-DIAGRAM.md) | 毕设论文主 ER 图 |
+| 设计 | [22-API-FILTER-SEQUENCE.md](./22-API-FILTER-SEQUENCE.md) | 接口 Filter 与统一处理时序图 |
 | 路线图 | [ROADMAP.md](../ROADMAP.md) | 后端 Java 分阶段目标与产出路径 |
 
 ## 快速开始
